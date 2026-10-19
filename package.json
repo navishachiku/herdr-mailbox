@@ -1,0 +1,10 @@
+{
+  "name": "herdr-mailbox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "mailbox": "src/mailbox.mjs" },
+  "scripts": {
+    "test": "node --test"
+  }
+}
