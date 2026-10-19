@@ -77,19 +77,19 @@ async function send(batch, target, text, back) {
   return true;
 }
 
-function newBatch(box, kind, letters, pane, transcript, body) {
+function newBatch(box, kind, letters, pane, transcript, convo, body) {
   const id = newBatchId(api.state.batches);
   const out = textOrFile(id, body(id), file => body(id, file));
   return {
     id, mailbox: box?.id ?? null, pane, kind, members: letters.map(l => l.uid), status: 'sending',
     ...(out.file ? { file: out.file } : { text: out.text }), sendText: out.text,
-    transcript: transcript ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0, createdAt: api.now(),
+    transcript: transcript ?? null, convo: convo ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0, createdAt: api.now(),
   };
 }
 
 async function sendMailboxBatch(box, kind, letters, owner) {
   const people = await peopleOf(letters.map(l => l.sender));
-  const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, (id, file) => {
+  const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, owner.convo, (id, file) => {
     if (file) return fileNotice({ id, letters, people, file, replies: kind === 'replies' });
     return kind === 'replies' ? repliesBatch({ id, letters, people }) : notesBatch({ id, letters, people });
   });
@@ -136,7 +136,7 @@ async function deliverMailbox(box, panes) {
   }
   if (!await inputIsEmpty(box, who.pane)) return;
   const convo = panes.find(p => p.pane_id === who.pane)?.agent_session?.value ?? box.owner.convo;
-  await sendMailboxBatch(box, kind, batch, { pane: who.pane, transcript: who.transcript ?? findByConversation(convo) });
+  await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, transcript: who.transcript ?? findByConversation(convo) });
 }
 
 // The transcript of a pane that has no mailbox: what its conversation last registered, else the file named by its id.
@@ -160,17 +160,26 @@ async function deliverDirect(panes) {
     if (hold) { b.nextAt = api.now() + timings.retryMs; api.save(); continue; }
     busy.add(b.pane);
     const transcript = transcriptOfPane(pane);
-    Object.assign(b, { status: 'sending', transcript, transcriptOffset: transcript ? sizeOf(transcript) : 0 });
-    const sent = await send(b, b.pane, b.text, () => { b.status = 'pending'; b.nextAt = api.now() + timings.retryMs; });
-    // Without a transcript there is nothing to look the batch up in.
-    if (sent && !transcript) { b.status = 'unconfirmed'; api.save(); }
+    Object.assign(b, { status: 'sending', transcript, convo: pane.agent_session?.value ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0 });
+    await send(b, b.pane, b.text, () => { b.status = 'pending'; b.nextAt = api.now() + timings.retryMs; });
   }
+}
+
+// A receiver's first message can create its transcript after the prompt went out, so while a batch is waiting the file
+// is looked up again on every poll: first by the opening registration, then by the conversation id. A file that did not
+// exist when the batch was sent is read from the start.
+function findTranscript(b) {
+  if (b.transcript && fs.existsSync(b.transcript)) return;
+  const registered = (api.state.registrations[b.pane] ?? []).filter(r => r.sid === b.convo).at(-1)?.transcript;
+  const file = registered && fs.existsSync(registered) ? registered : findByConversation(b.convo);
+  if (file) Object.assign(b, { transcript: file, transcriptOffset: 0 });
 }
 
 function settle() {
   let changed = false;
   for (const b of Object.values(api.state.batches)) {
     if (b.status !== 'sending' || !b.sentAt) continue;
+    findTranscript(b);
     if (landed(b.transcript, b.transcriptOffset, b.id)) b.status = 'confirmed';
     else if (api.now() - b.sentAt >= timings.confirmMs) b.status = 'unconfirmed';
     else continue;
