@@ -49,20 +49,32 @@ function visibleText(rawLine) {
   return out;
 }
 
+// Index of the "❯" line that sits right under a rule: the Claude input box. -1 when the screen has none.
+function findInputBox(plain) {
+  for (let i = plain.length - 1; i >= 1; i--) {
+    if (isRule(plain[i - 1]) && /^\s*❯/.test(plain[i])) return i;
+  }
+  return -1;
+}
+
 // Returns the text typed in the Claude input box, or '' when there is none or
 // the screen is not a Claude input box.
 export function typedText(screen) {
   const rawLines = screen.split(/\r?\n/);
   const plain = rawLines.map((l) => l.replace(ANSI_RE, ''));
-  let start = -1;
-  for (let i = plain.length - 1; i >= 1; i--) {
-    if (isRule(plain[i - 1]) && /^\s*❯/.test(plain[i])) {
-      start = i;
-      break;
-    }
-  }
+  const start = findInputBox(plain);
   if (start < 0) return '';
   const parts = [visibleText(rawLines[start]).replace(/^\s*❯/, '')];
   for (let i = start + 1; i < rawLines.length && !isRule(plain[i]); i++) parts.push(visibleText(rawLines[i]));
   return parts.map((s) => s.replace(ANSI_RE, '').trim()).filter(Boolean).join(' ');
+}
+
+// Three-way reading for delivery: 'empty' is the only state that allows typing into the pane. A screen that is
+// blank, has no Claude input box, or shows the background-agent list (it takes the arrow keys) is 'unknown'.
+export function classify(screen) {
+  if (typeof screen !== 'string' || !screen.trim()) return 'unknown';
+  const plain = screen.split(/\r?\n/).map((l) => l.replace(ANSI_RE, ''));
+  if (plain.some((l) => l.includes('↑/↓ to select'))) return 'unknown';
+  if (findInputBox(plain) < 0) return 'unknown';
+  return typedText(screen) ? 'typing' : 'empty';
 }

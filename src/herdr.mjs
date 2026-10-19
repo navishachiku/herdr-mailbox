@@ -15,13 +15,6 @@ export async function listPanes() {
   return JSON.parse(await run(['pane', 'list'])).result.panes;
 }
 
-// Panes with an agent go through agent prompt (pastes the text and presses Enter); plain terminals use pane run.
-export function deliver(pane, text) {
-  return pane.agent
-    ? run(['agent', 'prompt', pane.pane_id, text])
-    : run(['pane', 'run', pane.pane_id, text]);
-}
-
 export function notify(title, body) {
   return run(['notification', 'show', title, '--body', body, '--sound', 'request']);
 }

@@ -87,8 +87,8 @@ export class Mailboxes {
   }
 
   // Checks fields and builds the content that is stored, deduplicated and edited.
-  // `attach` is already read: { name, sha256, data }.
-  normalize(type, f, attach) {
+  // `attach` is already read: { name, sha256, data }. `direct` letters never enter a mailbox, so they have no note length limit.
+  normalize(type, f, attach, { direct = false } = {}) {
     if (!TYPES.includes(type)) return fail('bad_type', `type must be one of ${TYPES.join(', ')}`);
     if (f.priority && !PRIORITIES.includes(f.priority)) return fail('bad_priority', `priority must be one of ${PRIORITIES.join(', ')}`);
     const content = { type };
@@ -96,7 +96,7 @@ export class Mailboxes {
     if (type === 'note') {
       const text = String(f.text ?? '');
       if (!text.trim() && !attach) return fail('missing_text', 'a note needs text or --attach');
-      if (len(text) > LIMITS.note) return tooLong('note text', LIMITS.note);
+      if (!direct && len(text) > LIMITS.note) return tooLong('note text', LIMITS.note);
       content.text = text;
     } else {
       const question = String(f.question ?? '');
@@ -179,7 +179,7 @@ export class Mailboxes {
     if (!att.ok) return att;
     const dest = this.hooks.route(to, req);
     if (dest.ok === false) return dest;
-    const norm = this.normalize(type, req, att.attach);
+    const norm = this.normalize(type, req, att.attach, { direct: dest.kind === 'direct' });
     if (!norm.ok) return norm;
     const content = norm.content;
     if (supersedes) {
