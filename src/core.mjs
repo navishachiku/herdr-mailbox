@@ -13,6 +13,7 @@ const OPEN = ['queued', 'pending'];
 const LETTERS = 'ABCD';
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
+const BUILTIN = { send: 'send', edit: 'edit', withdraw: 'withdraw', status: 'status', answer: 'answer', submit: 'submit' };
 const len = s => [...String(s)].length;
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Serial numbers (Q003, N012) are for people only; agents must name a letter by uid.
@@ -28,12 +29,62 @@ export function newUid(now) {
   return head + tail;
 }
 
+export function newMailboxId(taken) {
+  for (;;) {
+    const id = `MB-${crypto.randomBytes(2).toString('hex')}`;
+    if (!taken[id]) return id;
+  }
+}
+
 export class Mailboxes {
   constructor({ state, save, now = Date.now, attachDir }) {
     Object.assign(this, { state, persist: save, now, attachDir });
+    this.ops = new Map();
+    this.ticks = [];
+    this.listeners = {};
+    // route and direct are single slots (a later module replaces the default); guards all run.
+    this.hooks = { route: to => ({ kind: 'direct', pane: to }), direct: null, guard: [], annotate: [] };
   }
 
   save() { this.persist(this.state); }
+
+  // Modules (identity, delivery, screen-api) each export default function register(api).
+  register(mod) {
+    const core = this;
+    mod({
+      op(name, handler, { mutates = false } = {}) {
+        if (core.ops.has(name) || BUILTIN[name]) throw new Error(`op ${name} is already registered`);
+        core.ops.set(name, { handler, mutates });
+      },
+      tick(name, fn, everyMs) { core.ticks.push({ name, fn, everyMs }); },
+      on(event, fn) { (core.listeners[event] ??= []).push(fn); },
+      emit: (event, payload) => core.emit(event, payload),
+      hook(name, fn) {
+        if (name === 'guard' || name === 'annotate') core.hooks[name].push(fn);
+        else if (name === 'route' || name === 'direct') core.hooks[name] = fn;
+        else throw new Error(`unknown hook ${name}`);
+      },
+      get state() { return core.state; },
+      save: () => core.save(),
+      now: () => core.now(),
+    });
+  }
+
+  // A failing listener must not undo or fail the call that raised the event.
+  emit(event, payload) {
+    for (const fn of this.listeners[event] ?? []) { try { fn(payload); } catch { /* listener bug */ } }
+  }
+
+  // Guards run before any op does its work; the first failure is the answer.
+  guard(op, req, ctx) {
+    for (const fn of this.hooks.guard) { const r = fn(op, req, ctx); if (r && r.ok === false) return r; }
+    return null;
+  }
+
+  // Extra receipt fields from modules (owner changes, disconnect hints). kind is 'send' or 'status'.
+  annotate(kind, mailbox, sender) {
+    return Object.assign({}, ...this.hooks.annotate.map(fn => fn(kind, mailbox, sender)));
+  }
 
   // Checks fields and builds the content that is stored, deduplicated and edited.
   // `attach` is already read: { name, sha256, data }.
@@ -126,6 +177,8 @@ export class Mailboxes {
     if (!to) return fail('missing_to', '--to is required');
     const att = this.readAttach(req.attach);
     if (!att.ok) return att;
+    const dest = this.hooks.route(to, req);
+    if (dest.ok === false) return dest;
     const norm = this.normalize(type, req, att.attach);
     if (!norm.ok) return norm;
     const content = norm.content;
@@ -133,15 +186,20 @@ export class Mailboxes {
       if (type === 'note') return fail('bad_supersedes', '--supersedes applies to decision and discussion questions');
       content.supersedes = supersedes;
     }
+    if (dest.kind === 'direct') {
+      return this.hooks.direct ? this.hooks.direct(req, content) : fail('no_mailbox', `${to} has no mailbox`);
+    }
+    const box = this.state.mailboxes[dest.id];
+    if (!box) return fail('unknown_mailbox', `no mailbox ${dest.id}`);
     const now = this.now();
-    const live = l => l.mailbox === to && !['withdrawn', 'superseded'].includes(l.status);
+    const live = l => l.mailbox === dest.id && !['withdrawn', 'superseded'].includes(l.status);
     const sameSender = this.keyOf(content, from);
     const dup = Object.values(this.state.letters).find(l => live(l) && l.sender === from && now - l.createdAt < DEDUP_MS && this.keyOf(l.content, from) === sameSender);
-    if (dup) return this.receipt(dup, from, { duplicate: true, reason: 'duplicate' });
+    if (dup) return this.receipt(dup, from, { duplicate: true, reason: 'duplicate', ...this.annotate('send', box.id, from) });
     if (type === 'decision') {
       const anyone = this.keyOf(content, '');
       const open = Object.values(this.state.letters).find(l => live(l) && l.sender === from && l.type === 'decision' && l.status === 'pending' && !this.answered(l) && this.keyOf(l.content, '') === anyone);
-      if (open) return this.receipt(open, from, { duplicate: true, reason: 'duplicate_open_question' });
+      if (open) return this.receipt(open, from, { duplicate: true, reason: 'duplicate_open_question', ...this.annotate('send', box.id, from) });
     }
     // Checked after the duplicate lookups: a resend of a letter that already superseded its target gets the
     // original receipt back instead of a "not active" error.
@@ -149,16 +207,15 @@ export class Mailboxes {
       const old = this.find(supersedes);
       if (!old.ok) return old;
       const o = old.letter;
-      if (o.mailbox !== to) return fail('bad_supersedes', 'the superseded letter is in another mailbox');
+      if (o.mailbox !== dest.id) return fail('bad_supersedes', 'the superseded letter is in another mailbox');
       if (o.sender !== from) return fail('not_sender', 'only the sender of a letter can supersede it');
       if (this.answered(o) && o.status === 'pending') return fail('user_answered', 'The user has already answered this question; it cannot be superseded until the answer is sent');
       if (!['pending', 'submitted'].includes(o.status)) return fail('not_active', `the letter is ${o.status}`);
     }
-    const box = this.state.mailboxes[to] ??= { key: to, counter: 0 };
     box.counter += 1;
     const uid = newUid(now);
     const letter = {
-      uid, serial: `${type === 'note' ? 'N' : 'Q'}${String(box.counter).padStart(3, '0')}`, mailbox: to, sender: from, type,
+      uid, serial: `${type === 'note' ? 'N' : 'Q'}${String(box.counter).padStart(3, '0')}`, mailbox: box.id, sender: from, type,
       status: type === 'note' ? 'queued' : 'pending', edited: false, version: 1, priority: req.priority || 'medium', tags: req.tags ?? [],
       createdAt: now, updatedAt: now, content, draft: null,
     };
@@ -167,8 +224,10 @@ export class Mailboxes {
     } catch (e) { box.counter -= 1; return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
     this.state.letters[uid] = letter;
     if (supersedes) { const o = this.state.letters[supersedes]; o.status = 'superseded'; o.supersededBy = uid; o.updatedAt = now; }
+    const extra = this.annotate('send', box.id, from);
     this.save();
-    return this.receipt(letter, from);
+    this.emit('letter', { letter });
+    return this.receipt(letter, from, extra);
   }
 
   // Edit and withdraw share the checks: the caller sent the letter, it is a question, and the user has not answered.
@@ -219,13 +278,19 @@ export class Mailboxes {
 
   status(req) {
     const from = req.from ?? 'unknown';
-    const boxes = req.to ? [req.to] : Object.keys(this.state.mailboxes);
-    return { ok: true, mailboxes: boxes.map(to => ({ to, pending: this.pendingOf(from, to) })).filter(b => b.pending.length) };
+    const routed = req.to ? this.hooks.route(req.to, req) : null;
+    if (routed?.ok === false) return routed;
+    const ids = req.to ? [routed.id].filter(Boolean) : Object.keys(this.state.mailboxes);
+    const mailboxes = ids.map(id => {
+      const box = this.state.mailboxes[id];
+      return { to: box.owner?.pane ?? id, mailbox: id, pending: this.pendingOf(from, id) };
+    });
+    return { ok: true, mailboxes: mailboxes.filter(b => b.pending.length), ...(ids.length === 1 ? this.annotate('status', ids[0], from) : {}) };
   }
 
   // The write interface for the user's answers; the mailbox screen is a later task. Every answer carries the version
   // that was on screen, so an answer to a question that was edited in the meantime is refused.
-  answer(req) {
+  answer(req, ctx = {}) {
     const found = this.find(req.uid);
     if (!found.ok) return found;
     const l = found.letter;
@@ -242,7 +307,8 @@ export class Mailboxes {
   }
 
   // Marks answered questions as sent. Delivery to the receiver is a later task; this is the state change.
-  submit(req) {
+  submit(req, ctx = {}) {
+    const submitted = {};
     const results = (req.items ?? []).map(({ uid, version }) => {
       const found = this.find(uid);
       if (!found.ok) return { uid, ...found };
@@ -251,22 +317,36 @@ export class Mailboxes {
       if (l.version !== version) return { uid, ok: false, error: 'stale_version', version: l.version };
       l.status = 'submitted';
       l.updatedAt = this.now();
+      (submitted[l.mailbox] ??= []).push(uid);
       return { uid, ok: true };
     });
     this.save();
+    for (const [mailbox, uids] of Object.entries(submitted)) this.emit('submitted', { mailbox, uids });
     return { ok: true, results };
   }
 
   // Mutating calls run against a copy: if saving to disk fails, the in-memory state is put back and the
   // sender gets a failure, so nothing is acknowledged that is not on disk and a resend can land for real.
-  handle(req) {
-    const ops = { send: 'send', edit: 'edit', withdraw: 'withdraw', status: 'status', answer: 'answer', submit: 'submit' };
-    if (!ops[req.op]) return fail('bad_op', `unknown op ${req.op}`);
-    if (req.op === 'status') return this.status(req);
+  // Registered handlers may be async (the daemon runs requests one at a time, so the copy stays valid).
+  handle(req, ctx = {}) {
+    // Guards see every op; a guard decides which ones it cares about.
+    const denied = this.guard(req.op, req, ctx);
+    if (denied) return denied;
+    const registered = this.ops.get(req.op);
+    if (!registered && !BUILTIN[req.op]) return fail('bad_op', `unknown op ${req.op}`);
+    const mutates = registered ? registered.mutates : req.op !== 'status';
+    const run = () => (registered ? registered.handler(req, ctx) : this[BUILTIN[req.op]](req, ctx));
+    if (!mutates) {
+      try { return run(); } catch (e) { return fail('internal', String(e.message || e)); }
+    }
     const backup = structuredClone(this.state);
-    try { return this[ops[req.op]](req); } catch (e) {
+    const restore = e => {
       this.state = backup;
       return fail('save_failed', `the letter was not saved (${e.code || e.message}); nothing was sent, try again`);
-    }
+    };
+    try {
+      const r = run();
+      return r && typeof r.then === 'function' ? r.catch(restore) : r;
+    } catch (e) { return restore(e); }
   }
 }

@@ -1,60 +1,49 @@
 #!/usr/bin/env node
-// mailbox CLI: send, status, edit, withdraw. Prints the daemon's JSON answer; exit 0 only when it says ok.
+// mailbox CLI. Each subcommand lives in src/cli/<name>.mjs and exports { options, usage, build }; a subcommand
+// whose file does not exist yet is simply not listed. Prints the daemon's JSON answer; exit 0 only when it says ok.
 // Letters are named by uid only. The sender is this pane (HERDR_PANE_ID) unless --from says otherwise.
-import path from 'node:path';
+import fs from 'node:fs';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
 
-const [cmd, ...rest] = process.argv.slice(2);
-const spec = {
-  to: { type: 'string' }, from: { type: 'string' }, type: { type: 'string' }, text: { type: 'string' },
-  question: { type: 'string' }, option: { type: 'string', multiple: true }, recommend: { type: 'string' },
-  idea: { type: 'string' }, priority: { type: 'string' }, tag: { type: 'string', multiple: true },
-  attach: { type: 'string' }, supersedes: { type: 'string' }, reason: { type: 'string' },
-};
-const USAGE = `usage:
-  mailbox send --to <address|MB-id> --type note <text>
-  mailbox send --to <address|MB-id> --type decision --question <q> --option <o> --option <o> [--option <o>...] --recommend <letter>
-  mailbox send --to <address|MB-id> --type discussion --question <q> [--idea <text>]
-    optional: --priority high|medium|low  --tag <t>  --attach <file>  --supersedes <uid>
-  mailbox status [--to <address|MB-id>]
-  mailbox edit <uid> [--question <q>] [--option <o>...] [--recommend <letter>] [--idea <text>] [--priority <p>] [--attach <file>]
-  mailbox withdraw <uid> --reason <text>`;
+const COMMANDS = ['send', 'status', 'edit', 'withdraw', 'claim', 'open', 'close', 'deliver'];
+const dir = new URL('./cli/', import.meta.url);
 
+const commands = Object.create(null);
+for (const name of COMMANDS) {
+  if (fs.existsSync(fileURLToPath(new URL(`${name}.mjs`, dir)))) commands[name] = await import(new URL(`${name}.mjs`, dir));
+}
+
+const usageText = () => `usage:\n${Object.values(commands).map(c => c.usage).join('\n')}`;
 function usage(msg) {
-  console.error(msg ? `${msg}\n${USAGE}` : USAGE);
+  console.error(msg ? `${msg}\n${usageText()}` : usageText());
   process.exit(2);
 }
 
+const [cmd, ...rest] = process.argv.slice(2);
+const command = commands[cmd];
+if (!command) usage(cmd ? `unknown command: ${cmd}` : '');
+
 let parsed;
-try { parsed = parseArgs({ args: rest, options: spec, allowPositionals: true }); } catch (e) { usage(e.message); }
-const { values: v, positionals } = parsed;
-const from = v.from ?? process.env.HERDR_PANE_ID ?? 'unknown';
-const attach = v.attach ? path.resolve(v.attach) : undefined;
+try { parsed = parseArgs({ args: rest, options: command.options, allowPositionals: true }); } catch (e) { usage(e.message); }
+const { values, positionals } = parsed;
 
-async function target(to) {
-  if (!to) return to;
-  if (to.includes(':') || to.startsWith('MB-')) return to;
-  try { return await resolvePane(to); } catch { console.error(`unknown agent or pane: ${to}`); process.exit(1); }
-}
+const helpers = {
+  from: values.from ?? process.env.HERDR_PANE_ID ?? 'unknown',
+  usage,
+  // A pane id or MB- id passes through; an agent name is looked up.
+  async target(to) {
+    if (!to) return to;
+    if (to.includes(':') || to.startsWith('MB-')) return to;
+    try { return await resolvePane(to); } catch { console.error(`unknown agent or pane: ${to}`); process.exit(1); }
+  },
+};
 
-let req;
-if (cmd === 'send') {
-  if (!v.to || !v.type) usage('--to and --type are required');
-  req = {
-    op: 'send', to: await target(v.to), from, type: v.type, text: v.text ?? positionals.join(' '), question: v.question,
-    options: v.option, recommend: v.recommend, idea: v.idea, priority: v.priority, tags: v.tag, attach, supersedes: v.supersedes,
-  };
-} else if (cmd === 'status') {
-  req = { op: 'status', from, to: await target(v.to) };
-} else if (cmd === 'edit') {
-  if (positionals.length !== 1) usage('edit takes exactly one uid');
-  req = { op: 'edit', uid: positionals[0], from, question: v.question, options: v.option, recommend: v.recommend, idea: v.idea, priority: v.priority, attach };
-} else if (cmd === 'withdraw') {
-  if (positionals.length !== 1) usage('withdraw takes exactly one uid');
-  req = { op: 'withdraw', uid: positionals[0], from, reason: v.reason };
-} else usage(cmd ? `unknown command: ${cmd}` : '');
+const req = await command.build(values, positionals, helpers);
+// Who is asking, for ops that only an owner (or the user, through a herdr plugin action) may run.
+req.caller = { pane: process.env.HERDR_PANE_ID, sid: process.env.HERDR_MAILBOX_SID, viaPlugin: Boolean(process.env.HERDR_PLUGIN_ID) };
 
 let res;
 try { res = await call(req); } catch (e) { res = { ok: false, error: 'daemon_unavailable', message: String(e.message || e) }; }

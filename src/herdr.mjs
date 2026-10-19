@@ -30,3 +30,20 @@ export function notify(title, body) {
 export function readScreen(pane) {
   return run(['pane', 'read', pane, '--source', 'visible', '--lines', '40', '--format', 'ansi']);
 }
+
+// Single-pane lookups. paneGet and agentGet return the object herdr wraps in result.pane / result.agent.
+export async function paneGet(pane) {
+  return JSON.parse(await run(['pane', 'get', pane])).result.pane;
+}
+
+export async function agentGet(name) {
+  return JSON.parse(await run(['agent', 'get', name])).result.agent;
+}
+
+// Every pane herdr knows, with its terminal_id (stable while herdr runs, new after a restart).
+export const paneList = listPanes;
+
+// Sends text to an agent pane's input box and submits it.
+export function prompt(pane, text) {
+  return run(['agent', 'prompt', pane, text]);
+}

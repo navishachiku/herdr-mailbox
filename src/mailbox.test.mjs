@@ -13,11 +13,29 @@ import { sessionKey } from './paths.mjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mb-'));
 
+// Core-only tests start with bound mailboxes; identity and its herdr lookup are covered separately.
+function boundCore(options) {
+  const state = emptyState();
+  for (const [i, to] of ['w1:p1', 'w9:p9'].entries()) {
+    const id = `MB-000${i}`;
+    state.mailboxes[id] = {
+      id, counter: 0, owner: { pane: to, terminalId: `terminal-${i}`, convo: `sid-${i}`, transcript: null, generation: 1 },
+      state: 'connected', disconnect: null, paused: null, screen: { open: false },
+    };
+  }
+  const core = new Mailboxes({ ...options, state });
+  core.register(api => api.hook('route', to => {
+    const box = Object.values(api.state.mailboxes).find(b => b.id === to || b.owner.pane === to);
+    return box ? { kind: 'mailbox', id: box.id } : { kind: 'direct', pane: to };
+  }));
+  return core;
+}
+
 // A mailbox core with a fake clock and a state that is never written to disk.
 function fresh() {
   const dir = tmp();
   const clock = { t: 1_800_000_000_000 };
-  const core = new Mailboxes({ state: emptyState(), save: () => {}, now: () => clock.t, attachDir: path.join(dir, 'att') });
+  const core = boundCore({ save: () => {}, now: () => clock.t, attachDir: path.join(dir, 'att') });
   return { core, clock, dir };
 }
 const TO = 'w1:p1';
@@ -189,31 +207,74 @@ test('a serial number is refused with a hint to use the uid', () => {
 // End to end: the real CLI and a real daemon in an isolated state directory.
 function sandbox({ root = fs.mkdtempSync(path.join('/tmp', 'mbe-')), session = 'herdr.sock' } = {}) {
   const socket = path.join(root, session);
-  const env = { ...process.env, HERDR_MAILBOX_STATE_DIR: root, HERDR_SOCKET_PATH: socket, HERDR_PANE_ID: 'w2:p2' };
+  const env = {
+    ...process.env, HERDR_MAILBOX_STATE_DIR: root, HERDR_SOCKET_PATH: socket, HERDR_PANE_ID: 'w2:p2',
+    HERDR_BIN_PATH: path.join(here, 'test-support', 'fake-herdr.mjs'),
+    FAKE_HERDR_STATE: path.join(root, `${session}-fake.json`),
+    FAKE_HERDR_LOG: path.join(root, `${session}-fake.log`),
+    HERDR_MAILBOX_TIMINGS: JSON.stringify({ mergeMs: 3_600_000 }),
+  };
   delete env.HERDR_PLUGIN_STATE_DIR;
+  delete env.HERDR_PLUGIN_ID;
+  delete env.HERDR_MAILBOX_SID;
+  delete env.HERDR_MAILBOX_DAEMON_ENTRY;
+  delete env.HERDR_MAILBOX_DAEMON_PROTO;
+  fs.writeFileSync(env.FAKE_HERDR_STATE, JSON.stringify({
+    panes: [TO, 'w1:p2', 'w2:p2'].map((id, i) => ({
+      pane_id: id, terminal_id: `terminal-${i}`, workspace_id: 'w1', tab_id: 'w1:t1',
+      label: id, agent: 'claude', agent_status: 'idle', agent_session: { value: `sid-${i}` },
+    })),
+    screens: {}, promptResult: {}, transcripts: {},
+  }));
   // The daemon keeps its files in a directory named after the herdr session.
   const dir = path.join(root, sessionKey(socket));
+  const currentDir = () => path.join(env.HERDR_MAILBOX_STATE_DIR, sessionKey(socket));
   const cli = (...args) => {
     const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], { env, encoding: 'utf8' });
     return { code: r.status, out: r.stdout.trim() ? JSON.parse(r.stdout) : null, err: r.stderr };
   };
   const raw = msg => new Promise((resolve, reject) => {
-    const c = net.connect(path.join(dir, 'd.sock'));
+    // Existing answer fixtures represent writes from the mailbox screen.
+    const stateFile = path.join(currentDir(), 'state.json');
+    if (msg.op === 'answer' && fs.existsSync(stateFile)) {
+      const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+      const box = state.mailboxes[state.letters[msg.uid]?.mailbox];
+      msg = { caller: { viaPlugin: true }, generation: box?.owner?.generation, ...msg };
+    }
+    const c = net.connect(path.join(currentDir(), 'd.sock'));
     let buf = '';
     c.on('connect', () => c.write(`${JSON.stringify({ proto: 1, ...msg })}\n`));
     c.on('data', d => { buf += d; });
     c.on('end', () => resolve(JSON.parse(buf)));
     c.on('error', reject);
   });
-  const pid = () => Number(fs.readFileSync(path.join(dir, 'daemon.pid'), 'utf8'));
+  const pid = () => Number(fs.readFileSync(path.join(currentDir(), 'daemon.pid'), 'utf8'));
   const stop = () => { try { process.kill(pid(), 'SIGKILL'); } catch { /* not running */ } };
   const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true }); };
-  return { root, dir, env, cli, raw, pid, stop, cleanup };
+  const bind = async (to = TO, { cold = false } = {}) => {
+    const started = cli('status');
+    if (started.code !== 0) throw new Error(`mailbox setup failed: ${JSON.stringify(started)}`);
+    const bound = await raw({ op: 'bind', pane: to, caller: { viaPlugin: true } });
+    if (!bound.ok) throw new Error(`mailbox bind failed: ${JSON.stringify(bound)}`);
+    if (cold) {
+      // Preserve first-send startup coverage while retaining the bound mailbox on disk.
+      process.kill(pid(), 'SIGTERM');
+      const deadline = Date.now() + 3000;
+      while (fs.existsSync(path.join(currentDir(), 'daemon.pid'))) {
+        if (Date.now() > deadline) throw new Error('setup daemon did not stop');
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      fs.rmSync(path.join(currentDir(), 'd.sock'), { force: true });
+    }
+    return bound.mailbox;
+  };
+  return { root, dir, env, cli, raw, pid, stop, cleanup, bind };
 }
 
-test('the CLI starts the daemon when it is not running, then sends', () => {
+test('the CLI starts the daemon when it is not running, then sends', async () => {
   const s = sandbox();
   try {
+    await s.bind(TO, { cold: true });
     assert.equal(fs.existsSync(path.join(s.dir, 'd.sock')), false);
     const r = s.cli('send', '--to', TO, '--type', 'note', 'hello');
     assert.equal(r.code, 0);
@@ -237,6 +298,7 @@ test('when the daemon cannot start the CLI reports failure and sends nothing', (
 test('a killed daemon comes back with the letter and the answer draft', async () => {
   const s = sandbox();
   try {
+    await s.bind();
     const sent = s.cli('send', '--to', TO, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--recommend', 'A');
     assert.equal(sent.code, 0);
     const uid = sent.out.uid;
@@ -276,6 +338,7 @@ test('resending a letter that superseded an older one returns the original recei
 test('six first sends at once start one daemon and lose no letter', async () => {
   const s = sandbox();
   try {
+    await s.bind(TO, { cold: true });
     const run = i => new Promise(resolve => {
       const c = spawn(process.execPath, [path.join(here, 'mailbox.mjs'), 'send', '--to', TO, '--type', 'note', `m${i}`], { env: s.env });
       let out = '';
@@ -285,7 +348,10 @@ test('six first sends at once start one daemon and lose no letter', async () => 
     const results = await Promise.all([0, 1, 2, 3, 4, 5].map(run));
     assert.ok(results.every(r => r.code === 0));
     assert.equal(new Set(results.map(r => r.out.serial)).size, 6);
-    const ps = spawnSync('ps', ['-eo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n').filter(l => l.includes(path.join(here, 'daemon.mjs')));
+    // Other test files may run their own daemons; count only processes in this sandbox.
+    const ps = spawnSync('ps', ['eww', '-axo', 'pid=,command='], { encoding: 'utf8' }).stdout.split('\n')
+      .filter(l => l.includes(path.join(here, 'daemon.mjs'))
+        && l.split(/\s+/).includes(`HERDR_MAILBOX_STATE_DIR=${s.env.HERDR_MAILBOX_STATE_DIR}`));
     assert.equal(ps.length, 1);
     assert.equal(Object.keys(JSON.parse(fs.readFileSync(path.join(s.dir, 'state.json'), 'utf8')).letters).length, 6);
   } finally { s.cleanup(); }
@@ -294,7 +360,7 @@ test('six first sends at once start one daemon and lose no letter', async () => 
 test('a failed save returns a failure, keeps nothing in memory, and a resend lands', () => {
   const dir = tmp();
   let failing = true;
-  const core = new Mailboxes({ state: emptyState(), save: () => { if (failing) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); }, now: () => 1_800_000_000_000, attachDir: path.join(dir, 'att') });
+  const core = boundCore({ save: () => { if (failing) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' }); }, now: () => 1_800_000_000_000, attachDir: path.join(dir, 'att') });
   const first = core.handle(note('hello'));
   assert.deepEqual([first.ok, first.error], [false, 'save_failed']);
   assert.equal(Object.keys(core.state.letters).length, 0);
@@ -303,12 +369,13 @@ test('a failed save returns a failure, keeps nothing in memory, and a resend lan
   assert.deepEqual([again.ok, again.duplicate, again.serial], [true, undefined, 'N001']);
 });
 
-test('the state directory, state file and socket are owner-only', () => {
+test('the state directory, state file and socket are owner-only', async () => {
   const s = sandbox();
   const base = path.join(s.root, 'sub');
   s.env.HERDR_MAILBOX_STATE_DIR = base;
   const dir = path.join(base, sessionKey(s.env.HERDR_SOCKET_PATH));
   try {
+    await s.bind();
     assert.equal(s.cli('send', '--to', TO, '--type', 'note', 'hello').code, 0);
     const mode = f => fs.statSync(f).mode & 0o777;
     assert.deepEqual([mode(base), mode(dir)], [0o700, 0o700]);
@@ -320,8 +387,10 @@ test('two herdr sessions with the same pane address keep separate mailboxes and 
   const a = sandbox();
   const b = sandbox({ root: a.root, session: 'other.sock' });
   try {
+    await a.bind('w1:p2');
     const sentA = a.cli('send', '--to', 'w1:p2', '--type', 'note', 'for session A');
     assert.equal(b.cli('status').out.mailboxes.length, 0);
+    await b.bind('w1:p2');
     const sentB = b.cli('send', '--to', 'w1:p2', '--type', 'note', 'for session B');
     assert.deepEqual([sentA.out.serial, sentB.out.serial], ['N001', 'N001']);
     assert.deepEqual(a.cli('status').out.mailboxes[0].pending.map(p => p.summary), ['for session A']);
