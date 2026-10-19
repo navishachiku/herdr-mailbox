@@ -65,7 +65,7 @@ function rig(t, timings = {}) {
   const calls = () => fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
   const prompts = (id = 'w1:p1') => calls().filter(c => c.argv[0] === 'agent' && c.argv[1] === 'prompt' && c.argv[2] === id);
   const stop = () => { try { process.kill(Number(fs.readFileSync(path.join(dir, 'daemon.pid'), 'utf8')), 'SIGKILL'); } catch { /* already stopped */ } };
-  t.after(() => { stop(); fs.rmSync(root, { recursive: true, force: true }); });
+  t.after(() => { stop(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
   const bind = async (id = 'w1:p1', { register = true } = {}) => {
     cli(['status']);
     const transcriptPath = id === 'w1:p1' ? transcript : path.join(root, 'sender.jsonl');
