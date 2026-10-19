@@ -73,7 +73,8 @@ export function canDeliver(mbId) {
   const box = api?.state.mailboxes[mbId];
   if (!box) return { ok: false, reason: 'unknown_mailbox' };
   if (box.state !== 'connected') return { ok: false, reason: box.disconnect?.reason ?? 'unbound' };
-  if (unverified.has(mbId) || missing.has(mbId) || noConversation.has(mbId)) return { ok: false, reason: 'verifying' };
+  if (noConversation.has(mbId)) return { ok: false, reason: 'waiting_conversation' };
+  if (unverified.has(mbId) || missing.has(mbId)) return { ok: false, reason: 'verifying' };
   return { ok: true, pane: box.owner.pane, transcript: box.owner.transcript };
 }
 export const whoami = canDeliver;

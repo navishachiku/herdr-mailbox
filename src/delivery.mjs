@@ -128,7 +128,7 @@ async function deliverMailbox(box, panes) {
   if (kind === 'notes' && !box.deliverNow && api.now() - batch[0].createdAt < timings.mergeMs) return;
   if (box.paused?.nextAt > api.now()) return;
   const who = canDeliver(box.id);
-  if (!who.ok) { setPaused(box, 'identity', false); return; }
+  if (!who.ok) { setPaused(box, who.reason === 'waiting_conversation' ? 'waiting_conversation' : 'identity', false); return; }
   if (kind === 'notes') {
     const status = panes.find(p => p.pane_id === who.pane)?.agent_status;
     const long = workingSince.has(who.pane) && api.now() - workingSince.get(who.pane) >= timings.workingMs;

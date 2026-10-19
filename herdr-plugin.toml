@@ -7,3 +7,37 @@ platforms = ["macos", "linux"]
 
 [[startup]]
 command = ["node", "src/ensure.mjs"]
+
+# After a herdr restart the screen's pane is gone; the first focus on its receiver brings it back.
+[[events]]
+on = "pane.focused"
+command = ["node", "src/on-focus.mjs"]
+
+# The shortcut: open the mailbox screen, focus it when it is open, close it when pressed from inside it.
+[[actions]]
+id = "open"
+title = "Open mailbox"
+contexts = ["pane"]
+command = ["node", "src/open.mjs"]
+
+[[panes]]
+id = "screen"
+title = "Mailbox"
+placement = "split"
+command = ["node", "src/screen/main.mjs"]
+
+[[panes]]
+id = "settings"
+title = "Mailbox settings"
+placement = "popup"
+width = 64
+height = 9
+command = ["node", "src/screen/settings.mjs"]
+
+[[panes]]
+id = "attachment"
+title = "Attachment"
+placement = "popup"
+width = 100
+height = 30
+command = ["node", "src/screen/attachment.mjs"]
