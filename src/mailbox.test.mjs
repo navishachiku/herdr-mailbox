@@ -70,6 +70,23 @@ test('decision needs 2 to 4 options and a recommendation', () => {
   assert.equal(core.handle(decision({ options: ['a', 'b', 'c', 'd'], recommend: 'D' })).ok, true);
 });
 
+test('202/AC-34 sending strips only an option own leading letter and preserves another option letter', () => {
+  const { core, dir } = fresh();
+  try {
+    const sent = core.handle(decision({
+      options: ['A 改甲', '(B) Change beta', 'C. Change gamma', 'B belongs to the fourth option'],
+      recommend: 'A',
+    }));
+    assert.equal(sent.ok, true);
+    assert.deepEqual(core.state.letters[sent.uid].content.options, [
+      '改甲', 'Change beta', 'Change gamma', 'B belongs to the fourth option',
+    ], 'the send entry point stores normalized options without removing a different option letter');
+    const english = core.handle(decision({ options: ['A new plan', 'Keep the existing plan'] }));
+    assert.equal(english.ok, true);
+    assert.equal(core.state.letters[english.uid].content.options[0], 'A new plan', 'an English word followed by Latin text is not an option prefix');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('over-limit text is refused with an attachment hint; the limit itself is accepted', () => {
   const { core } = fresh();
   const cases = [

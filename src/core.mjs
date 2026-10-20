@@ -19,6 +19,18 @@ const fail = (error, message, extra) => ({ ok: false, error, message, ...extra }
 // Serial numbers (Q003, N012) are for people only; agents must name a letter by uid.
 const SERIAL = /^[A-Z]\d{3,}$/;
 
+// The screen shows each option's letter itself, so a sender who wrote it into the option text would show it twice.
+// Only the option's own letter is taken off, and only when text remains after it:
+// - with brackets or punctuation it always goes: "(A)", "（A）", "[A]", "A.", "A:", "A)", "A、", "A："
+// - a bare letter and a space goes only when a non-Latin character follows ("A 改甲"), because in Latin text it is
+//   usually a word ("A new plan", "A plan" stay); a letter joined to the next word ("A.I. tools", "Apple") stays too
+function ownLetterOff(option, letter) {
+  if (!letter) return option;
+  const m = new RegExp(`^\\s*(?:[(（\\[]${letter}[)）\\]]\\s*|${letter}[、：）]\\s*|${letter}[.):]\\s+|${letter}\\s+(?=[^\\sA-Za-z0-9\\u00C0-\\u024F]))`).exec(option);
+  const rest = m ? option.slice(m[0].length) : option;
+  return rest.trim() ? rest : option;
+}
+
 export function newUid(now) {
   let t = now;
   let head = '';
@@ -105,7 +117,7 @@ export class Mailboxes {
       content.question = question;
     }
     if (type === 'decision') {
-      const options = (f.options ?? []).map(String);
+      const options = (f.options ?? []).map((o, i) => ownLetterOff(String(o), LETTERS[i]));
       if (options.length < 2 || options.length > 4) return fail('bad_options', `a decision question needs 2 to 4 options, got ${options.length}`);
       const long = options.findIndex(o => len(o) > LIMITS.option);
       if (long >= 0) return tooLong(`option ${LETTERS[long]}`, LIMITS.option);
