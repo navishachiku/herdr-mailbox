@@ -195,7 +195,7 @@ Over the limit, put the text in a file and pass `--attach <file>`; the file is c
 
 - The CLI never types a message into a pane itself. If the daemon cannot be started, the send fails.
 - If the running daemon speaks another protocol version than the command, the command refuses and asks you to restart the daemon.
-- `mailbox send` cannot wait for a reply. A dispatch that must block until the receiver answers still uses `herdr agent prompt --wait`.
+- `mailbox send --wait [--timeout <ms>]` returns after the receiver has taken the letter and finished its turn (it waits for this letter's batch to be delivered, then for the receiver to go idle again; exit 3: not delivered within 120s, the letter is queued and still arrives; exit 4: delivered but the receiver outlasted `--timeout`; do not resend on either); it needs an agent or pane address, not an `MB-` id. The letter is signed by the program either way, and a role prefix the sender typed (`TL 💬`, `PM:`) is dropped before sending.
 - macOS limits a Unix socket path to about 104 characters, so the state directory must not be nested deeply.
 
 <details>

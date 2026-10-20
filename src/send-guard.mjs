@@ -20,7 +20,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as herdr from './herdr.mjs';
-import { signatureFor, withSignature } from './signature.mjs';
 import { classify, typedText } from './input-box.mjs';
 import { STATE_FILE } from './paths.mjs';
 
@@ -157,18 +156,21 @@ function actionsIn(tokens, single) {
       if (tokens[j] !== 'agent' || tokens[j + 1] !== 'prompt') continue;
       const pos = [];
       let wait = false;
+      let timeout = null;
       for (let k = j + 2; k < tokens.length; k++) {
         const t = tokens[k];
         if (t.startsWith('--')) {
           if (t === '--wait') wait = true;
+          else if (t === '--timeout' && /^\d+$/.test(tokens[k + 1] ?? '')) timeout = tokens[++k];
+          else if (t.startsWith('--timeout=') && /^\d+$/.test(t.slice(10))) timeout = t.slice(10);
           else if (!t.includes('=') && VALUE_OPTS.has(t)) k++;
           continue;
         }
         pos.push(k);
       }
       if (pos.length >= 2) {
-        const plain = single && i === 0 && tokens.filter((t) => t !== '--wait').length === 5 && !tokens.substitutions.some(Boolean) && literal(tokens[pos[0]], tokens[pos[1]]);
-        out.push({ target: tokens[pos[0]], text: tokens[pos[1]], wait, plain, range: range(i) });
+        const plain = single && i === 0 && tokens.length - (wait ? 1 : 0) - (timeout === null ? 0 : tokens.some((t) => t.startsWith('--timeout=')) ? 1 : 2) === 5 && !tokens.substitutions.some(Boolean) && literal(tokens[pos[0]], tokens[pos[1]]);
+        out.push({ target: tokens[pos[0]], text: tokens[pos[1]], wait, timeout, plain, range: range(i) });
       }
     } else if (isHoldbackSend(tokens[i])) {
       const to = tokens.indexOf('--to', i + 1);
@@ -239,9 +241,8 @@ async function judge(action, ownPane) {
   if (!action.plain) {
     return { block: `Blocked: messages to ${action.target} go through the mailbox, and this command is not a plain herdr agent prompt <target> "<text>" (it has expansions, a redirect, a pipe or other commands). Use: mailbox send --to ${action.target} --type note "<text>"` };
   }
-  const signature = ownPane ? await signatureFor(ownPane, receiver.pane_id) : null;
-  const text = signature ? withSignature(action.text, signature) : action.text;
-  return { rewrite: `node ${shellQuote(MAILBOX)} send --to ${shellQuote(receiver.pane_id)} --type note ${shellQuote(text)}` };
+  // The mailbox signs the letter itself; the text goes in as the sender wrote it.
+  return { rewrite: `node ${shellQuote(MAILBOX)} send --to ${shellQuote(receiver.pane_id)} --type note${action.wait ? ' --wait' : ''}${action.wait && action.timeout ? ` --timeout ${action.timeout}` : ''} ${shellQuote(action.text)}` };
 }
 
 async function main() {

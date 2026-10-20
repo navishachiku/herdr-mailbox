@@ -41,3 +41,28 @@ export function withSignature(text, signature) {
   const hasOne = head !== '' && (head === signature || SHAPE.test(head));
   return `${signature}${MARK}${hasOne ? text.slice(i + MARK.length) : text}`;
 }
+
+// The sender's own role/position names, lower-cased, for telling "TL:" (own prefix) from ordinary text like "Note:".
+export async function ownNames(pane) {
+  try {
+    const p = (await get('pane', 'get', pane)).pane;
+    const tab = p.tab_id ? (await get('tab', 'get', p.tab_id)).tab.label : '';
+    return [p.label, tab].filter(Boolean).map(s => s.toLowerCase());
+  } catch { return []; }
+}
+
+// Program adds the one signature, so a prefix the sender typed is dropped (repeats too): "TL 💬", "PM 💬 ", or
+// "TL：" / "PM:" when the head is one of the sender's own names. A speech-bubble head must have no whitespace
+// and no more than three "/"-parts; slash commands are left alone.
+const BUBBLE = /^\s*[^\s:：]{1,30}(?:\/[^\s:：]{1,30}){0,2}\s*💬\s*/u;
+const COLON = /^\s*([^\s:：💬]{1,30})\s*[:：][ \t]*/u;
+
+export function stripOwnPrefix(text, names = []) {
+  if (typeof text !== 'string' || text.startsWith('/')) return text;
+  let out = text;
+  for (;;) {
+    const m = BUBBLE.exec(out) ?? (() => { const c = COLON.exec(out); return c && names.includes(c[1].toLowerCase()) ? c : null; })();
+    if (!m || m[0].length === 0) return out;
+    out = out.slice(m[0].length);
+  }
+}

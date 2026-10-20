@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { waitForReceiver, START_WINDOW_MS } from './wait.mjs';
 import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
 
@@ -45,7 +46,24 @@ const req = await command.build(values, positionals, helpers);
 // Who is asking, for ops that only an owner (or the user, through a herdr plugin action) may run.
 req.caller = { pane: process.env.HERDR_PANE_ID, sid: process.env.HERDR_MAILBOX_SID, viaPlugin: Boolean(process.env.HERDR_PLUGIN_ID) };
 
+if (values.wait && (!req.to || req.to.startsWith('MB-'))) usage('--wait needs an agent or pane address, not a mailbox id');
+
 let res;
 try { res = await call(req); } catch (e) { res = { ok: false, error: 'daemon_unavailable', message: String(e.message || e) }; }
+let exitCode = res.ok ? 0 : 1;
+if (res.ok && values.wait) {
+  // A letter that went into a mailbox is delivered when its batch is confirmed; a direct send has no batch to follow.
+  const viaMailbox = res.status !== 'direct' && res.status !== 'downgraded';
+  const delivered = viaMailbox ? async () => {
+    for (const end = Date.now() + START_WINDOW_MS; Date.now() < end; await new Promise(r => setTimeout(r, 1000))) {
+      const st = await call({ op: 'status', from: req.from, to: req.to, caller: req.caller }).catch(() => null);
+      if (st?.batches?.some(b => b.members.includes(res.uid) && b.status === 'confirmed')) return true;
+    }
+    return false;
+  } : undefined;
+  const { code, fields } = await waitForReceiver(req.to, values.timeout, { delivered });
+  res = { ...res, ...fields };
+  exitCode = code;
+}
 console.log(JSON.stringify(res));
-process.exit(res.ok ? 0 : 1);
+process.exit(exitCode);

@@ -61,6 +61,7 @@ test('201/AC-11 201/AC-12 PreToolUse rewrites mailbox and unbound sends and prot
   for (const [command, context] of [
     ['herdr agent prompt w1:p1 "report with spaces"', { agent_id: 'child-agent', agent_type: 'general-purpose' }],
     ['herdr agent prompt w1:p1 "report with spaces" --wait', {}],
+    ['herdr agent prompt w1:p1 "report with spaces" --wait --timeout 600000', {}],
     ['node /tmp/herdr-holdback/src/send.mjs --to w1:p1 "report with spaces"', {}],
   ]) {
     const result = hook(command, context);
@@ -71,6 +72,9 @@ test('201/AC-11 201/AC-12 PreToolUse rewrites mailbox and unbound sends and prot
     const rewritten = output.updatedInput.command;
     assert.ok(rewritten.includes(path.join(here, 'mailbox.mjs')));
     assert.match(rewritten, /send\s+--to\s+['"]?w1:p1['"]?\s+--type\s+note/);
+    assert.equal(/--wait/.test(rewritten), command.includes('--wait'), 'a --wait dispatch keeps waiting through the mailbox');
+    assert.equal(/--timeout 600000/.test(rewritten), command.includes('--timeout 600000'), 'the wait limit is carried over');
+    assert.doesNotMatch(rewritten, /💬/, 'the guard no longer signs: the mailbox does');
     assert.ok(rewritten.includes('report with spaces'));
     assert.doesNotMatch(rewritten, /herdr agent prompt|herdr-holdback\/src\/send\.mjs/);
   }
