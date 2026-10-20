@@ -158,12 +158,20 @@ async function closeScreen(box, panes) {
 }
 
 // 'alive': the screen pane is there and is the same terminal; 'stale': the pane id is there but its terminal is not
-// the one the screen started in (herdr restored an empty shell); 'gone': no such pane. Records from before the
-// terminal id was kept have none to compare and count as alive.
+// the one the screen started in (herdr restored an empty shell); 'gone': no such pane.
+// A record from before the screen's terminal id was kept has nothing to compare. If the receiver's terminal is the
+// recorded one, herdr has not restarted since the screen opened, so the pane is the real screen and its terminal
+// id is recorded now; if the receiver's terminal changed, the pane is a leftover shell.
 function screenState(box, panes) {
   const pane = box.screen?.pane && panes.find(p => p.pane_id === box.screen.pane);
   if (!pane) return 'gone';
-  return box.screen.paneTerminal && pane.terminal_id !== box.screen.paneTerminal ? 'stale' : 'alive';
+  if (box.screen.paneTerminal) return pane.terminal_id !== box.screen.paneTerminal ? 'stale' : 'alive';
+  const owner = panes.find(p => p.pane_id === box.owner?.pane);
+  if (!owner) return 'alive';
+  if (owner.terminal_id !== box.screen.terminalId) return 'stale';
+  box.screen.paneTerminal = pane.terminal_id;
+  api.save();
+  return 'alive';
 }
 
 // The shortcut: open the screen, focus it when it is open elsewhere, close it when asked from inside it.

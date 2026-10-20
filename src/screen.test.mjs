@@ -518,6 +518,49 @@ test('202/AC-13 after herdr restarts, focus closes the stale shell with the same
   } finally { w.cleanup(); }
 });
 
+test('202/AC-13 focus backfills a legacy screen terminal without reopening, then replaces the stale shell when that terminal changes', async () => {
+  const w = world();
+  try {
+    const mb = await ready(w);
+    assert.equal(w.cli('open').code, 0);
+    const panes = JSON.parse(fs.readFileSync(w.env.FAKE_HERDR_STATE, 'utf8')).panes;
+    const stateFile = path.join(w.dir, 'state.json');
+    w.stop();
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    const legacy = state.mailboxes[mb].screen;
+    const screenPane = panes.find(p => p.pane_id === legacy.pane);
+    assert.ok(screenPane, 'the screen pane is still present');
+    assert.equal(legacy.terminalId, panes.find(p => p.pane_id === RECV).terminal_id);
+    delete legacy.paneTerminal;
+    fs.writeFileSync(stateFile, JSON.stringify(state));
+    assert.equal(w.cli('status').code, 0);
+    fs.writeFileSync(w.env.FAKE_HERDR_LOG, '');
+    // Use the focus event's public op to check its response as well as the persisted migration.
+    const focused = await w.op('screen-ensure', { pane: RECV });
+    assert.deepEqual(focused, { ok: true, action: 'none' });
+    const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8')).mailboxes[mb].screen;
+    assert.equal(saved.pane, screenPane.pane_id);
+    assert.equal(saved.paneTerminal, screenPane.terminal_id);
+    assert.equal(saved.terminalId, legacy.terminalId);
+    assert.equal(w.log().some(({ argv }) => argv[0] === 'pane' && ['close', 'split', 'run'].includes(argv[1])), false);
+    w.setFake(f => {
+      f.panes = panes.map(p => p.pane_id === screenPane.pane_id
+        ? { ...p, terminal_id: `${p.terminal_id}-restarted` } : p);
+    });
+    fs.writeFileSync(w.env.FAKE_HERDR_LOG, '');
+    const ev = spawnSync(process.execPath, [path.join(here, 'on-focus.mjs')], {
+      env: { ...w.env, HERDR_PANE_ID: RECV, HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: 'pane.focused', data: { pane_id: RECV } }) }, encoding: 'utf8',
+    });
+    assert.equal(ev.status, 0, ev.stderr);
+    const calls = w.log().map(entry => entry.argv);
+    const closed = calls.findIndex(args => args[0] === 'pane' && args[1] === 'close' && args.includes(screenPane.pane_id));
+    const split = calls.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === RECV);
+    assert.ok(closed >= 0, 'the shell with the changed terminal is closed');
+    assert.ok(split > closed, 'the stale shell is closed before splitting the receiver');
+    assertScreenOpen(w, RECV, 48);
+  } finally { w.cleanup(); }
+});
+
 test('202/AC-14 Deliver now skips the merge wait but still waits for an empty input box', async () => {
   const w = world();
   try {
