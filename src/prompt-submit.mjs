@@ -7,9 +7,13 @@ import { call } from './ipc.mjs';
 
 const MARKER = /^📬 [^\n]*[（(]([^\s（）()]+)[）)]\s*$/;
 
+// Claude Code wraps a multi-line prompt it received as a paste: leading blank lines, then <pasted_content id="..">.
+// Only the first non-empty line after that wrapper counts, so a marker quoted further down never matches.
+const firstLine = prompt => String(prompt ?? '').replace(/^\s+/, '').replace(/^<pasted_content\b[^>]*>\s*/, '').split('\n')[0];
+
 try {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-  const marker = MARKER.exec(String(input.prompt ?? '').split('\n')[0])?.[1];
+  const marker = MARKER.exec(firstLine(input.prompt))?.[1];
   if (marker) {
     // A daemon that answers slowly must not hold the prompt: give up after two seconds and add nothing.
     const res = await Promise.race([call({ op: 'batch-by-marker', marker, caller: { pane: process.env.HERDR_PANE_ID, sid: process.env.HERDR_MAILBOX_SID } }), new Promise(resolve => setTimeout(resolve, 2000, { ok: false }))]);

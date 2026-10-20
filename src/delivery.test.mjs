@@ -530,6 +530,41 @@ test('201/AC-14 UserPromptSubmit restores the disclaimer and metadata from the h
   for (const value of [disclaimer, a.uid, b.uid, batch.id, 'w1:p2', sender]) assert.ok(context.includes(value), value);
 });
 
+test('201/AC-14 UserPromptSubmit reads a pasted header marker but ignores markers inside ordinary content', async t => {
+  const r = rig(t);
+  const mb = await r.bind();
+  const sender = await r.bind('w1:p2');
+  const a = r.note(mb, 'first pasted context report');
+  const b = r.note(mb, 'second pasted context report');
+  const batch = await r.confirmed(a.uid);
+  assert.deepEqual([...batch.members].sort(), [a.uid, b.uid].sort());
+  assert.equal(r.prompts().length, 1);
+  const prompt = r.prompts()[0].argv[3];
+  assert.match(prompt.split('\n')[0], /^📬 [^\n]*[（(][^\s（）()]+[）)]$/);
+  const hook = text => spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' },
+    input: JSON.stringify({ prompt: text, session_id: 'sid-w1:p1', transcript_path: r.transcript }),
+    encoding: 'utf8', timeout: 15000,
+  });
+  // Claude transcripts also use a closing tag carrying the pasted-content id.
+  for (const closing of ['</pasted_content>', '</pasted_content id="paste-1">']) {
+    const wrap = body => `\n\n<pasted_content id="paste-1">\n\n${body}\n${closing}\n`;
+    const result = hook(wrap(prompt));
+    assert.equal(result.status, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+    const context = output.hookSpecificOutput.additionalContext;
+    assert.equal(typeof context, 'string');
+    for (const value of [disclaimer, a.uid, b.uid, batch.id, 'w1:p2', sender]) assert.ok(context.includes(value), value);
+    const embedded = hook(wrap(`An ordinary pasted report follows.\n\n${prompt}`));
+    assert.equal(embedded.status, 0, embedded.stderr);
+    assert.equal(embedded.stdout, '', 'a marker after ordinary pasted content must not trigger the hook');
+  }
+  const ordinary = hook(`An ordinary user message follows.\n\n${prompt}`);
+  assert.equal(ordinary.status, 0, ordinary.stderr);
+  assert.equal(ordinary.stdout, '', 'a marker inside an ordinary message must not trigger the hook');
+});
+
 test('201/AC-15 Codex receives the full batch metadata and reply mailbox in its prompt', async t => {
   const r = rig(t);
   r.world.panes[0].agent = 'codex';
