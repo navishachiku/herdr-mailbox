@@ -297,7 +297,8 @@ export class Mailboxes {
       const box = this.state.mailboxes[id];
       return { to: box.owner?.pane ?? id, mailbox: id, pending: this.pendingOf(from, id) };
     });
-    return { ok: true, mailboxes: mailboxes.filter(b => b.pending.length), ...(ids.length === 1 ? this.annotate('status', ids[0], from) : {}) };
+    // With --to, name the target's mailbox even when nothing is pending, so a receiver can find its own id.
+    return { ok: true, ...(ids.length === 1 ? { mailbox: ids[0] } : {}), mailboxes: mailboxes.filter(b => b.pending.length), ...(ids.length === 1 ? this.annotate('status', ids[0], from) : {}) };
   }
 
   // The write interface for the user's answers; the mailbox screen is a later task. Every answer carries the version

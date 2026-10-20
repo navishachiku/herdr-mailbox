@@ -121,7 +121,7 @@ Every send prints one JSON line and exits 0 only when it says `ok`:
 ```
 
 ```sh
-mailbox status [--to <address|MB-id>]        # your letters that are still open
+mailbox status [--to <address|MB-id>]        # your letters that are still open; with --to also that mailbox's id
 mailbox edit <uid> --question "..."          # only while the user has not answered
 mailbox withdraw <uid> --reason "..."        # only while the user has not answered
 ```

@@ -421,3 +421,24 @@ test('200/AC-11 a nested Claude sharing the pane cannot rebind the mailbox or ac
     assert.equal(R.mb(id).owner.convo, 'sid-1');
   } finally { R.cleanup(); }
 });
+
+test('206/AC-2 status --to a pane names its own mailbox even when nothing is pending', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    const res = R.cli(['status', '--to', 'w1:p1']);
+    assert.equal(res.code, 0, JSON.stringify(res));
+    assert.equal(res.out.mailbox, id);
+    assert.deepEqual(res.out.mailboxes, []);
+  } finally { R.cleanup(); }
+});
+
+test('206/AC-2 status --to a pane without a mailbox reports no mailbox', async () => {
+  const R = rig();
+  try {
+    await R.bindReceiver();
+    const res = R.cli(['status', '--to', 'w4:p4']);
+    assert.equal(res.code, 0, JSON.stringify(res));
+    assert.equal(res.out.mailbox, undefined);
+  } finally { R.cleanup(); }
+});
