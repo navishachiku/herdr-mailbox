@@ -1420,6 +1420,76 @@ test('202/AC-33 Resend asks for its batch and member count before sending, while
   }
 });
 
+test('202/AC-35 compact options show a bright yellow star before the recommended letter and reserve the same space on other options', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const brightYellow = style => {
+    let foreground = null;
+    let bold = false;
+    for (const match of style.matchAll(/\x1b\[([0-9;]*)m/g)) {
+      const codes = match[1].split(';').map(Number);
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        if (code === 0) { foreground = null; bold = false; }
+        else if (code === 1) bold = true;
+        else if (code === 22) bold = false;
+        else if (code === 38 || code === 48) {
+          const mode = codes[++i];
+          let rgb;
+          if (mode === 2) { rgb = codes.slice(i + 1, i + 4); i += 3; }
+          else if (mode === 5) {
+            const index = codes[++i];
+            if (index === 11) rgb = [255, 255, 0];
+            else if (index === 3) rgb = bold ? [255, 255, 0] : [128, 128, 0];
+            else if (index >= 16 && index <= 231) {
+              const levels = [0, 95, 135, 175, 215, 255];
+              const n = index - 16;
+              rgb = [levels[Math.floor(n / 36)], levels[Math.floor(n / 6) % 6], levels[n % 6]];
+            }
+          }
+          if (code === 38) foreground = rgb ?? null;
+        } else if (code === 33 || code === 93) foreground = code;
+        else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97) || code === 39) foreground = null;
+      }
+    }
+    if (typeof foreground === 'number') return foreground === 93 || (foreground === 33 && bold);
+    return Array.isArray(foreground) && foreground[0] >= 180 && foreground[1] >= 140
+      && foreground[2] < Math.min(foreground[0], foreground[1]) * 0.75;
+  };
+  for (const [layout, text] of [
+    ['short', ['alpha', 'beta']],
+    ['long', ['alpha '.repeat(16).trim(), 'beta '.repeat(20).trim()]],
+  ]) {
+    for (const cols of [32, 48, 80]) {
+      for (const recommend of ['A', 'B']) {
+        const model = interactionModel();
+        model.notes = [];
+        model.batches = [];
+        model.questions = [{ ...model.questions[0], content: { question: 'Choose an option?', options: text, recommend } }];
+        const ui = render(model, { cols, rows: 100, cardMode: 'compact', locale: 'en', now: 0 });
+        const options = ui.hits.filter(h => h.action.type === 'choose');
+        assert.equal(options.length, 2);
+        const chosen = options.find(h => h.action.choice === recommend);
+        const other = options.find(h => h.action.choice !== recommend);
+        if (layout === 'long') {
+          assert.ok(Math.abs(chosen.row - other.row) > 1, 'long compact options use separate rows with wrapped text between them');
+          assert.equal(chosen.c0, other.c0, 'stacked option hits start at the same column');
+        }
+        const chosenCells = (await styledCells(ui.styled[chosen.row])).slice(chosen.c0, chosen.c1);
+        const otherCells = (await styledCells(ui.styled[other.row])).slice(other.c0, other.c1);
+        const star = chosenCells.findIndex(cell => cell.text === '★');
+        const letter = chosenCells.findIndex(cell => cell.text === recommend);
+        const otherLetter = otherCells.findIndex(cell => cell.text === other.action.choice);
+        assert.ok(star >= 0 && star < letter, `${layout}/${cols}: the compact option places its star before its letter`);
+        assert.ok(brightYellow(chosenCells[star].style), `${layout}/${cols}: the star foreground is bright yellow`);
+        assert.equal(otherCells[star]?.text, ' ', 'the other button reserves a blank at the same relative star column');
+        assert.equal(otherLetter, letter, 'both letters have the same offset inside their buttons');
+        assert.equal(chosenCells.filter(cell => cell.text === '★').length, 1);
+        assert.equal(otherCells.some(cell => cell.text === '★'), false);
+      }
+    }
+  }
+});
+
 test('202/AC-21 clickable button labels do not use square brackets', async () => {
   const { render } = await import('./screen/render.mjs');
   for (const cardMode of ['detailed', 'compact']) {
