@@ -6,7 +6,8 @@ import net from 'node:net';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { Mailboxes, DEDUP_MS } from './core.mjs';
+import { Mailboxes, DEDUP_MS, attachmentsOf } from './core.mjs';
+import { notesBatch } from './format.mjs';
 import { emptyState } from './store.mjs';
 import { sessionKey } from './paths.mjs';
 
@@ -110,9 +111,38 @@ test('the attachment is a snapshot taken at send time', () => {
   fs.writeFileSync(file, 'version one');
   const r = core.handle(note('see file', { attach: file }));
   fs.writeFileSync(file, 'version two');
-  assert.equal(fs.readFileSync(core.state.letters[r.uid].content.attach.path, 'utf8'), 'version one');
+  assert.equal(fs.readFileSync(attachmentsOf(core.state.letters[r.uid].content)[0].path, 'utf8'), 'version one');
   fs.rmSync(file);
-  assert.equal(fs.readFileSync(core.state.letters[r.uid].content.attach.path, 'utf8'), 'version one');
+  assert.equal(fs.readFileSync(attachmentsOf(core.state.letters[r.uid].content)[0].path, 'utf8'), 'version one');
+});
+
+test('207/AC-1 every attachment of one letter is kept and shown to the receiver, and a single-attachment letter from before still reads', () => {
+  const { core, dir } = fresh();
+  const files = ['a.md', 'b.md', 'c.md'].map(n => { const f = path.join(dir, n); fs.writeFileSync(f, `body of ${n}`); return f; });
+  const r = core.handle(note('three files', { attach: files }));
+  assert.equal(r.ok, true);
+  const letter = core.state.letters[r.uid];
+  const kept = attachmentsOf(letter.content);
+  assert.deepEqual(kept.map(a => fs.readFileSync(a.path, 'utf8')), ['body of a.md', 'body of b.md', 'body of c.md']);
+  const text = notesBatch({ id: 'B1', letters: [letter], people: {} });
+  for (const a of kept) assert.ok(text.includes(a.path), `the delivered text must name ${a.path}`);
+  const old = { ...letter, content: { type: 'note', text: 'old', attach: { name: 'x.md', path: '/old/x.md' } } };
+  assert.ok(notesBatch({ id: 'B2', letters: [old], people: {} }).includes('/old/x.md'));
+  assert.deepEqual(attachmentsOf(old.content).map(a => a.name), ['x.md']);
+});
+
+test('207/AC-2 more than 5 attachments or an unreadable one refuses the whole letter and names the culprit', () => {
+  const { core, dir } = fresh();
+  const ok = Array.from({ length: 6 }, (_, i) => { const f = path.join(dir, `f${i}.md`); fs.writeFileSync(f, 'x'); return f; });
+  const many = core.handle(note('too many', { attach: ok }));
+  assert.equal(many.error, 'too_many_attach');
+  assert.match(many.message, /at most 5.*got 6/);
+  const missing = path.join(dir, 'missing.md');
+  const bad = core.handle(note('one is gone', { attach: [ok[0], missing] }));
+  assert.equal(bad.error, 'bad_attach');
+  assert.ok(bad.message.includes(missing), 'the message names the unreadable file');
+  assert.equal(Object.keys(core.state.letters).length, 0, 'no partial letter is stored');
+  assert.equal(core.handle(note('five is fine', { attach: ok.slice(0, 5) })).ok, true);
 });
 
 test('identical letter from the same sender within 30 seconds is not created again', () => {

@@ -5,7 +5,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const LIMITS = { question: 200, option: 80, idea: 300, note: 500 };
+export const LIMITS = { question: 200, option: 80, idea: 300, note: 500, attach: 5 };
+
+// Letters stored before several attachments existed keep a single `attach`; both shapes read as one list.
+export const attachmentsOf = c => c.attachments ?? (c.attach ? [c.attach] : []);
 export const DEDUP_MS = 30_000;
 const PRIORITIES = ['high', 'medium', 'low'];
 const TYPES = ['note', 'decision', 'discussion'];
@@ -99,15 +102,15 @@ export class Mailboxes {
   }
 
   // Checks fields and builds the content that is stored, deduplicated and edited.
-  // `attach` is already read: { name, sha256, data }. `direct` letters never enter a mailbox, so they have no note length limit.
-  normalize(type, f, attach, { direct = false } = {}) {
+  // `attaches` is already read: [{ name, sha256, data }]. `direct` letters never enter a mailbox, so they have no note length limit.
+  normalize(type, f, attaches, { direct = false } = {}) {
     if (!TYPES.includes(type)) return fail('bad_type', `type must be one of ${TYPES.join(', ')}`);
     if (f.priority && !PRIORITIES.includes(f.priority)) return fail('bad_priority', `priority must be one of ${PRIORITIES.join(', ')}`);
     const content = { type };
     const tooLong = (what, limit) => fail('too_long', `${what} is over ${limit} characters; put the long text in a file and pass it with --attach <file>`);
     if (type === 'note') {
       const text = String(f.text ?? '');
-      if (!text.trim() && !attach) return fail('missing_text', 'a note needs text or --attach');
+      if (!text.trim() && !attaches.length) return fail('missing_text', 'a note needs text or --attach');
       if (!direct && len(text) > LIMITS.note) return tooLong('note text', LIMITS.note);
       content.text = text;
     } else {
@@ -130,29 +133,35 @@ export class Mailboxes {
       if (len(f.idea) > LIMITS.idea) return tooLong('idea', LIMITS.idea);
       content.idea = String(f.idea);
     }
-    if (attach) content.attach = { name: attach.name, sha256: attach.sha256 };
+    if (attaches.length) content.attachments = attaches.map(a => ({ name: a.name, sha256: a.sha256 }));
     return { ok: true, content };
   }
 
-  readAttach(file) {
-    if (!file) return { ok: true, attach: null };
-    try {
-      const data = fs.readFileSync(file);
-      return { ok: true, attach: { name: path.basename(file), sha256: crypto.createHash('sha256').update(data).digest('hex'), data } };
-    } catch (e) { return fail('bad_attach', `cannot read attachment ${file}: ${e.code || e.message}`); }
+  // `files` is one path or a list. A bad list is refused as a whole, so a letter never goes out with some attachments missing.
+  readAttach(files) {
+    const list = [].concat(files ?? []);
+    if (list.length > LIMITS.attach) return fail('too_many_attach', `at most ${LIMITS.attach} attachments per letter, got ${list.length}`);
+    const attaches = [];
+    for (const file of list) {
+      try {
+        const data = fs.readFileSync(file);
+        attaches.push({ name: path.basename(file), sha256: crypto.createHash('sha256').update(data).digest('hex'), data });
+      } catch (e) { return fail('bad_attach', `cannot read attachment ${file}: ${e.code || e.message}`); }
+    }
+    return { ok: true, attaches };
   }
 
   // The snapshot is copied into the mailbox, so later changes to the original do not change the letter.
-  snapshot(uid, version, attach) {
+  snapshot(uid, version, attach, index = 0) {
     const dir = path.join(this.attachDir, uid);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const file = path.join(dir, `v${version}-${attach.name}`);
+    const file = path.join(dir, `v${version}-${index ? `${index + 1}-` : ''}${attach.name}`);
     fs.writeFileSync(file, attach.data, { mode: 0o600 });
     return file;
   }
 
   keyOf(c, withSender) {
-    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.recommend ?? null, c.idea ?? null, c.attach?.sha256 ?? null, c.supersedes ?? null]);
+    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.recommend ?? null, c.idea ?? null, attachmentsOf(c).map(a => a.sha256).join() || null, c.supersedes ?? null]);
   }
 
   // The letters this sender still has open in one mailbox: queued notes and pending questions.
@@ -191,7 +200,7 @@ export class Mailboxes {
     if (!att.ok) return att;
     const dest = this.hooks.route(to, req);
     if (dest.ok === false) return dest;
-    const norm = this.normalize(type, req, att.attach, { direct: dest.kind === 'direct' });
+    const norm = this.normalize(type, req, att.attaches, { direct: dest.kind === 'direct' });
     if (!norm.ok) return norm;
     const content = norm.content;
     if (supersedes) {
@@ -232,7 +241,7 @@ export class Mailboxes {
       createdAt: now, updatedAt: now, content, draft: null,
     };
     try {
-      if (att.attach) content.attach.path = this.snapshot(uid, 1, att.attach);
+      att.attaches.forEach((a, i) => { content.attachments[i].path = this.snapshot(uid, 1, a, i); });
     } catch (e) { box.counter -= 1; return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
     this.state.letters[uid] = letter;
     if (supersedes) { const o = this.state.letters[supersedes]; o.status = 'superseded'; o.supersededBy = uid; o.updatedAt = now; }
@@ -265,14 +274,14 @@ export class Mailboxes {
       question: req.question ?? old.question, options: req.options ?? old.options, recommend: req.recommend ?? old.recommend,
       idea: req.idea ?? old.idea, priority: req.priority ?? l.priority,
     };
-    const norm = this.normalize(l.type, merged, att.attach ?? old.attach);
+    const norm = this.normalize(l.type, merged, att.attaches.length ? att.attaches : attachmentsOf(old));
     if (!norm.ok) return norm;
     const content = norm.content;
     if (old.supersedes) content.supersedes = old.supersedes;
     // Changing the attachment counts as changing the question: the version moves on either way.
     const version = l.version + 1;
-    if (att.attach) content.attach.path = this.snapshot(l.uid, version, att.attach);
-    else if (old.attach) content.attach = old.attach;
+    if (att.attaches.length) att.attaches.forEach((a, i) => { content.attachments[i].path = this.snapshot(l.uid, version, a, i); });
+    else if (attachmentsOf(old).length) content.attachments = attachmentsOf(old);
     if (this.keyOf(content, '') === this.keyOf(old, '') && merged.priority === l.priority) return this.receipt(l, l.sender, { unchanged: true });
     Object.assign(l, { content, priority: merged.priority, version, edited: true, updatedAt: this.now() });
     this.save();

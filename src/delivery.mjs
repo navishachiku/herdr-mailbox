@@ -251,23 +251,23 @@ async function direct(req, content) {
   const downgraded = content.type !== 'note';
   const id = newBatchId(api.state.batches);
   // The receiver has no mailbox to keep the attachment in, so the snapshot taken now is what the text points to.
-  let attachment;
-  if (req.attach) {
-    try {
-      const data = fs.readFileSync(req.attach);
-      const dir = path.join(ATTACH_DIR, id);
+  const attachments = [];
+  try {
+    for (const [i, file] of [].concat(req.attach ?? []).entries()) {
+      const data = fs.readFileSync(file);
+      const dir = path.join(ATTACH_DIR, id, String(i + 1));
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-      attachment = path.join(dir, path.basename(req.attach));
-      fs.writeFileSync(attachment, data, { mode: 0o600 });
-    } catch (e) { return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
-  }
+      attachments.push(path.join(dir, path.basename(file)));
+      fs.writeFileSync(attachments[i], data, { mode: 0o600 });
+    }
+  } catch (e) { return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
   let text;
   if (downgraded) {
-    text = forwardQuestion({ letterType: content.type, content, from, label: people[from].label, attachment });
+    text = forwardQuestion({ letterType: content.type, content, from, label: people[from].label, attachments });
   } else {
     const signature = await signatureFor(from, to);
     const body = content.text || '';
-    text = directNote({ text: signature ? withSignature(body, signature) : body, people, from, attachment });
+    text = directNote({ text: signature ? withSignature(body, signature) : body, people, from, attachments });
   }
   api.state.batches[id] = { id, mailbox: null, pane: pane.pane_id, kind: 'direct', members: [], status: 'pending', text, createdAt: api.now() };
   api.save();

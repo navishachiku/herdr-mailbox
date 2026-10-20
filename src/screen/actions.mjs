@@ -74,7 +74,7 @@ async function openOverlay(action, env) {
     if (prefs.ok === false) return { ok: false, error: prefs.error, overlay: env.overlay ?? null };
     return { ok: true, overlay: { ...(env.overlay ?? { kind: 'settings' }), prefs: pickPrefs(prefs) } };
   }
-  const res = await env.call({ op: 'attachment', uid: action.uid });
+  const res = await env.call({ op: 'attachment', uid: action.uid, index: action.index });
   if (res.ok === false) return { ok: false, error: res.error };
   return { ok: true, overlay: { kind: 'attachment', uid: action.uid, name: res.name, text: res.text, truncated: Boolean(res.truncated), top: 0 } };
 }

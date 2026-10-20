@@ -7,6 +7,7 @@ import * as herdr from './herdr.mjs';
 import { classify } from './input-box.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { timings } from './timings.mjs';
+import { attachmentsOf } from './core.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 const MAIN = fileURLToPath(new URL('./screen/main.mjs', import.meta.url));
@@ -36,7 +37,7 @@ async function view(req) {
   const base = l => ({ uid: l.uid, serial: l.serial, type: l.type, status: l.status, sender: l.sender, senderLabel: label(l.sender), createdAt: l.createdAt });
   const notes = mine.filter(l => l.status === 'queued' && l.type === 'note' && !l.batch)
     .sort((a, b) => a.createdAt - b.createdAt)
-    .map(l => ({ ...base(l), text: l.content.text ?? '', attach: l.content.attach?.name ?? null }));
+    .map(l => ({ ...base(l), text: l.content.text ?? '', attach: attachmentsOf(l.content)[0]?.name ?? null }));
   // A question the user just sent stays listed as submitted. Delivery marks the letter delivered the moment its batch
   // goes out, so for a short while after that the screen still reports it as sent rather than dropping it.
   const sentAt = l => api.state.batches[l.batch]?.createdAt ?? 0;
@@ -102,7 +103,7 @@ function prefsSet(req) {
 
 async function attachment(req) {
   const l = api.state.letters[req.uid];
-  const att = l?.content?.attach;
+  const att = l ? attachmentsOf(l.content)[req.index ?? 0] : null;
   if (!att?.path) return fail('no_attachment', 'that letter has no attachment');
   try {
     const data = fs.readFileSync(att.path);

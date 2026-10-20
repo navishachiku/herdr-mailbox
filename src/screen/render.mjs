@@ -238,11 +238,11 @@ function card(q, ctx) {
   } else if (q.content.idea) {
     for (const l of wrap(`${t.idea}: ${q.content.idea}`, w - 2)) add([textItem(` ${l}`, S.dim)]);
   }
-  if (q.content.attach) {
-    const open = { type: 'attachment', mailbox: model.mailbox.id, uid: q.uid };
+  (q.content.attachments ?? (q.content.attach ? [q.content.attach] : [])).forEach((a, index) => {
+    const open = { type: 'attachment', mailbox: model.mailbox.id, uid: q.uid, ...(index ? { index } : {}) };
     const look = FB.look(open);
-    add([look ? textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off) : { ...item([seg(` 📎 ${cut(q.content.attach.name, w - 6)} `, S.link, S.linkHover)], open), ...(cut(q.content.attach.name, w - 6) !== q.content.attach.name ? { tip: q.content.attach.name } : {}) }]);
-  }
+    add([look ? textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off) : { ...item([seg(` 📎 ${cut(a.name, w - 6)} `, S.link, S.linkHover)], open), ...(cut(a.name, w - 6) !== a.name ? { tip: a.name } : {}) }]);
+  });
   if (q.draft?.reconfirm) {
     add([clipItem(` ${t.reconfirm}`, w - 1 + 1, S.hold)]);
     add([button(t.reconfirmButton, { type: 'reconfirm', ...base, choice: q.draft.choice, text: draftText(q) })]);

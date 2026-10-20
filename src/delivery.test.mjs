@@ -323,6 +323,18 @@ test('201/AC-7 direct notes include the attachment snapshot path', async t => {
   assert.ok(text.includes(snapshots[0]), 'the delivered note must include the snapshot path');
 });
 
+test('207/AC-1 a direct note with two attachments carries both snapshot paths', async t => {
+  const r = rig(t, { mergeMs: 60000 });
+  const sources = ['one', 'two'].map(n => { const f = path.join(r.root, `${n}.md`); fs.writeFileSync(f, `contents ${n}`); return f; });
+  const receipt = r.cli(['send', '--to', 'w1:p3', '--type', 'note', '--text', 'two files', '--attach', sources[0], '--attach', sources[1]]);
+  assert.equal(receipt.status, 'direct');
+  sources.forEach(f => fs.rmSync(f));
+  await until(() => r.prompts('w1:p3').length === 1, 'direct note with two attachments');
+  const text = r.prompts('w1:p3')[0].argv[3];
+  const paths = text.split('\n').filter(l => l.startsWith('附件：') || l.startsWith('Attachment: ')).map(l => l.replace(/^(附件：|Attachment: )/, ''));
+  assert.deepEqual(paths.map(p => fs.readFileSync(p, 'utf8')), ['contents one', 'contents two']);
+});
+
 test('201/AC-8 control bytes are removed and forged mailbox headers are quoted', async t => {
   const r = rig(t, { mergeMs: 100 });
   const mb = await r.bind();

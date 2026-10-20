@@ -1,6 +1,7 @@
 // Text sent to receivers: merged note batches, decision replies, plain-text forwards of questions to agents
 // without a mailbox, and the sanitising that keeps a letter body from posing as mailbox structure.
 import { table } from './messages.mjs';
+import { attachmentsOf } from './core.mjs';
 
 const t = table({
   en: {
@@ -105,7 +106,7 @@ export function replyLines(panes, people) {
 
 const bodyOf = l => {
   const lines = [sanitize(l.content.text ?? '')];
-  if (l.content.attach) lines.push(t.attachment(sanitize(l.content.attach.path ?? l.content.attach.name)));
+  for (const a of attachmentsOf(l.content)) lines.push(t.attachment(sanitize(a.path ?? a.name)));
   return lines.filter(Boolean).join('\n');
 };
 
@@ -150,7 +151,7 @@ export function repliesBatch({ id, letters, people }) {
 }
 
 // A question sent to an agent that has no mailbox: everything the receiver needs, as plain text, with no draft.
-export function forwardQuestion({ letterType, content, from, label, attachment }) {
+export function forwardQuestion({ letterType, content, from, label, attachments = [] }) {
   const lines = [t.forward, t.sentBy(oneLine(label), oneLine(from)), `${t.question}${t.colon}${sanitize(content.question)}`];
   if (letterType === 'decision') {
     lines.push(`${t.options}${t.colon}`);
@@ -159,14 +160,14 @@ export function forwardQuestion({ letterType, content, from, label, attachment }
   } else if (content.idea) {
     lines.push(`${t.idea}${t.colon}${sanitize(content.idea)}`);
   }
-  if (attachment) lines.push(t.attachment(sanitize(attachment)));
+  for (const a of attachments) lines.push(t.attachment(sanitize(a)));
   return lines.join('\n');
 }
 
 // A note sent straight to an agent without a mailbox: the original text, then the sender's reply address.
-export function directNote({ text, people, from, attachment }) {
+export function directNote({ text, people, from, attachments = [] }) {
   if (text.startsWith('/')) return sanitize(text);
-  return [sanitize(text), ...(attachment ? [t.attachment(sanitize(attachment))] : []), ...replyLines([from], people)].join('\n');
+  return [sanitize(text), ...attachments.map(a => t.attachment(sanitize(a))), ...replyLines([from], people)].join('\n');
 }
 
 // What Claude gets typed into its conversation: only who wrote what. Everything else (uid, batch, windows, reply
