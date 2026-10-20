@@ -81,18 +81,19 @@ async function openOverlay(action, env) {
 
 const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds, tooltipSeconds: p.tooltipSeconds });
 
-// Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; in the attachment reader
-// the arrows, Page keys, Home, End and the wheel scroll (render keeps the position within the text).
+// Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; the arrows, Page keys,
+// Home, End and the wheel scroll it (render keeps the position within the content, and only draws a scrollbar
+// when there is something to scroll).
 function overlayInput(overlay, event) {
   if (!overlay) return null;
   if ((event.kind === 'key' && event.name === 'escape') || (event.kind === 'text' && event.text === 'q')) return null;
-  if (overlay.kind !== 'attachment') return overlay;
   const step = { up: -1, down: 1, pageup: -10, pagedown: 10, home: -Infinity, end: Infinity }[event.name];
   const by = event.kind === 'wheel' ? event.dir * 3 : event.kind === 'key' ? step : undefined;
   if (by === undefined) return overlay;
-  // No upper limit here: render knows how many rows the text wraps to and keeps the position within them (main
-  // copies that back). The text's length only bounds End, since it never wraps to more rows than it has characters.
-  const end = overlay.text.length + 1;
+  // No upper limit here: render knows how many rows the content takes and keeps the position within them (main
+  // copies that back). End only needs a bound past the last row: the attachment never wraps to more rows than it
+  // has characters, and the settings are a handful of rows.
+  const end = overlay.kind === 'attachment' ? overlay.text.length + 1 : 1000;
   return { ...overlay, top: Math.min(Math.max(0, (overlay.top ?? 0) + by), end) };
 }
 

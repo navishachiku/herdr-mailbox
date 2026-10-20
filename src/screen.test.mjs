@@ -497,9 +497,9 @@ test('202/AC-37 a two-line attachment wrapping to one hundred rows scrolls to it
   model.notes = [];
   model.batches = [];
   model.questions = [model.questions[0]];
-  // At 50 columns the reader fits 48 text columns: 50 wrapped rows from each of two raw lines.
+  // At 50 columns the borders and scrollbar leave 47 text columns: 50 wrapped rows per raw line.
   const ending = 'LAST WRAPPED ROW';
-  const full = `${'a'.repeat(48 * 50)}\n${'b'.repeat(48 * 49)}${ending}`;
+  const full = `${'a'.repeat(47 * 50)}\n${'b'.repeat(47 * 49)}${ending}`;
   assert.equal(full.split('\n').length, 2);
   const options = { cols: 50, rows: 30, locale: 'en', now: 0 };
   const action = hit(render(model, options), 'attachment');
@@ -2224,6 +2224,246 @@ test('202/AC-40 reload leaves the screen closed without splitting or running a p
     const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { env: w.env, encoding: 'utf8', timeout: 15000 });
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   } finally { w.cleanup(); }
+});
+
+// Infer the track and thumb from rendered differences, without prescribing their glyphs or colours.
+async function assertScrollThumb(frames, col, totalHeight) {
+  const columns = await Promise.all(frames.map(async frame => Promise.all(frame.styled.map(async line => (await styledCells(line))[col] ?? { text: ' ', style: '' }))));
+  const key = cell => JSON.stringify(cell);
+  const changed = columns[0].flatMap((cell, row) => key(cell) !== key(columns[2][row]) ? [row] : []);
+  assert.ok(changed.length > 0, 'the right-side scrollbar changes when scrolling from top to bottom');
+  const first = changed[0];
+  const last = changed.at(-1);
+  const height = last - first + 1;
+  const thumb = key(columns[0][first]);
+  const track = key(columns[2][first]);
+  assert.notEqual(thumb, track, 'the thumb is visibly different from its track');
+  const spans = columns.map((cells, index) => {
+    const rail = cells.slice(first, last + 1).map(key);
+    assert.ok(rail.every(cell => cell === thumb || cell === track), 'the reserved column contains only the scrollbar');
+    const positions = rail.flatMap((cell, row) => cell === thumb ? [row] : []);
+    assert.ok(positions.length >= 1, 'the thumb is at least one row high');
+    assert.equal(positions.at(-1) - positions[0] + 1, positions.length, 'the thumb is contiguous');
+    const expected = height * height / totalHeight(height);
+    assert.ok(Math.abs(positions.length - Math.max(1, expected)) <= 1, `frame ${index}: the thumb approximates the visible fraction`);
+    return { start: positions[0], end: positions.at(-1), length: positions.length };
+  });
+  assert.equal(spans[0].start, 0, 'the top view puts the thumb at the top');
+  assert.equal(spans[2].end, height - 1, 'the bottom view puts the thumb at the bottom');
+  assert.ok(spans[1].start > spans[0].start && spans[1].start < spans[2].start, 'the middle view puts the thumb between the extremes');
+  assert.ok(Math.abs(spans[1].start - (height - spans[1].length) / 2) <= 1, 'the middle thumb tracks the halfway scroll position');
+  return { first, last };
+}
+
+test('202/AC-43 overflowing decisions retain the full-width card layout without a scrollbar and keep the heading pinned', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.batches = [];
+  const seed = model.questions[0];
+  const options = { cols: 80, rows: 40, locale: 'en', now: 0, cardMode: 'detailed' };
+  model.questions = Array.from({ length: 12 }, (_, i) => ({
+    ...seed, uid: `scroll-${i}`, serial: `Q${i + 1}`, content: { ...seed.content, question: i === 0 ? 'q'.repeat(options.cols * 2) : `Question ${i + 1}?` },
+  }));
+  // A pane tall enough for every card supplies the layout before overflow, at the same content width.
+  const full = render(model, { ...options, rows: 2000 });
+  assert.equal(full.scrollMax, 0);
+  assert.ok(full.lines.includes('─'.repeat(options.cols)), 'card separators use the last column');
+  const top = render(model, options);
+  assert.ok(top.scrollMax > 0);
+  const start = top.lines.findIndex(line => line.includes(' Q1 ·'));
+  const end = top.lines.findIndex(line => line.includes('Batch answers')) - 1;
+  const heading = top.lines.findIndex(line => line.includes('Questions ·'));
+  assert.ok(start > heading && end > start);
+  for (const scroll of [0, Math.floor(top.scrollMax / 2), top.scrollMax]) {
+    const frame = render(model, { ...options, scroll });
+    assert.equal(frame.scroll, scroll);
+    assert.equal(frame.styled[heading], top.styled[heading], 'the heading remains pinned');
+    assert.deepEqual(frame.lines.slice(start, end), full.lines.slice(start + scroll, end + scroll), 'overflow only changes which full-width card rows are visible; it adds no scrollbar');
+    assert.deepEqual(frame.styled.slice(start, end), full.styled.slice(start + scroll, end + scroll), 'the last column retains its original card text and style');
+    const visibleHits = frame.hits.filter(h => h.row >= start && h.row < end);
+    const expectedHits = full.hits.filter(h => h.row >= start + scroll && h.row < end + scroll).map(h => ({ ...h, row: h.row - scroll }));
+    assert.deepEqual(visibleHits, expectedHits, 'card controls retain their full-width positions and hit ranges');
+  }
+});
+
+test('202/AC-43 wrapped attachment text has an interior scrollbar while fitting attachments and Settings have none', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.batches = [];
+  model.questions = [model.questions[0]];
+  const options = { cols: 50, rows: 30, locale: 'en', now: 0 };
+  const full = `${'a'.repeat(4000)}\n${'b'.repeat(4000)}LAST END`;
+  const ui = await overlayScreen(model, options, async req => req.op === 'prefs-get'
+    ? { ok: true, width: 48, cardMode: 'detailed', mergeSeconds: 60, tooltipSeconds: 15 }
+    : { ok: true, name: 'scroll.md', text: full, truncated: false });
+  assert.equal((await ui.act(hit(ui.frame(), 'attachment'))).ok, true);
+  const top = ui.frame();
+  const count = top.lines.join(' ').match(/\b(\d+)\/(\d+)\b/);
+  assert.ok(count && Number(count[2]) > 2, 'the attachment progress counts wrapped rows');
+  const total = Number(count[2]);
+  const frames = [top];
+  const [down] = parseInput('\x1b[B');
+  for (let i = 0; i < Math.floor((total - Number(count[1])) / 2); i++) await ui.input(down);
+  frames.push(ui.frame());
+  await ui.input(parseInput('\x1b[F')[0]);
+  frames.push(ui.frame());
+  const rail = await assertScrollThumb(frames, options.cols - 2, () => total);
+  const borderTop = top.lines.findIndex(line => line.startsWith('┌'));
+  const borderBottom = top.lines.findIndex(line => line.startsWith('└'));
+  assert.ok(rail.first > borderTop + 1 && rail.last < borderBottom, 'the track stays inside the attachment border and below its title');
+  for (const frame of frames) {
+    assert.equal(frame.lines[borderTop], top.lines[borderTop]);
+    assert.equal(frame.lines[borderBottom], top.lines[borderBottom]);
+    for (let row = rail.first; row <= rail.last; row++) {
+      assert.equal((await styledCells(frame.styled[row]))[options.cols - 1]?.text, '│', 'the scrollbar does not overwrite the right border');
+    }
+  }
+  assert.ok(frames[2].lines.join(' ').includes('LAST END'), 'the final wrapped text remains visible beside the bottom thumb');
+  const read = new Map();
+  const height = rail.last - rail.first + 1;
+  for (let offset = 0; offset < total; offset += height) {
+    const frame = render(model, { ...options, overlay: { ...ui.overlay(), top: offset } });
+    for (let row = rail.first; row <= rail.last; row++) {
+      const cells = await styledCells(frame.styled[row]);
+      read.set(frame.overlayTop + row - rail.first, cells.slice(1, options.cols - 2).map(cell => cell.text).join('').trimEnd());
+    }
+  }
+  assert.equal([...read].sort((a, b) => a[0] - b[0]).map(([, text]) => text).join(''), full.replace(/\n/g, ''), 'the scrollbar reserves its column instead of overwriting attachment text');
+  assert.equal((await ui.input(parseInput('\x1b')[0])).ok, true);
+  const short = render(model, { ...options, overlay: { kind: 'attachment', name: 'short.md', text: 'z'.repeat(options.cols - 2), top: 0 } });
+  assert.ok(short.lines.some(line => line.includes(`│${'z'.repeat(options.cols - 2)}│`)), 'a fitting attachment uses the full interior width without a scrollbar');
+  options.cols = 80;
+  assert.equal((await ui.act(hit(ui.frame(), 'settings'))).ok, true);
+  const settings = ui.frame();
+  const first = settings.lines.findIndex(line => line.startsWith('┌'));
+  const last = settings.lines.findIndex(line => line.startsWith('└'));
+  assert.ok(first >= 0 && last > first);
+  for (let row = first + 2; row < last; row++) {
+    const cells = await styledCells(settings.styled[row]);
+    assert.deepEqual(cells[options.cols - 2], cells[options.cols - 3], 'fitting Settings leaves a plain interior margin without a scrollbar');
+  }
+});
+
+test('202/AC-43 a short pane scrolls Settings inside its border and keeps the final tooltip setting buttons clickable', async () => {
+  const { parseInput } = await import('./screen/input.mjs');
+  const { hitAt } = await import('./screen/events.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.batches = [];
+  let prefs = { width: 48, cardMode: 'detailed', mergeSeconds: 60, tooltipSeconds: 15 };
+  const options = { cols: 80, rows: 10, locale: 'en', now: 0 };
+  const ui = await overlayScreen(model, options, async req => {
+    if (req.op === 'prefs-get') return { ok: true, ...prefs };
+    assert.equal(req.op, 'prefs-set');
+    const { op, ...change } = req;
+    prefs = { ...prefs, ...change };
+    return { ok: true, ...prefs };
+  });
+  assert.equal((await ui.act(hit(ui.frame(), 'settings'))).ok, true);
+  const top = ui.frame();
+  const bounds = frame => {
+    const first = frame.lines.findIndex(line => line.startsWith('┌'));
+    const last = frame.lines.findIndex(line => line.startsWith('└'));
+    assert.ok(first >= 0 && last > first && last < options.rows, 'the complete Settings border fits inside the short pane');
+    return { first, last };
+  };
+  const border = bounds(top);
+  const frames = [top];
+  const [wheel] = parseInput('\x1b[<65;40;5M');
+  for (let i = 0; i < 20; i++) {
+    assert.equal((await ui.input(wheel)).ok, true);
+    const frame = ui.frame();
+    bounds(frame);
+    frames.push(frame);
+    // Main carries the clamped viewport position into the next input event.
+    if (frame.overlayTop !== null) ui.overlay().top = frame.overlayTop;
+  }
+  const bottom = frames.at(-1);
+  assert.notDeepEqual(bottom.styled, top.styled, 'the wheel scrolls the Settings content');
+  const column = async frame => Promise.all(frame.styled.map(async line => (await styledCells(line))[options.cols - 2]));
+  const firstColumn = await column(top);
+  const lastColumn = await column(bottom);
+  const key = cell => JSON.stringify(cell);
+  const changed = firstColumn.flatMap((cell, row) => key(cell) !== key(lastColumn[row]) ? [row] : []);
+  assert.ok(changed.length > 0, 'an interior scrollbar changes with the Settings scroll position');
+  const start = changed[0];
+  const end = changed.at(-1);
+  assert.ok(start > border.first && end < border.last, 'the scrollbar stays inside the frame');
+  const thumb = key(firstColumn[start]);
+  const track = key(lastColumn[start]);
+  assert.notEqual(thumb, track, 'the thumb differs visibly from the track without requiring particular glyphs or colours');
+  assert.equal(key(lastColumn[end]), thumb, 'scrolling to the bottom puts the thumb at the bottom of the track');
+  assert.equal(key(firstColumn[end]), track, 'the top view leaves track below its thumb');
+  for (const frame of frames) {
+    assert.equal(frame.lines[border.first], top.lines[border.first]);
+    assert.equal(frame.lines[border.last], top.lines[border.last]);
+    for (let row = start; row <= end; row++) {
+      const cells = await styledCells(frame.styled[row]);
+      assert.equal(cells[options.cols - 1]?.text, '│', 'the scrollbar does not cover the right border');
+      assert.ok([thumb, track].includes(key(cells[options.cols - 2])), 'only the track or thumb occupies the reserved column');
+    }
+  }
+  const seen = frames.flatMap(frame => frame.lines).join('\n');
+  for (const label of ['Width', 'Card mode', 'Merge interval', 'Tooltip stays']) assert.ok(seen.includes(label), `${label} remains readable when scrolled into view`);
+  assert.ok(bottom.lines.slice(0, options.rows).some(line => line.includes('Tooltip stays')), 'the final setting is visible after scrolling');
+  for (const direction of [1, -1]) {
+    const frame = ui.frame();
+    const control = frame.hits.find(h => h.action.type === 'settings-set' && Number.isFinite(h.action.change?.tooltipSeconds) && (h.action.change.tooltipSeconds - prefs.tooltipSeconds) * direction > 0);
+    assert.ok(control && control.row > border.first && control.row < border.last && control.c1 <= options.cols - 2, 'the final setting button is inside the viewport and clear of the scrollbar');
+    const [click] = parseInput(`\x1b[<0;${control.c0 + 1};${control.row + 1}M`);
+    const clicked = hitAt(frame, click);
+    assert.deepEqual(clicked?.action, control.action, 'the displayed button coordinates select the matching setting');
+    assert.equal((await ui.act(clicked.action)).ok, true);
+    assert.equal(prefs.tooltipSeconds, control.action.change.tooltipSeconds);
+    assert.ok(ui.requests.some(req => req.op === 'prefs-set' && req.tooltipSeconds === prefs.tooltipSeconds));
+  }
+});
+
+test('202/AC-43 long answered and hovered cards retain their full-width layout without a decision scrollbar in either mode', async () => {
+  const { render } = await import('./screen/render.mjs');
+  for (const cardMode of ['detailed', 'compact']) {
+    for (const cols of [32, 48, 80]) {
+      const options = { cols, rows: 20, locale: 'en', now: 0, cardMode };
+      const model = interactionModel();
+      model.notes = [];
+      model.batches = [];
+      model.questions = [{
+        ...model.questions[0], draft: { choice: 'A', text: 'Already answered' },
+        content: {
+          ...model.questions[0].content,
+          question: `Question ${'長題文字 '.repeat(cols)}${'Q'.repeat(cols * 3)}`,
+          options: [`First ${'長選項 '.repeat(cols)}${'A'.repeat(cols * 3)}`, `Second ${'另一選項 '.repeat(cols)}${'B'.repeat(cols * 3)}`],
+        },
+      }];
+      const full = render(model, { ...options, rows: 2000 });
+      assert.equal(full.scrollMax, 0);
+      const initial = render(model, options);
+      assert.ok(initial.scrollMax > 1, `${cardMode}/${cols}: the answered card overflows`);
+      const start = initial.lines.findIndex(line => line.includes(' Q1 ·'));
+      const end = initial.lines.findIndex(line => line.includes('Batch answers')) - 1;
+      assert.ok(start >= 0 && end > start);
+      let hoveredOption = false;
+      for (let scroll = 1; scroll < initial.scrollMax; scroll++) {
+        const frame = render(model, { ...options, scroll });
+        const option = frame.hits.find(h => h.action.type === 'choose');
+        const hover = option ? { x: option.c0 + 1, y: option.row + 1 } : null;
+        if (hover) hoveredOption = true;
+        for (const pointer of [null, hover]) {
+          const view = render(model, { ...options, scroll, hover: pointer });
+          const expected = render(model, { ...options, rows: 2000, hover: pointer ? { x: pointer.x, y: pointer.y + scroll } : null });
+          assert.deepEqual(view.lines.slice(start, end), expected.lines.slice(start + scroll, end + scroll), `${cardMode}/${cols}, scroll ${scroll}: long question and option text keep the original wrapping or truncation without a scrollbar column`);
+          assert.deepEqual(view.styled.slice(start, end), expected.styled.slice(start + scroll, end + scroll), `${cardMode}/${cols}, scroll ${scroll}: answered and hovered styles retain the full card width`);
+          const actualHits = view.hits.filter(h => h.row >= start && h.row < end);
+          const expectedHits = expected.hits.filter(h => h.row >= start + scroll && h.row < end + scroll).map(h => ({ ...h, row: h.row - scroll }));
+          assert.deepEqual(actualHits, expectedHits, 'scrolling does not shrink or shift option hit areas');
+        }
+      }
+      assert.ok(hoveredOption, `${cardMode}/${cols}: an intermediate view hovers an answered option`);
+    }
+  }
 });
 
 test('202/AC-40 an unsent batch supplement defers screen-reload after a version change until the text is cleared', async () => {

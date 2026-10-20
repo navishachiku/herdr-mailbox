@@ -84,7 +84,7 @@ function draw() {
   ui = render(model, { cols, rows, cardMode: model.prefs?.cardMode, locale, scroll, focus, drafts: buffers, notice, hover, batchOpen, fx, ghosts,
     previousQuestionIds: seen ? [...seen] : null, lastInteractionAt, confirmPrompt: confirmPrompt?.message ?? null,
     feedback, deliveryState, deliveryConfirmedAt, tooltip: tips.current(), overlay });
-  if (overlay?.kind === 'attachment' && ui.overlayTop !== null) overlay.top = ui.overlayTop; // keep the scroll inside the text
+  if (overlay && ui.overlayTop !== null) overlay.top = ui.overlayTop; // keep the scroll inside the content
   // Everything now visible, or scrolled to, counts as seen; what is still behind the hint does not.
   const hidden = new Set(ui.unseen);
   seen ??= new Set();

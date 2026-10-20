@@ -486,6 +486,24 @@ const MERGE_STEP = 10;
 const TOOLTIP_STEP = 5; // prefs.mjs TOOLTIP
 const WIDTH_STEP = 4;
 
+function settingsRows(p, t, cols) {
+  const rows = [];
+  const add = left => rows.push(...flow(newRow, cols, left, [], BOX));
+  const set = change => ({ type: 'settings-set', change });
+  // Labels take 20 columns, so a label and both card mode buttons still fit one row beside a scrollbar at 44 columns.
+  const label = text => textItem(` ${text}${' '.repeat(Math.max(1, 19 - width(text)))}`, BOX);
+  add([label(t.widthLabel), button('−', set({ width: p.width - WIDTH_STEP })), textItem(String(p.width).padStart(3), BOX), button('+', set({ width: p.width + WIDTH_STEP }))]);
+  add([]);
+  add([label(t.modeLabel), button(t.detailed, set({ cardMode: 'detailed' }), p.cardMode === 'detailed' ? 'chosen' : 'button'), button(t.compact, set({ cardMode: 'compact' }), p.cardMode === 'compact' ? 'chosen' : 'button')]);
+  add([]);
+  add([label(t.mergeLabel), button('−', set({ mergeSeconds: p.mergeSeconds - MERGE_STEP })), textItem(String(p.mergeSeconds).padStart(3), BOX), button('+', set({ mergeSeconds: p.mergeSeconds + MERGE_STEP }))]);
+  add([]);
+  add([label(t.tooltipLabel), button('−', set({ tooltipSeconds: p.tooltipSeconds - TOOLTIP_STEP })), textItem(String(p.tooltipSeconds).padStart(3), BOX), button('+', set({ tooltipSeconds: p.tooltipSeconds + TOOLTIP_STEP }))]);
+  add([]);
+  for (const l of wrap(t.settingsHint, cols - 2)) add([textItem(` ${l}`, BOX_DIM)]);
+  return rows;
+}
+
 function overlayRows(overlay, ctx, height) {
   const { t } = ctx;
   const cols = ctx.cols - 2; // inside the border
@@ -496,24 +514,34 @@ function overlayRows(overlay, ctx, height) {
   add([]);
   let top = 0;
   if (overlay.kind === 'settings') {
-    const p = overlay.prefs ?? {};
-    const set = change => ({ type: 'settings-set', change });
-    const label = text => textItem(` ${text}${' '.repeat(Math.max(1, 22 - width(text)))}`, BOX);
-    add([label(t.widthLabel), button('−', set({ width: p.width - WIDTH_STEP })), textItem(String(p.width).padStart(3), BOX), button('+', set({ width: p.width + WIDTH_STEP }))]);
-    add([]);
-    add([label(t.modeLabel), button(t.detailed, set({ cardMode: 'detailed' }), p.cardMode === 'detailed' ? 'chosen' : 'button'), button(t.compact, set({ cardMode: 'compact' }), p.cardMode === 'compact' ? 'chosen' : 'button')]);
-    add([]);
-    add([label(t.mergeLabel), button('−', set({ mergeSeconds: p.mergeSeconds - MERGE_STEP })), textItem(String(p.mergeSeconds).padStart(3), BOX), button('+', set({ mergeSeconds: p.mergeSeconds + MERGE_STEP }))]);
-    add([]);
-    add([label(t.tooltipLabel), button('−', set({ tooltipSeconds: p.tooltipSeconds - TOOLTIP_STEP })), textItem(String(p.tooltipSeconds).padStart(3), BOX), button('+', set({ tooltipSeconds: p.tooltipSeconds + TOOLTIP_STEP }))]);
-    add([]);
-    for (const l of wrap(t.settingsHint, cols - 2)) add([textItem(` ${l}`, BOX_DIM)]);
+    // As tall as its content; on a pane too short for that, the settings scroll under the fixed title with the same
+    // scrollbar as the attachment reader, so the last one can still be reached.
+    const body = w => settingsRows(overlay.prefs ?? {}, t, w);
+    let content = body(cols);
+    const room = height - 2 - rows.length; // inside the border, under the title
+    if (content.length > room && room > 0) {
+      content = body(cols - 1);
+      const max = Math.max(0, content.length - room);
+      top = Math.min(Math.max(0, overlay.top ?? 0), max);
+      const bar = scrollbar(room, content.length, top, max);
+      content.slice(top, top + room).forEach((r, i) => { gap(r, cols - 1 - r.col, BOX); r.segs.push(bar(i)); r.col = cols; rows.push(r); });
+    } else rows.push(...content);
   } else {
-    // The text uses the full width inside the border; the border itself is the margin.
-    const body = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n').flatMap(l => wrap(l, cols));
+    // The text uses the full width inside the border; the border itself is the margin. Text longer than the box
+    // gives up the last column to a scrollbar and wraps one column narrower, so nothing is drawn over.
+    const source = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n');
     const view = Math.max(1, height - 2 - rows.length - 1);
+    let body = source.flatMap(l => wrap(l, cols));
+    const scrolls = body.length > view;
+    if (scrolls) body = source.flatMap(l => wrap(l, cols - 1));
     top = Math.min(Math.max(0, overlay.top ?? 0), Math.max(0, body.length - view));
-    for (const l of body.slice(top, top + view)) add([textItem(l, BOX)]);
+    const bar = scrolls ? scrollbar(view, body.length, top, Math.max(0, body.length - view)) : null;
+    body.slice(top, top + view).forEach((l, i) => {
+      const r = newRow();
+      place(r, textItem(l, BOX));
+      if (bar) { gap(r, cols - 1 - r.col, BOX); r.segs.push(bar(i)); r.col = cols; }
+      rows.push(...(bar ? [r] : flow(newRow, cols, [textItem(l, BOX)], [], BOX)));
+    });
     while (rows.length < height - 3) add([]);
     add([textItem(` ${t.attachmentHint(Math.min(body.length, top + view), body.length)}${overlay.truncated ? ` · ${t.truncated}` : ''}`, BOX_DIM)]);
   }
@@ -533,6 +561,17 @@ function frame(rows, cols) {
     return row;
   });
   return [edge('┌', '┐'), ...sides, edge('└', '┘')];
+}
+
+// ---------- scrollbar ----------
+// A one-column scrollbar: a faint track with a bright thumb whose length is the visible share of the content (at
+// least one row) and whose position follows the scroll. Blue-grey, so it never puts red next to green.
+const TRACK = { fg: hex('#3b414d') };
+const THUMB = { fg: hex('#8fa3c7'), bold: true };
+function scrollbar(height, total, from, max) {
+  const len = Math.min(height, Math.max(1, Math.round(height * height / total)));
+  const start = max > 0 ? Math.round((from / max) * (height - len)) : 0;
+  return i => (i >= start && i < start + len ? seg('┃', withBg(THUMB, BOX.bg)) : seg('│', withBg(TRACK, BOX.bg)));
 }
 
 // ---------- tooltip ----------
@@ -678,9 +717,10 @@ export function render(model, {
   if (tooltip && !overlay) showTooltip(tooltip, { lines, styled, hits, tips, cols, rows });
   let overlayTop = null;
   if (overlay) {
-    // The settings box is as tall as its content; the attachment reader takes all but a row above and below.
+    // The attachment reader takes all but a row above and below; the settings box is as tall as its content, up to
+    // the whole screen.
     const screen = Math.min(rows, lines.length);
-    const height = overlay.kind === 'attachment' ? Math.max(5, screen - 2) : 0;
+    const height = overlay.kind === 'attachment' ? Math.max(5, screen - 2) : screen;
     const box = overlayRows(overlay, ctx, height);
     overlayTop = box.top;
     const start = Math.max(0, Math.floor((screen - box.rows.length) / 2));
