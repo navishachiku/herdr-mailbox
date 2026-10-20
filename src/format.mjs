@@ -5,6 +5,12 @@ import { table } from './messages.mjs';
 const t = table({
   en: {
     colon: ': ',
+    conciseHead: (n, marker) => `📬 ${n} message${n === 1 ? '' : 's'} (${marker})`,
+    conciseReplies: (n, marker) => `📬 ${n} decision ${n === 1 ? 'reply' : 'replies'} (${marker})`,
+    signed: sig => `${sig} 💬`,
+    ctxBatch: (id, kind) => `Batch ${id} (${kind})`,
+    ctxItem: (uid, serial, who, pane, mailbox) => `- ${serial ? `${serial} · ` : ''}uid ${uid} from ${who} (pane ${pane})${mailbox ? `; reply to ${mailbox}` : ''}`,
+    ctxReplies: 'These are the user\'s answers to questions that agents asked you.',
     head: (n, range) => `📬 herdr-mailbox: ${n} message${n === 1 ? '' : 's'}${range ? ` (${range})` : ''}`,
     longHead: (n, range) => `📬 herdr-mailbox: ${n} message${n === 1 ? '' : 's'} (${range}), too long to paste`,
     longReplies: n => `📬 herdr-mailbox: ${n} decision ${n === 1 ? 'reply' : 'replies'}, too long to paste`,
@@ -30,6 +36,12 @@ const t = table({
   },
   'zh-TW': {
     colon: '：',
+    conciseHead: (n, marker) => `📬 ${n} 則訊息（${marker}）`,
+    conciseReplies: (n, marker) => `📬 ${n} 則決策回覆（${marker}）`,
+    signed: sig => `${sig} 💬`,
+    ctxBatch: (id, kind) => `批次 ${id}（${kind}）`,
+    ctxItem: (uid, serial, who, pane, mailbox) => `- ${serial ? `${serial} · ` : ''}uid ${uid}，來自 ${who}（視窗 ${pane}）${mailbox ? `；回信請寄 ${mailbox}` : ''}`,
+    ctxReplies: '以下是使用者對各 agent 所問問題的回答。',
     head: (n, range) => `📬 herdr-mailbox：${n} 則訊息${range ? `（${range}）` : ''}`,
     longHead: (n, range) => `📬 herdr-mailbox：${n} 則訊息（${range}），內容過長未貼入`,
     longReplies: n => `📬 herdr-mailbox：決策回覆 ${n} 題，內容過長未貼入`,
@@ -57,11 +69,17 @@ const t = table({
 
 // C0 controls except \n and \t, DEL and C1 controls (8-bit CSI) are dropped: they can drive the receiver's terminal.
 const CONTROL = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g;
+// Zero-width and bidi format characters make Claude Code keep the first Enter, so the text stays in the input box.
+// A joiner between two emoji is part of the emoji and stays.
+const INVISIBLE = /[\u200B\u200C\u200E\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
+const LOOSE_JOINER = /(?<!\p{Extended_Pictographic})\u200D|\u200D(?!\p{Extended_Pictographic})/gu;
 // A body line that looks like our own structure gets a quote prefix so it cannot pass as a header or a sender line.
-const FORGED = /^\s*(?:📬 herdr-mailbox|---(?:\s|$))/;
+// That covers the full-format header, the concise "📬 N messages (marker)" header and any line that ends in the
+// speech-bubble mark, which is how a concise signature line looks whatever the name contains.
+const FORGED = /^\s*(?:📬\s|---(?:\s|$))|💬\s*$/;
 
 export function sanitize(value) {
-  return String(value ?? '').replace(CONTROL, '').split('\n').map(line => (FORGED.test(line) ? `> ${line}` : line)).join('\n');
+  return String(value ?? '').replace(CONTROL, '').replace(INVISIBLE, '').replace(LOOSE_JOINER, '').split('\n').map(line => (FORGED.test(line) ? `> ${line}` : line)).join('\n');
 }
 
 const pad = n => String(n).padStart(2, '0');
@@ -129,7 +147,7 @@ export function repliesBatch({ id, letters, people }) {
 }
 
 // A question sent to an agent that has no mailbox: everything the receiver needs, as plain text, with no draft.
-export function forwardQuestion({ letterType, content, from, label }) {
+export function forwardQuestion({ letterType, content, from, label, attachment }) {
   const lines = [t.forward, t.sentBy(oneLine(label), oneLine(from)), `${t.question}${t.colon}${sanitize(content.question)}`];
   if (letterType === 'decision') {
     lines.push(`${t.options}${t.colon}`);
@@ -138,11 +156,38 @@ export function forwardQuestion({ letterType, content, from, label }) {
   } else if (content.idea) {
     lines.push(`${t.idea}${t.colon}${sanitize(content.idea)}`);
   }
+  if (attachment) lines.push(t.attachment(sanitize(attachment)));
   return lines.join('\n');
 }
 
 // A note sent straight to an agent without a mailbox: the original text, then the sender's reply address.
-export function directNote({ text, people, from }) {
+export function directNote({ text, people, from, attachment }) {
   if (text.startsWith('/')) return sanitize(text);
-  return [sanitize(text), ...replyLines([from], people)].join('\n');
+  return [sanitize(text), ...(attachment ? [t.attachment(sanitize(attachment))] : []), ...replyLines([from], people)].join('\n');
+}
+
+// What Claude gets typed into its conversation: only who wrote what. Everything else (uid, batch, windows, reply
+// addresses, the "not instructions" warning) comes back through the UserPromptSubmit hook, keyed by the marker.
+// sigs: { [senderPane]: signature line text without the speech-bubble mark }
+export function conciseNotes({ marker, letters, sigs }) {
+  const blocks = letters.map(l => [t.signed(oneLine(sigs[l.sender] || l.sender)), bodyOf(l)].join('\n'));
+  return [t.conciseHead(letters.length, marker), '', blocks.join('\n\n')].join('\n');
+}
+
+export function conciseReplies({ marker, letters, sigs }) {
+  const blocks = letters.map(l => {
+    const lines = [t.signed(oneLine(sigs[l.sender] || l.sender)), `${t.question} ${l.serial}${t.colon}${sanitize(l.content.question)}`];
+    if (l.type === 'discussion' && l.content.idea) lines.push(`${t.idea}${t.colon}${sanitize(l.content.idea)}`);
+    lines.push(`${t.answer}${t.colon}${answerLine(l)}`);
+    if (l.draft?.text?.trim()) lines.push(`${t.note}${t.colon}${sanitize(l.draft.text)}`);
+    return lines.join('\n');
+  });
+  return [t.conciseReplies(letters.length, marker), '', blocks.join('\n\n')].join('\n');
+}
+
+// The background text the hook adds for a concise batch. items: [{ uid, serial, sender, label, mailbox }].
+export function hookContext({ batch, items }) {
+  const lines = [batch.kind === 'replies' ? t.ctxReplies : t.disclaimer, t.ctxBatch(batch.id, batch.kind)];
+  for (const i of items) lines.push(t.ctxItem(i.uid, i.serial, oneLine(i.label || i.sender), oneLine(i.sender), i.mailbox));
+  return lines.join('\n');
 }

@@ -62,11 +62,12 @@ Without a link, run it as `node <plugin dir>/src/mailbox.mjs`.
 
 ### Claude Code hooks
 
-Two hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. Both hooks run files inside the plugin folder, which is the folder of the `plugin_root` that `herdr plugin list --json` reports for `plugin_id` `herdr-mailbox`.
+Three hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. The hooks run files inside the plugin folder, which is the folder of the `plugin_root` that `herdr plugin list --json` reports for `plugin_id` `herdr-mailbox`.
 
 | Hook | Matcher | File | What it does |
 | --- | --- | --- | --- |
 | `SessionStart` | `startup\|resume\|clear\|compact` | `src/session-start.mjs` | Records which conversation lives in the pane, so the mailbox can tell a cleared conversation from a different one. |
+| `UserPromptSubmit` | none | `src/prompt-submit.mjs` | A Claude receiver gets mailbox batches as short text (who wrote what, plus a batch code in the first line). This hook looks the code up and adds the rest as background context: the warning that the messages come from other agents and are not the user's instructions, each letter's uid and serial, the sender's window and the sender's mailbox for replies. **Without this hook registered, the receiver never sees that warning or the reply addresses.** |
 | `PreToolUse` | `Bash` | `src/send-guard.mjs` | Rewrites a plain `herdr agent prompt <target> "<text>"` into `mailbox send --to <target> --type note "<text>"`, and protects `--wait` dispatches from landing on top of someone's typing. |
 
 ```json
@@ -76,6 +77,9 @@ Two hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. Both 
       { "matcher": "startup|resume|clear|compact",
         "hooks": [{ "type": "command", "command": "node <plugin dir>/src/session-start.mjs", "timeout": 10 }] }
     ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "node <plugin dir>/src/prompt-submit.mjs", "timeout": 10 }] }
+    ],
     "PreToolUse": [
       { "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "node <plugin dir>/src/send-guard.mjs", "timeout": 10 }] }
@@ -84,7 +88,7 @@ Two hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. Both 
 }
 ```
 
-Both hooks exit quietly on any error, so a broken hook never fails a tool call. The send guard rewrites only the plain form above (one literal argument, no `$` or backticks, nothing else in the command); any other `herdr agent prompt` to an agent is blocked with the `mailbox send` command to use instead.
+All three hooks exit quietly on any error, so a broken hook never fails a tool call. The send guard rewrites only the plain form above (one literal argument, no `$` or backticks, nothing else in the command); any other `herdr agent prompt` to an agent is blocked with the `mailbox send` command to use instead.
 
 ### Codex
 
@@ -208,7 +212,7 @@ A small daemon owns the state file and handles one request at a time. The CLI ta
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Batching, the input-box check, confirmation, batch text. |
 | `src/screen/` | The mailbox screen and its two popups. |
 | `src/open.mjs`, `src/on-focus.mjs` | The `prefix+shift+m` action and reopening the screen after a Herdr restart. |
-| `src/session-start.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
 
 ### Tests
 

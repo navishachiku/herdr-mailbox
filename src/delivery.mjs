@@ -9,9 +9,9 @@ import * as herdr from './herdr.mjs';
 import { signatureFor, withSignature } from './signature.mjs';
 import { classify } from './input-box.mjs';
 import { canDeliver } from './identity.mjs';
-import { fileNotice, forwardQuestion, directNote, notesBatch, repliesBatch } from './format.mjs';
+import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, notesBatch, repliesBatch } from './format.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
-import { STATE_DIR } from './paths.mjs';
+import { ATTACH_DIR, STATE_DIR } from './paths.mjs';
 import { timings } from './timings.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
@@ -34,25 +34,43 @@ function setPaused(box, reason, retry = true) {
   box.paused = { reason, since: keep, ...(retry ? { nextAt: api.now() + timings.retryMs } : {}) };
 }
 
-// A mailbox whose owner is another sender's own mailbox: the address replies should go to.
-async function peopleOf(senders) {
+// Who the senders are, as the receiver should see them: label, signature line (workspace shown in brackets when the
+// sender lives in another one) and the sender's own connected mailbox, the address replies should go to.
+async function peopleOf(senders, receiverPane) {
   const people = {};
+  let receiverSpace;
+  if (receiverPane) { try { receiverSpace = (await herdr.paneGet(receiverPane)).workspace_id; } catch { /* unknown */ } }
   for (const pane of new Set(senders)) {
     let label = pane;
-    try { label = (await herdr.paneGet(pane)).label || pane; } catch { /* pane gone: the id is all we have */ }
+    let space;
+    try { const p = await herdr.paneGet(pane); label = p.label || pane; space = p.workspace_id; } catch { /* pane gone: the id is all we have */ }
     const mine = Object.values(api.state.mailboxes).find(b => b.state === 'connected' && b.owner?.pane === pane);
-    people[pane] = { label, mailbox: mine?.id };
+    let sig = receiverPane ? await signatureFor(pane, receiverPane) : null;
+    if (sig && space && receiverSpace && space !== receiverSpace) {
+      const [head, ...rest] = sig.split('/');
+      sig = rest.length ? `[${head}] ${rest.join('/')}` : sig;
+    }
+    people[pane] = { label, sig: sig || label, mailbox: mine?.id };
   }
   return people;
 }
 
-function textOrFile(id, text, notice) {
-  if (Buffer.byteLength(text, 'utf8') <= timings.batchFileBytes) return { text };
+const newMarker = () => {
+  for (;;) {
+    const marker = `BT-${crypto.randomBytes(3).toString('hex')}`;
+    if (!Object.values(api.state.batches).some(b => b.marker === marker || b.id === marker)) return marker;
+  }
+};
+
+const bytes = text => Buffer.byteLength(text, 'utf8');
+
+// A batch over the size limit is saved whole as a file and only a notice goes into the conversation.
+function writeBatchFile(id, text) {
   const dir = path.join(STATE_DIR, 'batches');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = path.join(dir, `${id}.md`);
   fs.writeFileSync(file, text, { mode: 0o600 });
-  return { file, text: notice(file) };
+  return file;
 }
 
 // herdr refused the prompt for a reason that means nothing was typed.
@@ -77,23 +95,34 @@ async function send(batch, target, text, back) {
   return true;
 }
 
-function newBatch(box, kind, letters, pane, transcript, convo, body) {
+// make: { full(id), notice(id, file), concise?(marker) }. A concise text (Claude receivers) carries a marker that
+// stands in for the batch id; too long, and the full text goes to a file with a notice that carries the id.
+function newBatch(box, kind, letters, pane, transcript, convo, make) {
   const id = newBatchId(api.state.batches);
-  const out = textOrFile(id, body(id), file => body(id, file));
+  const marker = make.concise ? newMarker() : null;
+  let text = make.concise ? make.concise(marker) : make.full(id);
+  let file = null;
+  if (bytes(text) > timings.batchFileBytes) {
+    file = writeBatchFile(id, make.full(id));
+    text = make.notice(id, file);
+  }
   return {
     id, mailbox: box?.id ?? null, pane, kind, members: letters.map(l => l.uid), status: 'sending',
-    ...(out.file ? { file: out.file } : { text: out.text }), sendText: out.text,
+    ...(file ? { file } : { text }), ...(marker && !file ? { marker } : {}), sendText: text,
     transcript: transcript ?? null, convo: convo ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0, createdAt: api.now(),
   };
 }
 
 async function sendMailboxBatch(box, kind, letters, owner) {
-  const people = await peopleOf(letters.map(l => l.sender));
+  const people = await peopleOf(letters.map(l => l.sender), owner.pane);
+  const sigs = Object.fromEntries(Object.entries(people).map(([pane, who]) => [pane, who.sig]));
   // A sender writing to its own mailbox needs no reply address.
   for (const who of Object.values(people)) if (who.mailbox === box.id) who.mailbox = undefined;
-  const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, owner.convo, (id, file) => {
-    if (file) return fileNotice({ id, letters, people, file, replies: kind === 'replies' });
-    return kind === 'replies' ? repliesBatch({ id, letters, people }) : notesBatch({ id, letters, people });
+  const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, owner.convo, {
+    full: id => (kind === 'replies' ? repliesBatch({ id, letters, people }) : notesBatch({ id, letters, people })),
+    notice: (id, file) => fileNotice({ id, letters, people, file, replies: kind === 'replies' }),
+    // Claude gets only who wrote what; the rest is added back by the UserPromptSubmit hook.
+    ...(owner.agent === 'claude' ? { concise: marker => (kind === 'replies' ? conciseReplies({ marker, letters, sigs }) : conciseNotes({ marker, letters, sigs })) } : {}),
   });
   const text = batch.sendText;
   delete batch.sendText;
@@ -138,7 +167,7 @@ async function deliverMailbox(box, panes) {
   }
   if (!await inputIsEmpty(box, who.pane)) return;
   const convo = panes.find(p => p.pane_id === who.pane)?.agent_session?.value ?? box.owner.convo;
-  await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, transcript: who.transcript ?? findByConversation(convo) });
+  await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, agent: panes.find(p => p.pane_id === who.pane)?.agent, transcript: who.transcript ?? findByConversation(convo) });
 }
 
 // The transcript of a pane that has no mailbox: what its conversation last registered, else the file named by its id.
@@ -182,7 +211,7 @@ function settle() {
   for (const b of Object.values(api.state.batches)) {
     if (b.status !== 'sending' || !b.sentAt) continue;
     findTranscript(b);
-    if (landed(b.transcript, b.transcriptOffset, b.id)) b.status = 'confirmed';
+    if (landed(b.transcript, b.transcriptOffset, b.marker ?? b.id)) b.status = 'confirmed';
     else if (api.now() - b.sentAt >= timings.confirmMs) b.status = 'unconfirmed';
     else continue;
     changed = true;
@@ -220,15 +249,26 @@ async function direct(req, content) {
   const from = req.from ?? 'unknown';
   const people = await peopleOf([from]);
   const downgraded = content.type !== 'note';
+  const id = newBatchId(api.state.batches);
+  // The receiver has no mailbox to keep the attachment in, so the snapshot taken now is what the text points to.
+  let attachment;
+  if (req.attach) {
+    try {
+      const data = fs.readFileSync(req.attach);
+      const dir = path.join(ATTACH_DIR, id);
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      attachment = path.join(dir, path.basename(req.attach));
+      fs.writeFileSync(attachment, data, { mode: 0o600 });
+    } catch (e) { return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
+  }
   let text;
   if (downgraded) {
-    text = forwardQuestion({ letterType: content.type, content, from, label: people[from].label });
+    text = forwardQuestion({ letterType: content.type, content, from, label: people[from].label, attachment });
   } else {
     const signature = await signatureFor(from, to);
     const body = content.text || '';
-    text = directNote({ text: signature ? withSignature(body, signature) : body, people, from });
+    text = directNote({ text: signature ? withSignature(body, signature) : body, people, from, attachment });
   }
-  const id = newBatchId(api.state.batches);
   api.state.batches[id] = { id, mailbox: null, pane: pane.pane_id, kind: 'direct', members: [], status: 'pending', text, createdAt: api.now() };
   api.save();
   return { ok: true, status: downgraded ? 'downgraded' : 'direct', batch: id, to: pane.pane_id, pending: [] };
@@ -286,6 +326,17 @@ function resolveBatch(req) {
   return { ok: true, batch: batch.id, status: batch.status };
 }
 
+// The hook asks with the marker from the first line of the prompt and gets back what the concise text left out.
+// Only the pane the batch was typed into may ask.
+async function batchByMarker(req, ctx) {
+  const batch = Object.values(api.state.batches).find(b => b.marker && b.marker === req.marker);
+  if (!batch || ctx.caller?.pane !== batch.pane) return fail('unknown_marker', 'no batch with that marker for this pane');
+  const letters = batch.members.map(uid => api.state.letters[uid]).filter(Boolean);
+  const people = await peopleOf(letters.map(l => l.sender), batch.pane);
+  const items = letters.map(l => ({ uid: l.uid, serial: l.serial, sender: l.sender, label: people[l.sender].sig, mailbox: people[l.sender].mailbox }));
+  return { ok: true, context: hookContext({ batch, items }) };
+}
+
 async function deliveryState(req) {
   const box = api.state.mailboxes[req.mailbox];
   if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
@@ -305,6 +356,7 @@ export default function registerDelivery(a) {
   api.op('deliver', deliverNow, { mutates: true });
   api.op('resolve-batch', resolveBatch, { mutates: true });
   api.op('delivery-state', deliveryState);
+  api.op('batch-by-marker', batchByMarker);
   // A restart in the middle of a send leaves the outcome unknown; it is never sent again by itself.
   api.on('start', () => {
     let changed = false;
