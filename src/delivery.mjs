@@ -89,6 +89,8 @@ function newBatch(box, kind, letters, pane, transcript, convo, body) {
 
 async function sendMailboxBatch(box, kind, letters, owner) {
   const people = await peopleOf(letters.map(l => l.sender));
+  // A sender writing to its own mailbox needs no reply address.
+  for (const who of Object.values(people)) if (who.mailbox === box.id) who.mailbox = undefined;
   const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, owner.convo, (id, file) => {
     if (file) return fileNotice({ id, letters, people, file, replies: kind === 'replies' });
     return kind === 'replies' ? repliesBatch({ id, letters, people }) : notesBatch({ id, letters, people });

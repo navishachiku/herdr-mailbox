@@ -365,6 +365,19 @@ test('201/AC-10 connected senders have a mailbox reply address on mailbox and di
   }
 });
 
+test('201/AC-10 notes sent to the sender mailbox omit the reply address', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  const mb = await r.bind();
+  r.env.HERDR_PANE_ID = 'w1:p1';
+  r.env.HERDR_MAILBOX_SID = 'sid-w1:p1';
+  const a = r.note(mb, 'self-addressed note');
+  await r.confirmed(a.uid);
+  assert.equal(r.prompts().length, 1);
+  const text = r.prompts()[0].argv[3];
+  assert.ok(text.includes('self-addressed note'));
+  assert.equal(text.includes(`${replyTo} ${mb}`), false);
+});
+
 test('201/AC-13 late letters cannot enter an active batch or send before it finishes', async t => {
   const r = rig(t, { mergeMs: 100, confirmMs: 2200 });
   const mb = await r.bind();
