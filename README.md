@@ -18,7 +18,7 @@ Mailbox gives each receiving agent a mailbox. Other agents send letters to it, e
 - **Three kinds of letter** — a note, a decision question (2 to 4 options, a recommended one is required) and a discussion question.
 - **A receipt for every send** — the letter's uid, its status, and the letters you sent to that mailbox that are still open.
 - **Batched delivery** — notes wait and arrive together; nothing is typed while someone is typing.
-- **A mailbox screen** — press `alt+i` for a panel beside the agent where you answer questions with the mouse and send all answers back in one batch.
+- **A mailbox screen** — press `prefix+shift+m` for a panel beside the agent where you answer questions with the mouse and send all answers back in one batch.
 - **It follows the agent** — moving the pane, restarting Herdr or clearing the conversation keeps the mailbox with the same receiver.
 - **No double sends** — an identical letter within 30 seconds is not created again, and neither is an identical unanswered decision question from the same sender.
 - **Change your mind, until you answer** — edit, withdraw or supersede a question; once you have answered, the answer is locked in.
@@ -35,7 +35,7 @@ Bind a key in `~/.config/herdr/config.toml` and reload with `prefix+shift+r`:
 
 ```toml
 [[keys.command]]
-key = "alt+i"
+key = "prefix+shift+m"
 type = "plugin_action"
 command = "herdr-mailbox.open"
 description = "open the mailbox"
@@ -44,6 +44,8 @@ description = "open the mailbox"
 [ui.toast]
 delivery = "herdr"
 ```
+
+`prefix` is `ctrl+b` unless you changed it.
 
 ### The `mailbox` command
 
@@ -126,7 +128,7 @@ Messages are signed `[workspace/]position/role 💬 ` from the sender pane's lab
 
 ## The mailbox screen
 
-`alt+i` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `alt+i` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. The text follows the system language (English or Traditional Chinese).
+`prefix+shift+m` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `prefix+shift+m` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. The text follows the system language (English or Traditional Chinese).
 
 - **Messages** — up to four queued notes, why delivery is paused (typing, unreadable input box, receiver working or unverified), and **Deliver now**. A batch whose arrival could not be confirmed shows **Mark delivered** and **Resend (may duplicate)**.
 - **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked, and a note field. Click an option, or use **Recommend** or **Explain**. A note alone, with no option, is an answer too.
@@ -205,7 +207,7 @@ A small daemon owns the state file and handles one request at a time. The CLI ta
 | `src/identity.mjs` | Binding a mailbox to a receiver, the reconcile loop, claims. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Batching, the input-box check, confirmation, batch text. |
 | `src/screen/` | The mailbox screen and its two popups. |
-| `src/open.mjs`, `src/on-focus.mjs` | The `alt+i` action and reopening the screen after a Herdr restart. |
+| `src/open.mjs`, `src/on-focus.mjs` | The `prefix+shift+m` action and reopening the screen after a Herdr restart. |
 | `src/session-start.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
 
 ### Tests
