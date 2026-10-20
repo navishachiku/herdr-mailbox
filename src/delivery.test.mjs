@@ -646,3 +646,55 @@ test('224/AC-2 an out-of-range or unreadable merge interval falls back to 60 s a
   assert.equal(Object.keys(r.state().letters).length, 2, 'letters still accepted');
   assert.equal(r.prompts().length, 0);
 });
+
+test('226/AC-1 AC-2 a paste left in the input box gets one Enter, is confirmed, and is never pasted twice', async t => {
+  const r = rig(t, { mergeMs: 100, nudgeMs: 300, confirmMs: 4000 });
+  const mb = await r.bind();
+  r.world.promptResult['w1:p1'] = 'stuck';
+  r.write();
+  const a = r.note(mb, 'stuck report');
+  const batch = await r.confirmed(a.uid);
+  const enters = r.calls().filter(c => c.argv[0] === 'pane' && c.argv[1] === 'send-keys');
+  assert.equal(enters.length, 1);
+  assert.equal(r.prompts().length, 1);
+  assert.equal(fs.readFileSync(r.transcript, 'utf8').split(batch.marker ?? batch.id).length - 1, 1);
+});
+
+test('226/AC-3 text in the input box that is not this batch gets no Enter and the batch ends unconfirmed', async t => {
+  const r = rig(t, { mergeMs: 100, nudgeMs: 300, confirmMs: 1000 });
+  const mb = await r.bind();
+  r.world.promptResult['w1:p1'] = 'lost';
+  r.write();
+  const a = r.note(mb, 'lost report');
+  await until(() => r.batches().find(b => b.members.includes(a.uid)), 'batch sent');
+  r.world.screens['w1:p1'] = '────────────\n❯ someone is typing here\n────────────';
+  r.write();
+  await until(() => r.batches().find(b => b.members.includes(a.uid) && b.status === 'unconfirmed'), 'unconfirmed batch');
+  assert.equal(r.calls().filter(c => c.argv[0] === 'pane' && c.argv[1] === 'send-keys').length, 0);
+});
+
+test('226/AC-3 a person typing after the pasted batch is not sent with it', async t => {
+  const r = rig(t, { mergeMs: 100, nudgeMs: 900, confirmMs: 2500 });
+  const mb = await r.bind();
+  r.world.promptResult['w1:p1'] = 'stuck';
+  r.write();
+  const a = r.note(mb, 'stuck report');
+  const sent = await until(() => r.batches().find(b => b.members.includes(a.uid)), 'batch sent');
+  const screen = await until(() => { const w = JSON.parse(fs.readFileSync(path.join(r.root, 'world.json'), 'utf8')); return w.stuck?.['w1:p1'] && w; }, 'stuck paste');
+  screen.screens['w1:p1'] = screen.screens['w1:p1'].replace('\n────────────', ' and then I typed more\n────────────');
+  fs.writeFileSync(path.join(r.root, 'world.json'), JSON.stringify(screen));
+  await until(() => r.batches().find(b => b.id === sent.id && b.status === 'unconfirmed'), 'unconfirmed batch');
+  assert.equal(r.calls().filter(c => c.argv[0] === 'pane' && c.argv[1] === 'send-keys').length, 0);
+});
+
+test('226/AC-1 a long batch folded into a "[Pasted text]" placeholder still gets one Enter', async t => {
+  const r = rig(t, { mergeMs: 4000, nudgeMs: 300, confirmMs: 4000 });
+  const mb = await r.bind();
+  r.world.promptResult['w1:p1'] = 'stuck';
+  r.write();
+  const letters = Array.from({ length: 15 }, (_, i) => r.note(mb, `long report ${i}\nsecond line ${i}`));
+  await r.confirmed(letters[0].uid);
+  assert.equal(r.calls().filter(c => c.argv[0] === 'pane' && c.argv[1] === 'send-keys').length, 1);
+  assert.equal(r.prompts().length, 1);
+  assert.match(r.calls().find(c => c.argv[1] === 'send-keys').argv[2], /w1:p1/);
+});

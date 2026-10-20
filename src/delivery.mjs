@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as herdr from './herdr.mjs';
 import { signatureFor, withSignature } from './signature.mjs';
-import { classify } from './input-box.mjs';
+import { classify, pastedLines, typedText } from './input-box.mjs';
 import { canDeliver } from './identity.mjs';
 import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, notesBatch, repliesBatch } from './format.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
@@ -62,6 +62,9 @@ const newMarker = () => {
   }
 };
 
+// Whitespace differs between what was typed and what the screen draws (wrapped rows, collapsed newlines).
+const squash = text => text.replace(/\s+/g, '');
+
 const bytes = text => Buffer.byteLength(text, 'utf8');
 
 // A batch over the size limit is saved whole as a file and only a notice goes into the conversation.
@@ -108,7 +111,7 @@ function newBatch(box, kind, letters, pane, transcript, convo, make) {
   }
   return {
     id, mailbox: box?.id ?? null, pane, kind, members: letters.map(l => l.uid), status: 'sending',
-    ...(file ? { file } : { text }), ...(marker && !file ? { marker } : {}), sendText: text,
+    ...(file ? { file } : { text }), ...(marker && !file ? { marker } : {}), sendText: text, tail: squash(text).slice(-40), lines: text.split('\n').length,
     transcript: transcript ?? null, convo: convo ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0, createdAt: api.now(),
   };
 }
@@ -206,11 +209,32 @@ function findTranscript(b) {
   if (file) Object.assign(b, { transcript: file, transcriptOffset: 0 });
 }
 
-function settle() {
+// The paste sometimes lands without the Enter taking effect. Once, a little after sending, press Enter again, but
+// only when the input box still holds this batch (its marker or id): anything else in the box is a person typing.
+async function nudge(b) {
+  if (b.nudged || b.status !== 'sending' || !b.sentAt || api.now() - b.sentAt < timings.nudgeMs) return;
+  if (landed(b.transcript, b.transcriptOffset, b.marker ?? b.id)) return;
+  b.nudged = true;
+  try {
+    // A long paste that is not folded runs past the visible 40 rows, so look further back for the input box.
+    const screen = await herdr.readScreen(b.pane, { source: 'recent', lines: 200 });
+    const typed = typedText(screen);
+    // The box must hold this batch and end where it ends: anything typed after it belongs to a person. A folded
+    // paste shows no text, so it counts as this batch only when it is alone in the box and its line count fits.
+    const folded = pastedLines(screen);
+    const mine = folded !== null ? Math.abs(folded - b.lines) <= 1
+      : typed.includes(b.marker ?? b.id) && (!b.tail || squash(typed).endsWith(b.tail));
+    if (mine) await herdr.pressEnter(b.pane);
+  } catch { /* unreadable or refused: the transcript decides */ }
+  api.save();
+}
+
+async function settle() {
   let changed = false;
   for (const b of Object.values(api.state.batches)) {
     if (b.status !== 'sending' || !b.sentAt) continue;
     findTranscript(b);
+    await nudge(b);
     if (landed(b.transcript, b.transcriptOffset, b.marker ?? b.id)) b.status = 'confirmed';
     else if (api.now() - b.sentAt >= timings.confirmMs) b.status = 'unconfirmed';
     else continue;
@@ -229,7 +253,7 @@ function trackWorking(panes) {
 }
 
 async function tick() {
-  settle();
+  await settle();
   let panes;
   try { panes = await herdr.paneList(); } catch { return; } // herdr unreachable: send nothing
   trackWorking(panes);

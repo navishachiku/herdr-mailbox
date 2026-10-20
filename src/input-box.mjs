@@ -69,6 +69,13 @@ export function typedText(screen) {
   return parts.map((s) => s.replace(ANSI_RE, '').trim()).filter(Boolean).join(' ');
 }
 
+// A long paste is folded by Claude Code into "[Pasted text #1 +N lines]". Returns N when that placeholder is all the
+// box holds, else null.
+export function pastedLines(screen) {
+  const m = /^\[Pasted text #\d+ \+(\d+) lines?\]$/.exec(typedText(screen));
+  return m ? Number(m[1]) : null;
+}
+
 // Three-way reading for delivery: 'empty' is the only state that allows typing into the pane. A screen that is
 // blank, has no Claude input box, or shows the background-agent list (it takes the arrow keys) is 'unknown'.
 export function classify(screen) {

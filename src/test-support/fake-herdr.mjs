@@ -57,8 +57,26 @@ else if (group === 'agent' && verb === 'get') {
   if (result === 'agent_blocked') die('agent_blocked', `agent ${target} is blocked`);
   // "lost" reports success but never reaches the conversation.
   const transcript = world.transcripts?.[target];
-  if (result !== 'lost' && transcript) {
+  if (result === 'stuck') {
+    // Pasted but never submitted: the text sits in the input box until Enter is pressed.
+    world.stuck = { ...world.stuck, [target]: text.join(' ') };
+    // Like Claude Code, fold a long paste into a one-line placeholder.
+    const lines = text.join(' ').split('\n').length;
+    const shown = lines >= 30 ? `[Pasted text #1 +${lines} lines]` : text.join(' ').replace(/\n/g, ' ');
+    world.screens = { ...world.screens, [target]: `────────────\n❯ ${shown}\n────────────` };
+    fs.writeFileSync(statePath, JSON.stringify(world));
+  } else if (result !== 'lost' && transcript) {
     fs.appendFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: text.join(' ') } })}\n`);
+  }
+  out({ pane_id: target, sent: true });
+} else if (group === 'pane' && verb === 'send-keys') {
+  const [target, ...keys] = positional;
+  const held = world.stuck?.[target];
+  if (keys.join() === 'Enter' && held && world.transcripts?.[target]) {
+    fs.appendFileSync(world.transcripts[target], `${JSON.stringify({ type: 'user', message: { role: 'user', content: held } })}\n`);
+    delete world.stuck[target];
+    world.screens[target] = '────────────\n❯ \n────────────';
+    fs.writeFileSync(statePath, JSON.stringify(world));
   }
   out({ pane_id: target, sent: true });
 } else if (group === 'tab' && verb === 'get') {
