@@ -29,6 +29,7 @@ const t = table({
     picked: (letter, text) => `${letter} "${text}"`,
     accepted: (letter, text) => `P (took the recommendation: ${letter} "${text}")`,
     explain: 'E (asked for more explanation)',
+    voided: 'X (Voided: no answer needed)',
     noChoice: '(no option chosen)',
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
@@ -60,6 +61,7 @@ const t = table({
     picked: (letter, text) => `${letter}「${text}」`,
     accepted: (letter, text) => `P（按建議：${letter}「${text}」）`,
     explain: 'E（請再說明）',
+    voided: 'X（作廢：不需要回答）',
     noChoice: '（未選選項）',
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
@@ -129,6 +131,7 @@ function answerLine(l) {
   const choice = l.draft?.choice;
   if (!choice) return t.noChoice;
   if (choice === 'E') return t.explain;
+  if (choice === 'X') return t.voided;
   if (choice === 'P') return t.accepted(c.recommend, sanitize(optionText(c, c.recommend)));
   return t.picked(choice, sanitize(optionText(c, choice)));
 }

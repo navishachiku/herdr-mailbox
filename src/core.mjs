@@ -298,7 +298,8 @@ export class Mailboxes {
     if (req.version !== l.version) return fail('stale_version', 'the question changed; reload it', { version: l.version });
     const choice = req.choice ? String(req.choice).toUpperCase() : null;
     const text = String(req.text ?? '');
-    const valid = l.type === 'decision' ? [...LETTERS.slice(0, l.content.options.length), 'P', 'E'] : ['E'];
+    // X voids the question: the user says it no longer needs an answer.
+    const valid = l.type === 'decision' ? [...LETTERS.slice(0, l.content.options.length), 'P', 'E', 'X'] : ['E', 'X'];
     if (choice && !valid.includes(choice)) return fail('bad_choice', `choice must be one of ${valid.join(', ')}`);
     l.draft = choice || text.trim() ? { choice, text } : null;
     l.updatedAt = this.now();
