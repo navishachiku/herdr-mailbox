@@ -139,7 +139,7 @@ function answerLine(ui, uid) {
   const start = ui.lines.findIndex(line => line.includes(question.content.question));
   assert.ok(start >= 0, 'the question card is visible');
   const next = ui.lines.findIndex((line, i) => i > start && ui.model.questions.some(q => q.uid !== uid && line.includes(q.content.question)));
-  const line = ui.lines.slice(start, next < 0 ? undefined : next).find(line => /\bAnswer\s*:/i.test(line));
+  const line = ui.lines.slice(start, next < 0 ? undefined : next).find(line => /\bPick\s*:/i.test(line));
   assert.ok(line, 'the question has its own answer field');
   return line;
 }
@@ -187,7 +187,7 @@ test('202/AC-3 clicking an option, Recommend or Explain fills the answer slot wi
       await click(w, before, action);
       const after = await screen(w, mb);
       assert.equal(find(after.model, q.uid).draft.choice, choice);
-      assert.match(answerLine(after, q.uid), new RegExp(`\\bAnswer\\s*:\\s*${choice}\\b`, 'i'));
+      assert.match(answerLine(after, q.uid), new RegExp(`\\bPick\\s*:\\s*${choice}\\b`, 'i'));
     }
   } finally { w.cleanup(); }
 });
@@ -202,7 +202,7 @@ test('202/AC-3 filling only the note shows N: a draft with text and no letter co
     await click(w, before, { ...action, text: 'only a note' });
     const after = await screen(w, mb);
     assert.equal(find(after.model, q.uid).draft.text, 'only a note');
-    assert.match(answerLine(after, q.uid), /\bAnswer\s*:\s*N\b/i);
+    assert.match(answerLine(after, q.uid), /\bPick\s*:\s*N\b/i);
   } finally { w.cleanup(); }
 });
 
@@ -219,7 +219,7 @@ test('202/AC-4 while the receiver input box has text the view reports it, and th
     const disabled = render(typing, { cols: 48, rows: 40, cardMode: 'detailed' });
     const text = disabled.lines.join('\n');
     assert.equal(disabled.hits.some(hit => hit.action?.type === 'submit'), false);
-    assert.match(text, /Confirm|確認送出/);
+    assert.match(text, /Send|確認送出/);
     assert.match(text, /disabled|停用/);
     w.setFake(f => { f.screens[RECV] = EMPTY; });
     const empty = await until(async () => { const v = await w.op('view', { mailbox: mb }); return v.inputState === 'empty' && v; });
@@ -1596,7 +1596,7 @@ test('202/AC-34 compact cards retain detailed layout for the same short content 
       return { row: h.row, col: h.c0 };
     };
     return {
-      header: locate('Q1 ·'), answer: locate('Answer:'),
+      header: locate('Q1 ·'), answer: locate('Pick:'),
       letters: ['A', 'B'].map(choice => {
         const h = ui.hits.find(h => h.action.type === 'choose' && h.action.choice === choice);
         assert.ok(h);
@@ -2485,4 +2485,18 @@ test('202/AC-40 an unsent batch supplement defers screen-reload after a version 
   drafts[BATCH] = '';
   for (let i = 0; i < 4; i++) await refreshVersion();
   assert.deepEqual(requests, [{ op: 'screen-reload', mailbox: 'MB-test', scroll: 7 }], 'clearing the supplement releases exactly one pending reload');
+});
+
+test('225/AC-2 the English mode button words have equal width, so each label sits centred and switching never moves the buttons', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const row = cardMode => render(interactionModel(), { cols: 48, rows: 60, cardMode, locale: 'en', now: 0 }).lines.find(line => line.includes('Questions ·'));
+  // The button names the mode it switches to.
+  assert.match(row('detailed'), / Compact {3}Options $/);
+  assert.match(row('compact'), / Details {3}Options $/);
+});
+
+test('225/AC-3 the Chinese screen keeps its original heading buttons', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const line = render(interactionModel(), { cols: 48, rows: 60, cardMode: 'detailed', locale: 'zh-TW', now: 0 }).lines.find(l => l.includes('決策區'));
+  assert.match(line, / 精簡 {3}設定 $/);
 });

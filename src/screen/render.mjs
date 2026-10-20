@@ -391,7 +391,8 @@ function questionRows(model, ctx) {
   // The mode button keeps one width in both modes, so switching never moves the header or the cards below it.
   const modeWidth = Math.max(width(t.compact), width(t.detailed));
   const modeText = compact ? t.detailed : t.compact;
-  const modeLabel = modeText + ' '.repeat(modeWidth - width(modeText));
+  const lead = Math.floor((modeWidth - width(modeText)) / 2);
+  const modeLabel = ' '.repeat(lead) + modeText + ' '.repeat(modeWidth - width(modeText) - lead);
   add([textItem(` ${t.questions(pending.length, pending.filter(isAnswered).length)}`, S.bold)], [
     button(modeLabel, { type: 'card-mode', mailbox: model.mailbox.id, mode: compact ? 'detailed' : 'compact' }),
     button(t.settings, { type: 'settings', mailbox: model.mailbox.id }),
