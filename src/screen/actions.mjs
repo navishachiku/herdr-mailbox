@@ -13,10 +13,8 @@ const ANSWERS = {
   reconfirm: a => ({ choice: a.choice ?? null, text: a.text }),
   reset: () => ({ choice: null, text: '' }),
 };
-// Popups keep the focus they were opened with, and typing in the screen must never leave it.
-const KEEPS_FOCUS = new Set(['text-input', 'note-text', 'batch-note', 'attachment', 'settings']);
-
-const popup = (entrypoint, ...env) => ['plugin', 'pane', 'open', '--plugin', 'herdr-mailbox', '--entrypoint', entrypoint, '--placement', 'popup', ...env.flatMap(e => ['--env', e])];
+// These keep focus in the screen: typing, the in-screen settings and attachment layer, and the controls inside it.
+const KEEPS_FOCUS = new Set(['text-input', 'note-text', 'batch-note', 'attachment', 'settings', 'settings-set', 'overlay-input', 'overlay-close']);
 
 // The receiver is the pane to the left of the screen, so focus moves one pane left from the screen's own pane.
 async function handBack(env) {
@@ -62,6 +60,42 @@ async function write(action, env) {
   }
 }
 
+// Settings and attachments open as a layer inside the mailbox pane (herdr popups do not show in the web interface,
+// and one left open blocks the next). The layer is plain data, kept by the caller and passed back as env.overlay:
+// { kind: 'settings', prefs } or { kind: 'attachment', uid, name, text, truncated, top }.
+async function openOverlay(action, env) {
+  if (action.type === 'settings') {
+    const prefs = await env.call({ op: 'prefs-get' });
+    return prefs.ok === false ? { ok: false, error: prefs.error } : { ok: true, overlay: { kind: 'settings', prefs: pickPrefs(prefs) } };
+  }
+  if (action.type === 'settings-set') {
+    // Each change is saved at once; an open screen keeps its width until the next time it opens.
+    const prefs = await env.call({ op: 'prefs-set', ...action.change });
+    if (prefs.ok === false) return { ok: false, error: prefs.error, overlay: env.overlay ?? null };
+    return { ok: true, overlay: { ...(env.overlay ?? { kind: 'settings' }), prefs: pickPrefs(prefs) } };
+  }
+  const res = await env.call({ op: 'attachment', uid: action.uid });
+  if (res.ok === false) return { ok: false, error: res.error };
+  return { ok: true, overlay: { kind: 'attachment', uid: action.uid, name: res.name, text: res.text, truncated: Boolean(res.truncated), top: 0 } };
+}
+
+const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds });
+
+// Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; in the attachment reader
+// the arrows, Page keys, Home, End and the wheel scroll (render keeps the position within the text).
+function overlayInput(overlay, event) {
+  if (!overlay) return null;
+  if ((event.kind === 'key' && event.name === 'escape') || (event.kind === 'text' && event.text === 'q')) return null;
+  if (overlay.kind !== 'attachment') return overlay;
+  const step = { up: -1, down: 1, pageup: -10, pagedown: 10, home: -Infinity, end: Infinity }[event.name];
+  const by = event.kind === 'wheel' ? event.dir * 3 : event.kind === 'key' ? step : undefined;
+  if (by === undefined) return overlay;
+  // No upper limit here: render knows how many rows the text wraps to and keeps the position within them (main
+  // copies that back). The text's length only bounds End, since it never wraps to more rows than it has characters.
+  const end = overlay.text.length + 1;
+  return { ...overlay, top: Math.min(Math.max(0, (overlay.top ?? 0) + by), end) };
+}
+
 // Returns { ok, error?, model? }. When the daemon says what the screen showed is out of date, the fresh view
 // comes back as `model` so the caller can redraw at once instead of waiting for the next poll.
 // Every stage is also reported through env.onFeedback (see feedback.mjs): 'pending' before the first request goes
@@ -72,6 +106,9 @@ export async function perform(action, env) {
   const report = (state, extra = {}) => env.onFeedback?.({ key: feedbackKey(action), type: action.type, state, at: now(), ...extra });
   try {
     if (action.type === 'text-input') return { ok: true };
+    // Settings and attachments are a layer inside the screen itself (overlay); these move or close it locally.
+    if (action.type === 'overlay-input') return { ok: true, overlay: overlayInput(env.overlay ?? null, action.event) };
+    if (action.type === 'overlay-close') return { ok: true, overlay: null };
     // The new-question hint only moves the view; it keeps focus in the screen.
     if (action.type === 'reveal') return { ok: true, scroll: action.scroll };
     // Void all and Resend ask first; the caller supplies the question (main draws it as a Yes / No row). A caller
@@ -79,10 +116,10 @@ export async function perform(action, env) {
     const asks = action.type === 'void-all' || (action.type === 'resolve-batch' && action.action === 'resend');
     if (asks && env.confirm && !(await env.confirm(action.confirm))) return { ok: true, cancelled: true };
     report('pending');
-    if (action.type === 'attachment' || action.type === 'settings') {
-      await env.run(action.type === 'attachment' ? popup('attachment', `HERDR_MAILBOX_UID=${action.uid}`) : popup('settings'));
-      report('done');
-      return { ok: true };
+    if (action.type === 'settings' || action.type === 'attachment' || action.type === 'settings-set') {
+      const res = await openOverlay(action, env);
+      report(res.ok ? 'done' : 'failed', res.ok ? {} : { error: res.error });
+      return res;
     }
     const res = await write(action, { ...env, confirm: async () => true });
     if (!res) { report('failed', { error: 'unknown_action' }); return { ok: false, error: 'unknown_action' }; }

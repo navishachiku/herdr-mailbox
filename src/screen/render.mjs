@@ -99,7 +99,7 @@ function place(r, it) {
   const c0 = r.col;
   const i0 = r.segs.length;
   for (const x of it.segs) { r.segs.push(x); r.col += width(x.t); }
-  if (it.action) r.hits.push({ c0, c1: r.col, i0, i1: r.segs.length, action: it.action });
+  if (it.action) r.hits.push({ c0, c1: r.col, i0, i1: r.segs.length, action: it.action, group: it.group });
   // Disabled buttons still look like buttons, so they keep their distance too.
   if (it.action || it.block) r.blocks.push({ c0, c1: r.col });
   if (it.caret !== null && it.caret !== undefined) r.caret = c0 + it.caret;
@@ -191,50 +191,50 @@ function card(q, ctx) {
   // Header: only the serial (white) and the sender (bright amber). No priority word: the colour bar already says it.
   // Amber stays clear of the red and green bars for a red-green colour-blind reader by being much brighter, and of
   // the blue medium bar by hue.
-  const room = Math.max(4, w - width(` ${q.serial} · `) - (compact ? itemWidth(chip) + 1 : 0));
+  const room = Math.max(4, w - width(` ${q.serial} · `));
   const headItem = item([seg(` ${q.serial}`, S.serial), seg(' · ', S.dim), seg(cut(q.senderLabel, room), S.sender)]);
   if (cut(q.senderLabel, room) !== q.senderLabel) headItem.tip = `${q.serial} · ${q.senderLabel}`;
-  add([headItem], compact ? [chip] : []);
+  add([headItem]);
   if (q.tags?.length) add(q.tags.map(x => textItem(` #${x} `, S.chip)));
-  for (const l of wrap(q.content.question, w - 2)) add([textItem(` ${l}`, S.bold)]);
+  // Compact mode keeps the same layout and only shortens content: the question to three rows, the third ending in
+  // "…", every row carrying the full question for the tooltip.
+  let questionLines = wrap(q.content.question, w - 2);
+  if (compact && questionLines.length > 3) {
+    const third = questionLines.slice(2).join(' ');
+    questionLines = [...questionLines.slice(0, 2), cut(third, w - 3) === third ? `${cut(third, w - 4)}…` : cut(third, w - 3)];
+  }
+  const shortened = questionLines.join('') !== wrap(q.content.question, w - 2).join('');
+  for (const l of questionLines) add([{ ...textItem(` ${l}`, S.bold), ...(shortened ? { tip: q.content.question } : {}) }]);
 
   if (q.type === 'decision') {
     const letters = 'ABCD';
     blank(); // the question stands a row apart from its options
     // Options: ★ (bright yellow, the recommended one) or a blank, then the letter as a small coloured block, then the
-    // option text. Long text wraps in full, continuation lines starting under the first line's text. Picking an
-    // option recolours its letter block. Only an option's first line is clickable; one question's options may touch.
+    // option text. Detailed mode wraps long text in full, continuation lines starting under the first line's text;
+    // all of an option's rows are one clickable group that lights up together. Compact mode keeps each option to one
+    // row ending in "…", with the full text in a tooltip. Picking an option recolours its letter block.
     const letter = (L, chosen) => seg(` ${L} `, chosen ? S.letterChosen : S.letter, chosen ? S.letterChosen : S.buttonHover);
     const group = rowsOf => rowsOf.forEach(r => { r.group = q.uid; });
-    const optionRows = (opt, i, wrapWidth) => {
+    const optionRows = (opt, i) => {
       const L = letters[i];
       const chosen = q.draft?.choice === L;
       const pending = FB.look(choose(L));
+      const action = pending ? null : choose(L);
       const s = pending ? S.dim : chosen ? S.chosen : S.text;
       const h = withBg(s, P.rowHover);
       const lead = [seg(' ', s, h), L === q.content.recommend ? seg('★', S.star, withBg(S.star, P.rowHover)) : seg(' ', s, h), seg(' ', s, h), letter(L, chosen), seg(' ', s, h)];
       const indent = lead.reduce((n, x) => n + width(x.t), 0);
-      const lines = wrap(opt, Math.max(4, wrapWidth - indent - 1));
-      const first = [...lead, seg(lines[0], s, h)];
-      first.push(seg(' '.repeat(Math.max(1, wrapWidth - first.reduce((n, x) => n + width(x.t), 0))), s, h));
-      return [item(first, pending ? null : choose(L)), ...lines.slice(1).map(l => textItem(' '.repeat(indent) + l, s))];
+      const room = Math.max(4, w - indent - 1);
+      const lines = compact ? [cut(opt, room)] : wrap(opt, room);
+      const fill = segs => [...segs, seg(' '.repeat(Math.max(1, w - segs.reduce((n, x) => n + width(x.t), 0))), s, h)];
+      const rowsOf = [item(fill([...lead, seg(lines[0], s, h)]), action), ...lines.slice(1).map(l => item(fill([seg(' '.repeat(indent), s, h), seg(l, s, h)]), action))];
+      rowsOf.forEach(it => { it.group = `${q.uid}:${L}`; });
+      if (lines[0] !== opt && compact) rowsOf[0].tip = opt;
+      return rowsOf;
     };
-    const fitsAsButton = q.content.options.every(opt => width(opt) + 8 <= w - 2);
-    if (compact && fitsAsButton) {
-      const at = rows.length;
-      add(q.content.options.map((opt, i) => {
-        const L = letters[i];
-        const chosen = q.draft?.choice === L;
-        const star = L === q.content.recommend ? seg('★', withBg(S.star, P.btn), withBg(S.star, P.btnHover)) : seg(' ', S.button, S.buttonHover);
-        return item([seg(' ', S.button, S.buttonHover), star, seg(' ', S.button, S.buttonHover), letter(L, chosen), seg(` ${opt} `, S.button, S.buttonHover)], FB.look(choose(L)) ? null : choose(L));
-      }));
-      group(rows.slice(at));
-    } else {
-      const at = rows.length;
-      q.content.options.forEach((opt, i) => { for (const it of optionRows(opt, i, w)) add([it]); });
-      group(rows.slice(at));
-    }
-    if (compact) add([], [button(t.recommendShort, { type: 'recommend', ...base, text: draftText(q) }), button(t.explainShort, { type: 'explain', ...base, text: draftText(q) }), voidButton]);
+    const at = rows.length;
+    q.content.options.forEach((opt, i) => { for (const it of optionRows(opt, i)) add([it]); });
+    group(rows.slice(at));
   } else if (q.content.idea) {
     for (const l of wrap(`${t.idea}: ${q.content.idea}`, w - 2)) add([textItem(` ${l}`, S.dim)]);
   }
@@ -248,15 +248,11 @@ function card(q, ctx) {
     add([button(t.reconfirmButton, { type: 'reconfirm', ...base, choice: q.draft.choice, text: draftText(q) })]);
   }
 
-  if (!compact) {
-    blank();
-    const actions = q.type === 'decision'
-      ? [button(t.recommend, { type: 'recommend', ...base, text: draftText(q) }), button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton]
-      : [button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton];
-    add(actions, [chip]);
-  } else if (q.type === 'discussion') {
-    add([], [button(t.explainShort, { type: 'explain', ...base, text: draftText(q) }), voidButton]);
-  }
+  blank();
+  const actions = q.type === 'decision'
+    ? [button(t.recommend, { type: 'recommend', ...base, text: draftText(q) }), button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton]
+    : [button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton];
+  add(actions, [chip]);
 
   const isFocused = focus?.uid === q.uid;
   const label = textItem(` ${q.type === 'decision' ? t.note : t.reply}`, S.dim);
@@ -392,8 +388,12 @@ function questionRows(model, ctx) {
   const rows = [];
   const add = (left, right) => rows.push(...flow(newRow, cols, left, right));
   const pending = model.questions.filter(q => q.status === 'pending');
+  // The mode button keeps one width in both modes, so switching never moves the header or the cards below it.
+  const modeWidth = Math.max(width(t.compact), width(t.detailed));
+  const modeText = compact ? t.detailed : t.compact;
+  const modeLabel = modeText + ' '.repeat(modeWidth - width(modeText));
   add([textItem(` ${t.questions(pending.length, pending.filter(isAnswered).length)}`, S.bold)], [
-    button(compact ? t.detailed : t.compact, { type: 'card-mode', mailbox: model.mailbox.id, mode: compact ? 'detailed' : 'compact' }),
+    button(modeLabel, { type: 'card-mode', mailbox: model.mailbox.id, mode: compact ? 'detailed' : 'compact' }),
     button(t.settings, { type: 'settings', mailbox: model.mailbox.id }),
   ]);
   add([]);
@@ -473,6 +473,45 @@ function bottomRows(model, ctx) {
   return rows;
 }
 
+// ---------- in-pane layer (settings, attachment) ----------
+// A box drawn over the middle of the screen. While it is open only its own controls are clickable, and keys go to
+// it (main.mjs). Blue-grey, never red next to green.
+const BOX = { fg: P.text, bg: hex('#2b3245') };
+const BOX_TITLE = { fg: P.white, bg: hex('#2b3245'), bold: true };
+const BOX_DIM = { fg: hex('#9aa3b5'), bg: hex('#2b3245') };
+const MERGE_STEP = 10;
+const WIDTH_STEP = 4;
+
+function overlayRows(overlay, ctx, height) {
+  const { t, cols } = ctx;
+  const rows = [];
+  const add = (left, right) => rows.push(...flow(newRow, cols, left, right, BOX));
+  const title = overlay.kind === 'settings' ? t.settingsTitle : `📎 ${overlay.name}`;
+  add([clipItem(` ${title}`, cols - itemWidth(button(t.close, { type: 'overlay-close' })) - 1, BOX_TITLE)], [button(t.close, { type: 'overlay-close' })]);
+  add([]);
+  let top = 0;
+  if (overlay.kind === 'settings') {
+    const p = overlay.prefs ?? {};
+    const set = change => ({ type: 'settings-set', change });
+    const label = text => textItem(` ${text}${' '.repeat(Math.max(1, 22 - width(text)))}`, BOX);
+    add([label(t.widthLabel), button('−', set({ width: p.width - WIDTH_STEP })), textItem(String(p.width).padStart(3), BOX), button('+', set({ width: p.width + WIDTH_STEP }))]);
+    add([]);
+    add([label(t.modeLabel), button(t.detailed, set({ cardMode: 'detailed' }), p.cardMode === 'detailed' ? 'chosen' : 'button'), button(t.compact, set({ cardMode: 'compact' }), p.cardMode === 'compact' ? 'chosen' : 'button')]);
+    add([]);
+    add([label(t.mergeLabel), button('−', set({ mergeSeconds: p.mergeSeconds - MERGE_STEP })), textItem(String(p.mergeSeconds).padStart(3), BOX), button('+', set({ mergeSeconds: p.mergeSeconds + MERGE_STEP }))]);
+    add([]);
+    for (const l of wrap(t.settingsHint, cols - 2)) add([textItem(` ${l}`, BOX_DIM)]);
+  } else {
+    const body = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n').flatMap(l => wrap(l, cols - 2));
+    const view = Math.max(1, height - rows.length - 1);
+    top = Math.min(Math.max(0, overlay.top ?? 0), Math.max(0, body.length - view));
+    for (const l of body.slice(top, top + view)) add([textItem(` ${l}`, BOX)]);
+    while (rows.length < height - 1) add([]);
+    add([textItem(` ${t.attachmentHint(Math.min(body.length, top + view), body.length)}${overlay.truncated ? ` · ${t.truncated}` : ''}`, BOX_DIM)]);
+  }
+  return { rows, top };
+}
+
 // ---------- tooltip ----------
 // The full text of a cut-off item, in a box right under it, wrapped to the screen width; above it when there is not
 // enough room below. The box covers the rows it lands on, and their clickable areas with them. Blue-grey, so it
@@ -524,12 +563,9 @@ function spaceOut(rows, cols) {
   return out;
 }
 
-function finish(r, cols, hoverAt) {
+function finish(r, cols, lit) {
   let segs = r.segs;
-  if (hoverAt !== null) {
-    const hit = r.hits.find(h => hoverAt >= h.c0 && hoverAt < h.c1);
-    if (hit) segs = segs.map((x, i) => (i >= hit.i0 && i < hit.i1 && x.h ? { ...x, s: x.h } : x));
-  }
+  for (const hit of r.hits.filter(lit)) segs = segs.map((x, i) => (i >= hit.i0 && i < hit.i1 && x.h ? { ...x, s: x.h } : x));
   let used = 0;
   const out = [];
   for (const x of segs) {
@@ -555,7 +591,7 @@ export function render(model, {
   cols = 48, rows = 40, cardMode = model.prefs?.cardMode ?? 'detailed', locale = 'en', scroll = 0, focus = null,
   drafts = {}, notice = null, now = Date.now(), hover = null, batchOpen = false, fx = {}, ghosts = [],
   previousQuestionIds = null, lastInteractionAt = null, confirmPrompt = null,
-  feedback = null, deliveryState = null, deliveryConfirmedAt = null, tooltip = null,
+  feedback = null, deliveryState = null, deliveryConfirmedAt = null, tooltip = null, overlay = null,
 } = {}) {
   const ctx = { t: screenText(locale), cols, compact: cardMode === 'compact', model, drafts, focus, notice, now, batchOpen, fx, ghosts, confirmPrompt };
   FB = {
@@ -601,14 +637,38 @@ export function render(model, {
   const hits = [];
   const tips = [];
   let cursor = null;
-  [...top, ...shown, ...bottom].forEach((r, row) => {
-    const out = finish(r, cols, hover && hover.y - 1 === row ? hover.x - 1 : null);
+  // The hovered control, and with it every row of the same group (all lines of one wrapped option).
+  const all = [...top, ...shown, ...bottom];
+  const pointed = hover ? all[hover.y - 1]?.hits.find(h => hover.x - 1 >= h.c0 && hover.x - 1 < h.c1) ?? null : null;
+  const lit = h => h === pointed || Boolean(pointed?.group && h.group === pointed.group);
+  all.forEach((r, row) => {
+    const out = finish(r, cols, lit);
     lines.push(out.line);
     styled.push(out.styled);
     for (const h of out.hits) hits.push({ row, ...h });
     for (const tip of r.tips) if (tip.c0 < cols) tips.push({ row, c0: tip.c0, c1: Math.min(cols, tip.c1), text: tip.text });
     if (out.caret !== null) cursor = { row, col: out.caret };
   });
-  if (tooltip) showTooltip(tooltip, { lines, styled, hits, tips, cols, rows });
-  return { lines, styled, hits, tips, cursor, scrollMax, scroll: from, unseen };
+  if (tooltip && !overlay) showTooltip(tooltip, { lines, styled, hits, tips, cols, rows });
+  let overlayTop = null;
+  if (overlay) {
+    // The settings box is as tall as its content; the attachment reader takes all but a row above and below.
+    const screen = Math.min(rows, lines.length);
+    const height = overlay.kind === 'attachment' ? Math.max(5, screen - 2) : 0;
+    const box = overlayRows(overlay, ctx, height);
+    overlayTop = box.top;
+    const start = Math.max(0, Math.floor((screen - box.rows.length) / 2));
+    hits.length = 0;
+    tips.length = 0;
+    cursor = null;
+    box.rows.forEach((r, i) => {
+      const row = start + i;
+      if (row >= lines.length) return;
+      const out = finish(r, cols, h => Boolean(hover && hover.y - 1 === row && hover.x - 1 >= h.c0 && hover.x - 1 < h.c1));
+      lines[row] = out.line;
+      styled[row] = out.styled;
+      for (const h of out.hits) hits.push({ row, ...h });
+    });
+  }
+  return { lines, styled, hits, tips, cursor, scrollMax, scroll: from, unseen, overlayTop };
 }

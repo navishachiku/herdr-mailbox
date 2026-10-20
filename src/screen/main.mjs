@@ -44,6 +44,7 @@ let lastInteractionAt = null; // last mouse movement, click or key; new question
 let feedback = null; // the operation in flight and how it went (see feedback.mjs)
 let deliveryState = null; // while Deliver now is delivering: the daemon's delivery state for this mailbox
 let deliveryConfirmedAt = null; // when that delivery was seen landing
+let overlay = null; // settings or an attachment, open as a layer inside this pane (see actions.mjs)
 let confirmPrompt = null; // { message, resolve } while the screen asks a yes / no question
 let seen = null; // questions already on screen, so a new one can be told apart
 const anim = new Animator(() => draw());
@@ -74,7 +75,8 @@ function draw() {
   const fx = { ...anim.values(), noShift: model.inputState === 'typing' || focus !== null };
   ui = render(model, { cols, rows, cardMode: model.prefs?.cardMode, locale, scroll, focus, drafts: buffers, notice, hover, batchOpen, fx, ghosts,
     previousQuestionIds: seen ? [...seen] : null, lastInteractionAt, confirmPrompt: confirmPrompt?.message ?? null,
-    feedback, deliveryState, deliveryConfirmedAt, tooltip });
+    feedback, deliveryState, deliveryConfirmedAt, tooltip, overlay });
+  if (overlay?.kind === 'attachment' && ui.overlayTop !== null) overlay.top = ui.overlayTop; // keep the scroll inside the text
   // Everything now visible, or scrolled to, counts as seen; what is still behind the hint does not.
   const hidden = new Set(ui.unseen);
   seen ??= new Set();
@@ -166,7 +168,7 @@ function onFeedback(next) {
   draw();
 }
 
-const env = () => ({ call, run: herdr.run, now: Date.now, onFeedback, selfPane: SELF, ownerPane: model.mailbox.pane, generation: model.mailbox.generation });
+const env = () => ({ call, run: herdr.run, now: Date.now, onFeedback, overlay, model, scroll, drafts: buffers, selfPane: SELF, ownerPane: model.mailbox.pane, generation: model.mailbox.generation });
 const question = uid => model.questions.find(q => q.uid === uid);
 
 async function act(action) {
@@ -174,6 +176,7 @@ async function act(action) {
   busy = true;
   try {
     const res = await perform(action, env());
+    if (Object.hasOwn(res, 'overlay')) overlay = res.overlay;
     if (res.model) adopt(res.model); else await refresh();
     if (!res.ok) say(res.error || 'failed');
   } finally { busy = false; }
@@ -197,6 +200,7 @@ async function closeScreen() {
 // `captured` is the control under the click in the frame that was on screen when the click arrived.
 async function click(captured) {
   const action = captured ? { ...captured } : null;
+  if (overlay) { if (action) await act(action); return; }
   // With the confirmation row open, only its Yes and No buttons respond.
   if (confirmPrompt && action?.type !== 'confirm-yes' && action?.type !== 'confirm-no') return;
   if (action?.type === 'batch-note') {
@@ -325,6 +329,13 @@ async function key(event) {
   draw();
 }
 
+// While a layer is open, keys and the wheel belong to it (clicks only find its own controls, render hides the rest).
+async function overlayEvent(event) {
+  const res = await perform({ type: 'overlay-input', event }, env());
+  overlay = res.overlay ?? null;
+  draw();
+}
+
 // Clicks are matched to a control when they arrive, against the frame on screen then (see events.mjs).
 const queue = createEventQueue({
   getUI: () => ui,
@@ -332,13 +343,15 @@ const queue = createEventQueue({
     try {
       if (!model) return;
       if (event.kind === 'move') move(event);
+      else if (overlay && event.kind !== 'click' && !(event.kind === 'key' && event.name === 'ctrl-c')) await overlayEvent(event);
       else if (event.kind === 'wheel') { scroll += event.dir * 3; draw(); } else if (event.kind === 'click') await click(action); else await key(event);
     } catch (e) { say(String(e.message || e)); }
   },
 });
 
 enter(out);
-out.on('resize', () => { forgetSize(); draw(); });
+// A change of pane size closes the layer, like herdr-sidebar's modal does.
+out.on('resize', () => { forgetSize(); overlay = null; draw(); });
 paint.reset();
 await refresh();
 setInterval(() => { if (!busy) refresh(); }, 1000);

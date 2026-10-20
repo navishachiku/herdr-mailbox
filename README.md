@@ -138,8 +138,8 @@ Messages are signed `[workspace/]position/role 💬 ` from the sender pane's lab
 - **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked, and a note field. Click an option, or use **Recommend** or **Explain**. A note alone, with no option, is an answer too. **Void** sends a question back at once as "no answer needed".
 - **Batch answers** — **Recommend all** and **Explain all** apply to the decision questions still unanswered, and **Reset all** clears the drafts. **Void all** does the same for every unsent question, drafts included, after you confirm how many.
 - **Confirm & send** — sends your answers back to the agent as a single batch. It is greyed out, with the reason, while the agent's input box has text or cannot be read, so an answer never lands on top of a draft.
-- **Attachments** — a letter with an attachment shows a link that opens the full text in a popup; arrow keys and the wheel scroll, `Esc` closes.
-- **Settings** — the **Settings** button opens width (24 to 80 columns in steps of 4; applies the next time the screen opens), card mode (detailed or compact) and the merge interval for notes in seconds (default 60). Changes are saved at once and shared by every Herdr session.
+- **Attachments** — a letter with an attachment shows a link that opens the full text in a box inside the mailbox screen; arrow keys and the wheel scroll, **Close** or `Esc` closes.
+- **Settings** — the **Settings** button opens **Mailbox settings** in a box inside the mailbox screen: width (24 to 80 columns in steps of 4; applies the next time the screen opens), card mode (detailed or compact) and the merge interval for notes in seconds (default 60). Changes are saved at once and shared by every Herdr session; **Close** or `Esc` closes the box. No Herdr popup is used, so the screen looks the same in a terminal and in the web interface.
 
 The screen is written for the mouse: clicking a text field gives it the keyboard, and Enter or leaving the field saves it. Pane focus returns to the receiver after a button press. The screen redraws only the rows that changed, so a delivery on the left does not disturb a field you are typing in. After a Herdr restart the screen reopens the next time you focus its receiver. A pressed button turns into a disabled "Processing…" at once; sending and voiding then show the result for two seconds, or why they failed. Text cut off with "…" shows in full in a box when the pointer rests on it for half a second.
 
@@ -210,7 +210,7 @@ A small daemon owns the state file and handles one request at a time. The CLI ta
 | `src/daemon.mjs`, `src/core.mjs` | The daemon and the letter rules: receipts, deduplication, edit and withdraw, limits. |
 | `src/identity.mjs` | Binding a mailbox to a receiver, the reconcile loop, claims. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Batching, the input-box check, confirmation, batch text. |
-| `src/screen/` | The mailbox screen and its two popups. |
+| `src/screen/` | The mailbox screen, with settings and attachments shown inside it. |
 | `src/open.mjs`, `src/on-focus.mjs` | The `prefix+shift+m` action and reopening the screen after a Herdr restart. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
 

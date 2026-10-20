@@ -1,5 +1,5 @@
 // What the mailbox screen needs from the daemon: the view it draws, bulk answers, preferences, the attachment
-// text for the popup, and the bookkeeping for the screen pane itself (open, close, reopen after a herdr restart).
+// text for the in-screen reader, and the bookkeeping for the screen pane itself (open, close, reopen after a herdr restart).
 // Answers and submits reuse core's answer and submit; identity's guard checks the generation on every write.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';

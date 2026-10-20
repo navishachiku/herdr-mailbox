@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 
-// Terminal setup shared by the screen and its popups: alternate screen, mouse reporting (clicks and all motion,
+// Terminal setup for the screen: alternate screen, mouse reporting (clicks and all motion,
 // for hover), bracketed paste.
 // Everything is undone on exit, including when herdr kills the pane.
 export function enter(out = process.stdout, stdin = process.stdin) {
