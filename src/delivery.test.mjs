@@ -565,6 +565,30 @@ test('201/AC-14 UserPromptSubmit reads a pasted header marker but ignores marker
   assert.equal(ordinary.stdout, '', 'a marker inside an ordinary message must not trigger the hook');
 });
 
+test('201/AC-16 a working Claude receiver confirms an absorbed queued command but not enqueue alone', async t => {
+  const r = rig(t, { mergeMs: 100, workingMs: 300, confirmMs: 4000 });
+  const mb = await r.bind();
+  r.world.panes[0].agent_status = 'working';
+  r.world.promptResult['w1:p1'] = 'lost';
+  r.write();
+  const a = r.note(mb, 'report delivered during work');
+  const sending = await until(() => r.batches().find(batch => batch.members.includes(a.uid) && batch.status === 'sending')
+    && r.prompts().length === 1 && r.batches().find(batch => batch.members.includes(a.uid)), 'working receiver prompt');
+  const prompt = `<pasted_content id="queued-1">\n${r.prompts()[0].argv[3]}\n</pasted_content id="queued-1">`;
+  const append = entry => fs.appendFileSync(r.transcript, `${JSON.stringify(entry)}\n`);
+  append({ type: 'queue-operation', operation: 'enqueue', content: prompt });
+  await sleep(r.clock.tickMs * 3);
+  assert.equal(r.batches().find(batch => batch.id === sending.id).status, 'sending', 'enqueue alone must not confirm delivery');
+  append({ type: 'queue-operation', operation: 'remove', reason: 'absorbed_mid_turn' });
+  append({ type: 'attachment', attachment: { type: 'queued_command', prompt } });
+  const confirmed = await r.confirmed(a.uid);
+  assert.equal(confirmed.id, sending.id);
+  assert.equal(confirmed.status, 'confirmed');
+  const entries = fs.readFileSync(r.transcript, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(entries.some(entry => entry.type === 'user'), false, 'confirmation must not require a regular user message');
+  assert.equal(r.prompts().length, 1);
+});
+
 test('201/AC-15 Codex receives the full batch metadata and reply mailbox in its prompt', async t => {
   const r = rig(t);
   r.world.panes[0].agent = 'codex';
