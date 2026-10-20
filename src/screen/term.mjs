@@ -1,12 +1,13 @@
 import { execFileSync } from 'node:child_process';
 
-// Terminal setup shared by the screen and its popups: alternate screen, mouse reporting, bracketed paste.
+// Terminal setup shared by the screen and its popups: alternate screen, mouse reporting (clicks and all motion,
+// for hover), bracketed paste.
 // Everything is undone on exit, including when herdr kills the pane.
 export function enter(out = process.stdout, stdin = process.stdin) {
-  out.write('\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h\x1b[?2004h');
+  out.write('\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1003h\x1b[?1006h\x1b[?2004h');
   stdin.setRawMode?.(true);
   stdin.resume();
-  const restore = () => out.write('\x1b[?2004l\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l');
+  const restore = () => out.write('\x1b[?2004l\x1b[?1006l\x1b[?1003l\x1b[?1000l\x1b[?25h\x1b[?1049l');
   process.on('exit', restore);
   for (const sig of ['SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(0));
   return restore;

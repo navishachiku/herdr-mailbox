@@ -693,3 +693,761 @@ test('202/AC-2 AC-3 AC-18 smoke: both card modes render a full view without thro
     }
   } finally { w.cleanup(); }
 });
+
+// A view-shaped fixture keeps visual assertions independent of daemon socket availability.
+function interactionModel() {
+  const question = (uid, draft = null) => ({
+    uid, serial: uid, type: 'decision', status: 'pending', priority: 'medium',
+    sender: SENDER, senderLabel: 'worker', version: 1, tags: [], draft,
+    content: { question: 'Which option?', options: ['First', 'Second'], recommend: 'A', attach: { name: 'plan.md' } },
+  });
+  return {
+    ok: true,
+    mailbox: { id: 'MB-test', state: 'connected', generation: 1, pane: RECV, label: 'receiver', screen: { open: true } },
+    notes: [{ uid: 'note', senderLabel: 'worker', text: 'A queued note' }],
+    questions: [question('Q1'), question('Q2', { choice: 'A', text: 'A reason' }), question('Q3', { choice: 'B', text: 'Check again', reconfirm: true })],
+    batches: [{ id: 'batch-test', status: 'unconfirmed', kind: 'notes', members: 1 }],
+    inputState: 'empty', paused: null, deliverAt: null,
+    prefs: { width: 48, cardMode: 'detailed' },
+  };
+}
+
+// Decode visible terminal columns and their SGR sequences, including wide glyphs.
+async function styledCells(line) {
+  const { charWidth } = await import('./screen/text.mjs');
+  const cells = [];
+  let style = '';
+  for (const token of line.match(/\x1b\[[0-9;]*m|[^\x1b]/gu) ?? []) {
+    if (token.startsWith('\x1b[')) {
+      style = /^\x1b\[(?:0)?m$/.test(token) ? '' : style + token;
+    } else {
+      for (let i = 0; i < charWidth(token); i++) cells.push({ text: token, style });
+    }
+  }
+  return cells;
+}
+
+test('202/AC-20 screen startup enables all-motion and SGR mouse reporting', () => {
+  const w = world();
+  try {
+    const script = `
+      import { enter } from ${JSON.stringify(new URL('./screen/term.mjs', import.meta.url).href)};
+      enter(process.stdout, { resume() {}, setRawMode() {} });
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { env: w.env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes('\x1b[?1003h'), 'all mouse movement is reported');
+    assert.ok(result.stdout.includes('\x1b[?1006h'), 'mouse coordinates use SGR reporting');
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-20 moving onto each clickable hit changes its SGR style and moving away restores it', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const model = interactionModel();
+  for (const cardMode of ['detailed', 'compact']) {
+    const options = { cols: 80, rows: 100, cardMode, now: 0 };
+    const before = render(model, options);
+    assert.ok(before.hits.length > 0);
+    for (const target of before.hits) {
+      const events = parseInput(`\x1b[<35;${target.c0 + 1};${target.row + 1}M`);
+      assert.equal(events.length, 1, 'a mouse movement produces an input event');
+      const { x, y } = events[0];
+      assert.equal(x, target.c0 + 1);
+      assert.equal(y, target.row + 1);
+      // Hover takes the same 1-based coordinates as decoded terminal mouse input.
+      const over = render(model, { ...options, hover: { x, y } });
+      const styles = async ui => (await styledCells(ui.styled[target.row])).slice(target.c0, target.c1).map(cell => cell.style);
+      assert.notDeepEqual(await styles(over), await styles(before), `${cardMode}: ${target.action.type} visibly responds to hover`);
+      const away = parseInput('\x1b[<35;1;1M')[0];
+      assert.ok(away && !before.hits.some(h => h.row === away.y - 1 && h.c0 <= away.x - 1 && away.x - 1 < h.c1), 'the pointer moves outside all hits');
+      const restored = render(model, { ...options, hover: { x: away.x, y: away.y } });
+      assert.deepEqual(await styles(restored), await styles(before), 'moving away restores the original SGR style');
+    }
+  }
+});
+
+test('202/AC-23 clickable hits have padding and spacing, while options of the same question may touch vertically and each occupy one row', async () => {
+  const { render } = await import('./screen/render.mjs');
+  for (const cardMode of ['detailed', 'compact']) {
+    for (const cols of [32, 48, 80]) {
+      const ui = render(interactionModel(), { cols, rows: 100, cardMode, now: 0 });
+      assert.ok(ui.hits.length > 0);
+      for (let i = 0; i < ui.hits.length; i++) {
+        for (const other of ui.hits.slice(i + 1)) {
+          const target = ui.hits[i];
+          const overlaps = target.c0 < other.c1 && other.c0 < target.c1;
+          const sameQuestionOptions = target.action.type === 'choose' && other.action.type === 'choose'
+            && target.action.uid === other.action.uid;
+          if (target.row !== other.row && overlaps && !sameQuestionOptions) {
+            assert.ok(Math.abs(target.row - other.row) - 1 >= 1, `${cardMode}/${cols}: ${target.action.type} and ${other.action.type} leave a row between overlapping column ranges`);
+          }
+        }
+      }
+      for (const target of ui.hits) {
+        const label = `${cardMode}/${cols}: ${target.action.type}`;
+        assert.ok(Number.isInteger(target.row) && target.row >= 0 && target.row < ui.lines.length, `${label} occupies a visible row`);
+        assert.ok(target.c0 >= 0 && target.c1 <= cols && target.c1 - target.c0 >= 3, `${label} has room for text and padding`);
+        const cells = await styledCells(ui.styled[target.row]);
+        const text = cells.slice(target.c0, target.c1).map(cell => cell.text).join('');
+        assert.equal(cells[target.c0]?.text, ' ', `${label} has left padding inside the hit`);
+        assert.equal(cells[target.c1 - 1]?.text, ' ', `${label} has right padding inside the hit`);
+        assert.ok(text.trim().length > 0, `${label} contains visible text`);
+      }
+      const options = ui.hits.filter(h => h.action.type === 'choose');
+      assert.ok(options.length > 0, 'option hit ranges are present');
+      for (const option of options) {
+        // Hits use a single row; repeated ranges for one option must not extend it onto another row.
+        const rows = new Set(options.filter(h => h.action.uid === option.action.uid && h.action.choice === option.action.choice).map(h => h.row));
+        assert.deepEqual([...rows], [option.row], `${cardMode}/${cols}: ${option.action.uid}/${option.action.choice} occupies exactly one row`);
+        for (const neighbor of options.filter(h => h.action.uid === option.action.uid && h.action.choice !== option.action.choice && h.row !== option.row)) {
+          assert.equal(rows.has(neighbor.row), false, 'an option hit does not extend into a neighboring option row');
+        }
+      }
+      for (const row of new Set(ui.hits.map(h => h.row))) {
+        const hits = ui.hits.filter(h => h.row === row).sort((a, b) => a.c0 - b.c0);
+        for (let i = 1; i < hits.length; i++) {
+          assert.ok(hits[i].c0 - hits[i - 1].c1 >= 1, `${cardMode}/${cols}: adjacent hits leave a column between their ranges`);
+        }
+      }
+    }
+  }
+});
+
+test('202/AC-22 a new offscreen question is revealed when idle or by clicking its hint while interaction keeps the scroll position', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const w = world();
+  try {
+    const model = interactionModel();
+    model.notes = [];
+    model.batches = [];
+    const seed = model.questions[0];
+    model.questions = Array.from({ length: 20 }, (_, i) => ({
+      ...seed, uid: `old-${i}`, serial: `Q${i + 1}`,
+      content: { ...seed.content, question: `Existing question ${i + 1}?` },
+    }));
+    const options = { cols: 80, rows: 40, locale: 'en', cardMode: 'compact', scroll: 0, now: 100_000 };
+    const before = render(model, options);
+    assert.ok(before.scrollMax > 0, 'the existing questions overflow the viewport');
+    const fresh = {
+      ...seed, uid: 'new-question', serial: 'Q21',
+      content: { ...seed.content, question: 'New arrival needs a decision?' },
+    };
+    const next = { ...model, questions: [...model.questions, fresh] };
+    // Render receives the previously seen ids and the timestamp of the last parsed input; null means idle.
+    const previousQuestionIds = model.questions.map(q => q.uid);
+    const idle = render(next, { ...options, previousQuestionIds, lastInteractionAt: null });
+    assert.ok(idle.scroll > before.scroll, 'an idle screen scrolls to the new card');
+    assert.ok(idle.lines.some(line => line.includes(fresh.content.question)), 'the new question text is visible when idle');
+    assert.ok(idle.hits.some(h => h.action.uid === fresh.uid), 'the new card has a visible clickable control');
+    for (const input of ['\x1b[<35;4;4M', 'typing a reply']) {
+      const events = parseInput(input);
+      assert.ok(events.some(e => e.kind === 'move' || e.kind === 'text'), 'mouse movement and typing count as interaction');
+      const activeOptions = { ...options, previousQuestionIds, lastInteractionAt: events.length ? options.now : null };
+      const active = render(next, activeOptions);
+      assert.equal(active.scroll, before.scroll, 'recent interaction preserves the scroll position');
+      assert.equal(active.lines.some(line => line.includes(fresh.content.question)), false, 'the new card remains offscreen until requested');
+      let hint;
+      for (const h of active.hits) {
+        const cells = await styledCells(active.styled[h.row]);
+        if (cells.slice(h.c0, h.c1).map(cell => cell.text).join('').includes('↓ 1 new question')) { hint = h; break; }
+      }
+      assert.ok(hint, 'a clickable English hint says ↓ 1 new question');
+      const [event] = parseInput(`\x1b[<0;${hint.c0 + 1};${hint.row + 1}M`);
+      assert.equal(event.kind, 'click');
+      const clicked = active.hits.find(h => h.row === event.y - 1 && h.c0 <= event.x - 1 && event.x - 1 < h.c1);
+      assert.ok(clicked, 'the hint is reachable through terminal mouse coordinates');
+      const result = await perform(clicked.action, {
+        call: async req => req.op === 'view' ? next : { ok: true },
+        run: async args => {
+          const r = spawnSync(process.execPath, [FAKE, ...args], { env: w.env, encoding: 'utf8' });
+          assert.equal(r.status, 0, r.stderr);
+          return r.stdout;
+        },
+        model: next, scroll: active.scroll, selfPane: 'w1:p3', ownerPane: RECV, generation: 1,
+      });
+      assert.equal(result.ok, true);
+      // A local navigation action returns the new scroll offset for the next render.
+      assert.ok(Number.isFinite(result.scroll) && result.scroll > active.scroll, 'clicking the hint requests a scroll to the new card');
+      const revealed = render(next, { ...activeOptions, previousQuestionIds: next.questions.map(q => q.uid), scroll: result.scroll });
+      assert.ok(revealed.lines.some(line => line.includes(fresh.content.question)), 'clicking the hint reveals the new question');
+      assert.ok(revealed.hits.some(h => h.action.uid === fresh.uid), 'the revealed card can be acted on');
+    }
+  } finally { w.cleanup(); }
+});
+
+async function performVoid(w, ui, action, confirm, requests = []) {
+  const { perform } = await import('./screen/actions.mjs');
+  return perform(action, {
+    call: req => {
+      requests.push(req);
+      return w.raw({ ...req, caller: { pane: RECV, viaPlugin: true } });
+    },
+    run: async args => {
+      const r = spawnSync(process.execPath, [FAKE, ...args], { env: w.env, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stderr);
+      return r.stdout;
+    },
+    confirm, selfPane: 'w1:p3', ownerPane: RECV, generation: ui.model.mailbox.generation,
+  });
+}
+
+test('202/AC-24 Void answers a decision or discussion with X, immediately sends Voided and removes only that card', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const fixture = interactionModel();
+  fixture.questions[2] = { ...fixture.questions[2], type: 'discussion', content: { question: 'Discuss this?', idea: 'An idea' } };
+  const preview = render(fixture, { cols: 80, rows: 100 });
+  for (const q of fixture.questions) hit(preview, 'void', a => a.uid === q.uid);
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const decisionQuestion = await decision(w, { question: 'Void this decision?' });
+    const discussionQuestion = await discussion(w, { question: 'Void this discussion?' });
+    const keep = await decision(w, { question: 'Keep this question pending?' });
+    for (const q of [decisionQuestion, discussionQuestion]) {
+      const ui = await screen(w, mb);
+      const requests = [];
+      const result = await performVoid(w, ui, hit(ui, 'void', a => a.uid === q.uid), undefined, requests);
+      assert.equal(result.ok, true);
+      const answer = requests.findIndex(req => req.op === 'answer' && req.uid === q.uid && req.choice === 'X');
+      assert.ok(answer >= 0, 'Void uses the normal answer channel with code X');
+      assert.ok(requests.slice(answer + 1).some(req => req.op === 'submit' && req.items.some(item => item.uid === q.uid)), 'Void submits immediately after answering');
+      const after = await screen(w, mb);
+      const sentQuestion = find(after.model, q.uid);
+      assert.ok(sentQuestion && ['submitted', 'delivered'].includes(sentQuestion.status), 'the question is sent');
+      assert.equal(sentQuestion.draft.choice, 'X');
+      assert.equal(after.hits.some(h => h.action.uid === q.uid), false, 'the sent card is no longer actionable');
+      assert.equal(after.lines.some(line => line.includes(sentQuestion.content.question)), false, 'the sent question leaves the decision area');
+      assert.equal(find(after.model, keep.uid).status, 'pending');
+      const prompt = await until(() => w.prompts().find(entry => JSON.stringify(entry).includes(sentQuestion.content.question)));
+      assert.ok(prompt, 'the receiver gets the voided answer without another Submit click');
+      assert.match(JSON.stringify(prompt), /Voided|作廢/);
+    }
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-25 Void all confirms the count and sends X for every unsent question including existing drafts', async () => {
+  const { render } = await import('./screen/render.mjs');
+  hit(render(interactionModel(), { cols: 80, rows: 100 }), 'void-all');
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const open = await decision(w, { question: 'Unanswered decision to void?' });
+    const drafted = await decision(w, { question: 'Drafted decision to void?' });
+    const talk = await discussion(w, { question: 'Drafted discussion to void?' });
+    await w.op('answer', { uid: drafted.uid, version: drafted.version, choice: 'B', text: 'Existing choice' });
+    await w.op('answer', { uid: talk.uid, version: talk.version, text: 'Existing discussion draft' });
+    await note(w, 'Keep this queued note');
+    const ui = await screen(w, mb);
+    const requests = [];
+    let confirmations = 0;
+    const result = await performVoid(w, ui, hit(ui, 'void-all'), async message => {
+      confirmations++;
+      assert.match(message, /\b3\b/, 'confirmation states the number of questions, including drafts');
+      assert.match(message, /void|作廢/i);
+      assert.equal(requests.some(req => ['answer', 'submit'].includes(req.op)), false, 'no questions change before confirmation');
+      assert.deepEqual((await w.op('view', { mailbox: mb })).questions, ui.model.questions);
+      assert.equal(w.prompts().length, 0);
+      return true;
+    }, requests);
+    assert.equal(confirmations, 1, 'Void all asks for confirmation');
+    assert.equal(result.ok, true);
+    const after = await screen(w, mb);
+    for (const q of [open, drafted, talk]) {
+      const sent = find(after.model, q.uid);
+      assert.ok(sent && ['submitted', 'delivered'].includes(sent.status));
+      assert.equal(sent.draft.choice, 'X', 'X replaces existing answer drafts too');
+      assert.equal(after.hits.some(h => h.action.uid === q.uid), false);
+      assert.equal(after.lines.some(line => line.includes(sent.content.question)), false);
+      const prompt = await until(() => w.prompts().find(entry => JSON.stringify(entry).includes(sent.content.question)));
+      assert.ok(prompt, 'each voided question is delivered to the receiver');
+      assert.match(JSON.stringify(prompt), /Voided|作廢/);
+    }
+    assert.deepEqual(after.model.notes, ui.model.notes, 'Void all leaves queued notes alone');
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-25 cancelling Void all preserves unanswered questions, drafts and delivery state', async () => {
+  const { render } = await import('./screen/render.mjs');
+  hit(render(interactionModel(), { cols: 80, rows: 100 }), 'void-all');
+  const w = world();
+  try {
+    const mb = await ready(w);
+    await decision(w, { question: 'Keep this unanswered decision?' });
+    const q = await discussion(w, { question: 'Keep this discussion draft?' });
+    await w.op('answer', { uid: q.uid, version: q.version, text: 'Preserve my draft' });
+    const ui = await screen(w, mb);
+    const requests = [];
+    let confirmations = 0;
+    let confirmationMessage;
+    await performVoid(w, ui, hit(ui, 'void-all'), async message => {
+      confirmations++;
+      confirmationMessage = message;
+      return false;
+    }, requests);
+    assert.equal(confirmations, 1);
+    assert.match(confirmationMessage, /\b2\b/, 'the cancellation prompt includes the target count');
+    assert.equal(requests.some(req => ['answer', 'submit'].includes(req.op)), false, 'cancelling makes no answer or submit requests');
+    await sleep(300);
+    const after = await w.op('view', { mailbox: mb });
+    assert.deepEqual(after.questions, ui.model.questions);
+    assert.deepEqual(after.notes, ui.model.notes);
+    assert.deepEqual(after.batches, ui.model.batches);
+    assert.equal(w.prompts().length, 0, 'cancelling sends nothing to the receiver');
+  } finally { w.cleanup(); }
+});
+
+// Hold the op response so the optimistic frame is checked before any result can complete it.
+async function feedbackRequest(model, action, call, pendingLabel, run = async () => ({ ok: true })) {
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  let now = 100_000;
+  let feedback = null;
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const pending = perform(action, {
+    call: async req => { await gate; return call(req); }, run,
+    now: () => now, onFeedback: next => { feedback = next; },
+    selfPane: 'w1:p3', ownerPane: RECV, generation: model.mailbox.generation,
+  });
+  let result;
+  try {
+    await Promise.resolve();
+    now += 199;
+    const ui = render(model, { cols: 80, rows: 100, locale: 'en', now, feedback });
+    assert.ok(ui.lines.some(line => line.includes(pendingLabel)), 'feedback is visible within 200 ms while the op is still pending');
+    assert.equal(ui.hits.some(h => h.action.type === action.type && (!action.uid || h.action.uid === action.uid)), false, 'the pending button is disabled');
+  } finally {
+    release();
+    result = await pending;
+  }
+  return { result, feedback, completedAt: now };
+}
+
+test('202/AC-26 Deliver now disables immediately, shows waiting reasons and keeps Delivered for two seconds after confirmation', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const fixture = interactionModel();
+  const preview = render(fixture, { cols: 80, rows: 100, now: 100_000 });
+  const optimistic = await feedbackRequest(fixture, hit(preview, 'deliver-now'), async () => ({ ok: true }), 'Delivering…');
+  assert.equal(optimistic.result.ok, true);
+  assert.equal(render(fixture, { cols: 80, rows: 100, now: optimistic.completedAt, feedback: optimistic.feedback }).lines.some(line => /\bDelivered\b/.test(line)), false, 'request acceptance alone is not delivery confirmation');
+  const w = world({ timings: { tickMs: 1, retryMs: 1, confirmMs: 50 } });
+  try {
+    const mb = await ready(w);
+    await note(w, 'Deliver this note');
+    w.setFake(f => { f.screens[RECV] = TYPING; });
+    const ui = await screen(w, mb);
+    assert.equal((await click(w, ui, hit(ui, 'deliver-now'))).ok, true);
+    let state;
+    for (const [input, reason] of [[TYPING, 'typing'], [UNKNOWN, 'unknown']]) {
+      w.setFake(f => { f.screens[RECV] = input; });
+      state = await until(async () => {
+        const next = await w.op('delivery-state', { mailbox: mb });
+        return next.paused?.reason === reason && next;
+      });
+      assert.equal(state.paused.reason, reason);
+      const waiting = render(await w.op('view', { mailbox: mb }), {
+        cols: 80, rows: 100, locale: 'en', now: 101_000,
+        feedback: optimistic.feedback, deliveryState: state,
+      });
+      assert.ok(waiting.lines.some(line => line.includes('Waiting:') && line.includes(reason)), `the waiting label includes ${reason}`);
+      assert.equal(waiting.hits.some(h => h.action.type === 'deliver-now'), false);
+      assert.equal(w.prompts().length, 0, 'waiting is not treated as delivered');
+    }
+    w.setFake(f => { f.screens[RECV] = EMPTY; });
+    state = await until(async () => {
+      const next = await w.op('delivery-state', { mailbox: mb });
+      return next.batches.some(b => b.status === 'confirmed') && next;
+    });
+    assert.ok(state.batches.some(b => b.status === 'confirmed'), 'the daemon confirms transcript landing');
+    // A later queued note keeps the normal delivery button available once the success feedback expires.
+    await note(w, 'Next note stays queued');
+    const model = await w.op('view', { mailbox: mb });
+    const options = { cols: 80, rows: 100, locale: 'en', feedback: optimistic.feedback, deliveryState: state, deliveryConfirmedAt: 102_000 };
+    for (const now of [102_000, 103_999]) {
+      const delivered = render(model, { ...options, now });
+      assert.ok(delivered.lines.some(line => /\bDelivered\b/.test(line)), 'delivery confirmation remains visible for two seconds');
+      assert.equal(delivered.hits.some(h => h.action.type === 'deliver-now'), false);
+    }
+    const restored = render(model, { ...options, now: 104_000 });
+    assert.equal(restored.lines.some(line => /\bDelivered\b/.test(line)), false);
+    hit(restored, 'deliver-now');
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-26 Deliver now stops showing Delivering once the batch turns unconfirmed and restores the button with the unresolved prompt', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  const model = interactionModel();
+  model.questions = [];
+  model.batches = [];
+  const options = { cols: 80, rows: 40, locale: 'en' };
+  const before = render(model, { ...options, now: 100_000 });
+  let feedback;
+  const requests = [];
+  const result = await perform(hit(before, 'deliver-now'), {
+    call: async req => { requests.push(req); return { ok: true }; },
+    run: async () => ({ ok: true }), generation: model.mailbox.generation,
+    now: () => 100_000, onFeedback: next => { feedback = next; },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].op, 'deliver-now');
+  const batch = { id: 'batch-unconfirmed-after-deliver', status: 'sending', kind: 'notes', members: 1, createdAt: 100_001, sentAt: 100_001 };
+  const deliveryState = { ok: true, paused: null, queued: model.notes.map(n => n.uid), inputState: 'empty', batches: [batch] };
+  model.batches = [batch];
+  const sending = render(model, { ...options, now: 100_002, feedback, deliveryState, deliveryConfirmedAt: null });
+  assert.ok(sending.lines.some(line => line.includes('Delivering…')));
+  assert.equal(sending.hits.some(h => h.action.type === 'deliver-now'), false, 'the in-flight delivery starts disabled');
+  // The tracked batch failed to confirm; a queued note keeps the normal delivery button available to retry.
+  batch.status = 'unconfirmed';
+  for (const now of [100_500, 700_000]) {
+    const unresolved = render(model, { ...options, now, feedback, deliveryState, deliveryConfirmedAt: null });
+    assert.equal(unresolved.lines.some(line => line.includes('Delivering…')), false, 'an unconfirmed batch no longer leaves Deliver now stuck delivering');
+    hit(unresolved, 'deliver-now');
+    assert.ok(unresolved.lines.some(line => line.includes(batch.id) && /unconfirmed/i.test(line)), 'the unresolved batch is shown instead of an endless delivering state');
+    hit(unresolved, 'resolve-batch', a => a.batch === batch.id && a.action === 'delivered');
+    hit(unresolved, 'resolve-batch', a => a.batch === batch.id && a.action === 'resend');
+  }
+});
+
+test('202/AC-29 Submit and stale Void disable while processing, then show completion or the failure reason', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const fixture = interactionModel();
+  const preview = render(fixture, { cols: 80, rows: 100 });
+  await feedbackRequest(fixture, hit(preview, 'submit'), async () => ({ ok: true }), 'Processing…');
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const q = await decision(w, { question: 'Submit with visible feedback?' });
+    await w.op('answer', { uid: q.uid, version: q.version, choice: 'A' });
+    const ui = await screen(w, mb);
+    const call = req => w.raw({ ...req, caller: { pane: RECV, viaPlugin: true } });
+    const run = async args => {
+      const r = spawnSync(process.execPath, [FAKE, ...args], { env: w.env, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stderr);
+      return r.stdout;
+    };
+    const success = await feedbackRequest(ui.model, hit(ui, 'submit'), call, 'Processing…', run);
+    assert.equal(success.result.ok, true);
+    assert.ok(['submitted', 'delivered'].includes(find(await w.op('view', { mailbox: mb }), q.uid).status));
+    for (const elapsed of [0, 1999]) {
+      const completed = render(ui.model, { cols: 80, rows: 100, now: success.completedAt + elapsed, feedback: success.feedback });
+      assert.ok(completed.lines.some(line => line.includes('Completed')), 'completion remains visible for two seconds');
+      assert.equal(completed.hits.some(h => h.action.type === 'submit'), false);
+    }
+    const restored = render(ui.model, { cols: 80, rows: 100, now: success.completedAt + 2000, feedback: success.feedback });
+    assert.equal(restored.lines.some(line => line.includes('Completed')), false);
+    hit(restored, 'submit');
+    const stale = await decision(w, { question: 'Old question for failed Void?' });
+    const old = await screen(w, mb);
+    const action = hit(old, 'void', a => a.uid === stale.uid);
+    assert.equal((await w.raw({ op: 'edit', uid: stale.uid, from: SENDER, question: 'Changed question for failed Void?' })).ok, true);
+    const failed = await feedbackRequest(old.model, action, call, 'Processing…', run);
+    assert.equal(failed.result.ok, false);
+    assert.equal(failed.result.error, 'stale_version');
+    const error = render(failed.result.model ?? old.model, { cols: 80, rows: 100, now: failed.completedAt, feedback: failed.feedback });
+    assert.ok(error.lines.some(line => /Failed:/.test(line) && /stale_version|question changed/i.test(line)), 'failure feedback includes the daemon reason');
+    const unchanged = find(await w.op('view', { mailbox: mb }), stale.uid);
+    assert.equal(unchanged.status, 'pending');
+    assert.equal(unchanged.draft, null);
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-27 AC-28 long options wrap completely with aligned continuations and a bright yellow recommendation star before aligned letters', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const yellowForeground = style => {
+    let foreground = null;
+    let bold = false;
+    for (const match of style.matchAll(/\x1b\[([0-9;]*)m/g)) {
+      const codes = match[1].split(';').map(Number);
+      for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        if (code === 0) { foreground = null; bold = false; }
+        else if (code === 1) bold = true;
+        else if (code === 22) bold = false;
+        else if (code === 38 || code === 48) {
+          const mode = codes[++i];
+          let rgb;
+          if (mode === 2) { rgb = codes.slice(i + 1, i + 4); i += 3; }
+          else if (mode === 5) {
+            const index = codes[++i];
+            if (index === 11) rgb = [255, 255, 0];
+            else if (index >= 16 && index <= 231) {
+              const levels = [0, 95, 135, 175, 215, 255];
+              const n = index - 16;
+              rgb = [levels[Math.floor(n / 36)], levels[Math.floor(n / 6) % 6], levels[n % 6]];
+            }
+          }
+          if (code === 38) foreground = rgb ?? null;
+        } else if (code === 33 || code === 93) foreground = code;
+        else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97) || code === 39) foreground = null;
+      }
+    }
+    if (typeof foreground === 'number') return foreground === 93 || (foreground === 33 && bold);
+    return Array.isArray(foreground) && foreground[0] >= 180 && foreground[1] >= 140
+      && foreground[2] < Math.min(foreground[0], foreground[1]) * 0.75;
+  };
+  for (const cardMode of ['detailed', 'compact']) {
+    for (const cols of [32, 48]) {
+      const model = interactionModel();
+      model.notes = [];
+      model.batches = [];
+      const options = ['abcdefghijklmnopqrstuvwxyz'.repeat(3), 'zyxwvutsrqponmlkjihgfedcba'.repeat(3)];
+      model.questions = [{ ...model.questions[0], content: { question: 'Choose a long option?', options, recommend: 'A' } }];
+      const ui = render(model, { cols, rows: 100, cardMode, now: 0 });
+      const optionHits = ui.hits.filter(h => h.action.type === 'choose');
+      const first = ['A', 'B'].map(choice => {
+        const hits = optionHits.filter(h => h.action.choice === choice).sort((a, b) => a.row - b.row);
+        assert.ok(hits.length > 0, `${choice} is clickable`);
+        return hits[0];
+      });
+      const rows = await Promise.all(ui.styled.map(styledCells));
+      const letters = first.map((h, i) => rows[h.row].findIndex((cell, col) => col >= h.c0 && col < h.c1 && cell.text === 'AB'[i]));
+      const star = rows[first[0].row].findIndex(cell => cell.text === '★');
+      assert.ok(star >= 0 && star < letters[0], 'the recommendation star precedes its option letter');
+      assert.ok(yellowForeground(rows[first[0].row][star].style), 'the star has a bright yellow foreground, not merely a yellow background');
+      assert.equal(letters[1], letters[0], 'recommended and other option letters share a column');
+      assert.equal(rows[first[1].row][star]?.text, ' ', 'the other option reserves a blank at the star column');
+      assert.equal(rows[first[1].row].some(cell => cell.text === '★'), false);
+      for (let i = 0; i < options.length; i++) {
+        const start = first[i].row;
+        const nextControl = ui.hits.filter(h => h.row > start && h.action.type !== 'choose').map(h => h.row);
+        const end = first[i + 1]?.row ?? Math.min(...nextControl);
+        const textCol = rows[start].findIndex((cell, col) => col > letters[i] && /[a-z]/.test(cell.text));
+        assert.ok(textCol > letters[i], 'option text follows the option letter');
+        const chunks = [];
+        for (let row = start; row < end; row++) {
+          const text = rows[row].slice(textCol).map(cell => cell.text).join('').trim();
+          if (!text) continue;
+          if (row > start) {
+            const left = rows[row].findIndex((cell, col) => col > 0 && cell.text !== ' ');
+            assert.equal(left, textCol, 'each continuation starts at the first line text column');
+          }
+          assert.equal(text.includes('…'), false, 'long options are never truncated with an ellipsis');
+          chunks.push(text);
+        }
+        assert.ok(chunks.length > 1, 'the long option actually wraps');
+        assert.equal(chunks.join(''), options[i], 'all option characters remain visible in order');
+      }
+    }
+  }
+});
+
+test('202/AC-31 marking the second batch delivered hits the correct action and removes only its prompt, then leaves No messages after both are resolved', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  for (const cols of [32, 48, 80]) {
+    const model = interactionModel();
+    model.notes = [];
+    model.questions = [];
+    model.batches = ['batch-first', 'batch-second'].map(id => ({ id, status: 'unconfirmed', kind: 'notes', members: 1 }));
+    const options = { cols, rows: 40, locale: 'en', now: 0 };
+    const before = render(model, options);
+    const requests = [];
+    const env = {
+      call: async req => {
+        requests.push(req);
+        if (req.op === 'view') return model;
+        assert.equal(req.op, 'resolve-batch');
+        assert.equal(req.action, 'delivered');
+        const batch = model.batches.find(b => b.id === req.batch);
+        assert.ok(batch, 'the requested batch exists');
+        batch.status = 'confirmed';
+        return { ok: true };
+      },
+      run: async () => ({ ok: true }), generation: model.mailbox.generation,
+    };
+    // Find the visible second label first, then use the same coordinate hit lookup as the screen.
+    const labels = [];
+    for (let row = 0; row < before.lines.length; row++) {
+      const cells = await styledCells(before.styled[row]);
+      const label = 'Mark delivered';
+      const col = cells.findIndex((_, i) => cells.slice(i, i + label.length).map(cell => cell.text).join('') === label);
+      if (col >= 0) labels.push({ row, col });
+    }
+    assert.equal(labels.length, 2, 'both Mark delivered labels are visible');
+    const [event] = parseInput(`\x1b[<0;${labels[1].col + 1};${labels[1].row + 1}M`);
+    assert.equal(event.kind, 'click');
+    const clicked = before.hits.find(h => h.row === event.y - 1 && h.c0 <= event.x - 1 && event.x - 1 < h.c1);
+    assert.ok(clicked, 'the second label is clickable at its displayed position');
+    assert.equal(clicked.action.type, 'resolve-batch');
+    assert.equal(clicked.action.batch, 'batch-second');
+    assert.equal(clicked.action.action, 'delivered', 'the label must not hit the first batch Resend action');
+    const firstActions = before.hits.filter(h => h.action.batch === 'batch-first').map(h => h.action);
+    assert.equal((await perform(clicked.action, env)).ok, true);
+    assert.equal(requests[0].batch, 'batch-second');
+    assert.equal(requests[0].action, 'delivered');
+    const afterSecond = render(model, options);
+    assert.equal(afterSecond.lines.some(line => line.includes('batch-second')), false, 'the resolved batch prompt disappears on the next render');
+    assert.equal(afterSecond.hits.some(h => h.action.batch === 'batch-second'), false, 'both controls of the resolved batch disappear');
+    assert.ok(afterSecond.lines.some(line => line.includes('batch-first') && line.includes('unconfirmed')), 'the first prompt remains');
+    assert.deepEqual(afterSecond.hits.filter(h => h.action.batch === 'batch-first').map(h => h.action), firstActions, 'both first-batch controls stay unchanged');
+    assert.equal((await perform(hit(afterSecond, 'resolve-batch', a => a.batch === 'batch-first' && a.action === 'delivered'), env)).ok, true);
+    const empty = render(model, options);
+    assert.equal(empty.hits.some(h => h.action.type === 'resolve-batch'), false);
+    assert.equal(empty.lines.some(line => /batch-first|batch-second|unconfirmed|Mark delivered|Resend/.test(line)), false, 'no old prompt or button text remains');
+    const messages = empty.lines.findIndex(line => line.trim().startsWith('Messages ·'));
+    const questions = empty.lines.findIndex(line => line.trim().startsWith('Questions ·'));
+    assert.ok(messages >= 0 && questions > messages);
+    assert.deepEqual(empty.lines.slice(messages + 1, questions).map(line => line.trim()).filter(Boolean), ['No messages'], 'the empty message area contains only its empty-state line');
+  }
+});
+
+test('202/AC-32 a queued click keeps the action from the displayed frame even when the layout changes before dispatch', async () => {
+  // Main's input queue must use this entry point: enqueue captures the displayed hit, onEvent handles it later.
+  const { createEventQueue } = await import('./screen/events.mjs');
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.questions = [];
+  model.batches = [{ id: 'batch-target', status: 'unconfirmed', kind: 'notes', members: 2 }];
+  const options = { cols: 48, rows: 40, locale: 'en', now: 0 };
+  const frameA = render(model, options);
+  const target = frameA.hits.find(h => h.action.batch === 'batch-target' && h.action.action === 'delivered');
+  assert.ok(target);
+  const [clickEvent] = parseInput(`\x1b[<0;${target.c0 + 1};${target.row + 1}M`);
+  let currentUI = frameA;
+  let unblock;
+  const barrier = new Promise(resolve => { unblock = resolve; });
+  const requests = [];
+  const queue = createEventQueue({
+    getUI: () => currentUI,
+    onEvent: async (event, capturedAction) => {
+      if (event.kind === 'key') { await barrier; return; }
+      if (event.kind === 'click') {
+        assert.ok(capturedAction, 'the queue supplies the action captured at event receipt');
+        const result = await perform(capturedAction, {
+          call: async req => { requests.push(req); return { ok: true }; },
+          run: async () => ({ ok: true }), generation: model.mailbox.generation,
+        });
+        assert.equal(result.ok, true);
+      }
+    },
+  });
+  const first = queue.enqueue({ kind: 'key', name: 'enter' });
+  await Promise.resolve();
+  const pendingClick = queue.enqueue(clickEvent);
+  try {
+    model.batches.unshift({ id: 'batch-inserted', status: 'unconfirmed', kind: 'notes', members: 1 });
+    currentUI = render(model, options);
+    const moved = currentUI.hits.find(h => h.row === clickEvent.y - 1 && h.c0 <= clickEvent.x - 1 && clickEvent.x - 1 < h.c1);
+    assert.ok(moved, 'the same coordinate is still clickable in frame B');
+    assert.equal(moved.action.batch, 'batch-inserted', 'the new layout puts a different batch at that coordinate');
+    assert.equal(requests.length, 0, 'the click is still queued behind the earlier event');
+  } finally {
+    unblock();
+    await Promise.all([first, pendingClick]);
+  }
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].op, 'resolve-batch');
+  assert.equal(requests[0].batch, 'batch-target', 'dispatch uses frame A rather than the newer frame B');
+  assert.equal(requests[0].action, 'delivered');
+});
+
+test('202/AC-33 Resend asks for its batch and member count before sending, while cancelling restores the unchanged view', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { perform } = await import('./screen/actions.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  for (const confirm of [true, false]) {
+    const model = interactionModel();
+    model.notes = [];
+    model.questions = [];
+    model.batches = [{ id: 'batch-resend-target', status: 'unconfirmed', kind: 'notes', members: 3 }];
+    const original = structuredClone(model);
+    const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
+    const before = render(model, options);
+    const action = hit(before, 'resolve-batch', a => a.batch === 'batch-resend-target' && a.action === 'resend');
+    const requests = [];
+    let prompt = null;
+    let answer;
+    let asked;
+    const asking = new Promise(resolve => { asked = resolve; });
+    const pending = perform(action, {
+      call: async req => {
+        requests.push(req);
+        assert.equal(req.op, 'resolve-batch');
+        assert.equal(req.batch, 'batch-resend-target');
+        assert.equal(req.action, 'resend');
+        model.batches[0].status = 'sending';
+        return { ok: true };
+      },
+      run: async () => ({ ok: true }), generation: model.mailbox.generation,
+      confirm: message => {
+        prompt = message;
+        asked();
+        return new Promise(resolve => { answer = resolve; });
+      },
+    });
+    try {
+      await Promise.race([asking, pending]);
+      assert.deepEqual(requests, [], 'no resolve-batch request is sent before confirmation');
+      assert.equal(typeof prompt, 'string', 'Resend opens the existing confirmation UI');
+      const confirmation = render(model, { ...options, confirmPrompt: prompt });
+      assert.ok(confirmation.lines.some(line => line.includes('batch-resend-target')), 'the confirmation identifies the batch');
+      assert.match(prompt, /batch-resend-target/);
+      assert.match(prompt, /\b3\b/, 'the confirmation includes the number of messages');
+      const yes = confirmation.hits.find(h => h.action.type === 'confirm-yes');
+      const no = confirmation.hits.find(h => h.action.type === 'confirm-no');
+      assert.ok(yes && no, 'the confirmation offers both Yes and No');
+      const target = confirm ? yes : no;
+      const [event] = parseInput(`\x1b[<0;${target.c0 + 1};${target.row + 1}M`);
+      const clicked = confirmation.hits.find(h => h.row === event.y - 1 && h.c0 <= event.x - 1 && event.x - 1 < h.c1);
+      assert.equal(clicked?.action.type, confirm ? 'confirm-yes' : 'confirm-no');
+      answer(clicked.action.type === 'confirm-yes');
+      const result = await pending;
+      assert.equal(result.ok, true);
+      if (confirm) {
+        assert.equal(requests.length, 1, 'confirmation releases exactly one resend request');
+        assert.equal(requests[0].batch, 'batch-resend-target');
+        assert.equal(requests[0].action, 'resend');
+      } else {
+        assert.deepEqual(requests, [], 'cancelling sends no resolve-batch request');
+        assert.deepEqual(model, original);
+        const restored = render(model, options);
+        assert.deepEqual(restored.lines, before.lines);
+        assert.deepEqual(restored.hits, before.hits, 'cancelling restores the original controls');
+        assert.equal(restored.hits.some(h => ['confirm-yes', 'confirm-no'].includes(h.action.type)), false);
+      }
+    } finally {
+      answer?.(false);
+      await pending;
+    }
+  }
+});
+
+test('202/AC-21 clickable button labels do not use square brackets', async () => {
+  const { render } = await import('./screen/render.mjs');
+  for (const cardMode of ['detailed', 'compact']) {
+    const ui = render(interactionModel(), { cols: 80, rows: 100, cardMode, now: 0 });
+    assert.ok(ui.hits.some(h => h.action.type === 'choose'));
+    assert.ok(ui.hits.some(h => h.action.type === 'settings'));
+    for (const target of ui.hits) {
+      const cells = await styledCells(ui.styled[target.row]);
+      const label = cells.slice(target.c0, target.c1).map(cell => cell.text).join('');
+      assert.doesNotMatch(label, /[\[\]]/, `${cardMode}: ${target.action.type} uses a button style rather than bracketed text`);
+    }
+  }
+});
+
+test('202/AC-30 resting on cut-off text shows its full text in a box under it, or above it when there is no room below', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const model = interactionModel();
+  const full = `A long note that cannot fit ${'in one narrow row '.repeat(2)}END`;
+  model.notes = [{ uid: 'long', senderLabel: 'worker', text: full }];
+  const options = { cols: 32, rows: 60, now: 0 };
+  const plain = render(model, options);
+  const tip = plain.tips.find(t => t.text.includes('END'));
+  assert.ok(tip, 'the cut-off message is marked with its full text');
+  assert.ok(plain.lines[tip.row].includes('…') && !plain.lines[tip.row].includes('END'), 'the row itself is cut');
+  const box = render(model, { ...options, tooltip: { x: tip.c0 + 2, y: tip.row + 1 } });
+  const below = box.lines.slice(tip.row + 1).join(' ').replace(/\s+/g, ' ');
+  assert.ok(below.includes('in one narrow row') && below.includes('END'), 'the full text appears right under the item');
+  assert.ok(box.lines.every(line => line.length <= 32), 'the box wraps to the screen width');
+  const tight = render(model, { ...options, rows: tip.row + 2, tooltip: { x: tip.c0 + 2, y: tip.row + 1 } });
+  assert.ok(tight.lines.slice(0, tip.row).join(' ').includes('END'), 'with no room below the box goes above');
+});

@@ -1,5 +1,5 @@
 // Terminal input: turns raw stdin bytes into events, and edits a one-line text value.
-// Events: { kind: 'click', x, y } (1-based, left button press), { kind: 'wheel', dir: -1|1 },
+// Events: { kind: 'click', x, y } (1-based, left button press), { kind: 'move', x, y } (pointer motion), { kind: 'wheel', dir: -1|1 },
 // { kind: 'key', name } for named keys, { kind: 'text', text } for typed or pasted text.
 
 const SGR_MOUSE = /^\x1b\[<(\d+);(\d+);(\d+)([Mm])/;
@@ -17,6 +17,7 @@ export function parseInput(data) {
     if ((m = SGR_MOUSE.exec(s))) {
       const [b, x, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
       if (b === 64 || b === 65) events.push({ kind: 'wheel', dir: b === 64 ? -1 : 1 });
+      else if (b & 32) events.push({ kind: 'move', x, y }); // motion, with or without a button held
       else if (b === 0 && m[4] === 'M') events.push({ kind: 'click', x, y });
     } else if ((m = PASTE.exec(s))) {
       events.push({ kind: 'text', text: m[1].replace(/\r?\n/g, ' ') });
