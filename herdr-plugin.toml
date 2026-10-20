@@ -13,6 +13,11 @@ command = ["node", "src/ensure.mjs"]
 on = "pane.focused"
 command = ["node", "src/on-focus.mjs"]
 
+# Switching tabs does not always report a focused pane, so the tab event covers the same case.
+[[events]]
+on = "tab.focused"
+command = ["node", "src/on-tab-focus.mjs"]
+
 # The shortcut: open the mailbox screen, focus it when it is open, close it when pressed from inside it.
 [[actions]]
 id = "open"

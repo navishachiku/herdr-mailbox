@@ -143,16 +143,27 @@ async function openScreen(box, panes) {
       '--direction', 'right', '--target-pane', owner.pane_id, '--no-focus', ...env.flatMap(e => ['--env', e])]);
     screenPane = paneIdIn(out) ?? null;
   }
-  box.screen = { open: true, pane: screenPane, terminalId: owner.terminal_id };
+  // The screen pane's own terminal id tells a live screen from the empty shell herdr restores in its place.
+  const fresh = (await panesOrNull())?.find(p => p.pane_id === screenPane);
+  box.screen = { open: true, pane: screenPane, terminalId: owner.terminal_id, paneTerminal: fresh?.terminal_id ?? null };
   api.save();
   return { ok: true, mailbox: box.id, pane: screenPane, opened: true };
 }
 
 async function closeScreen(box, panes) {
   const pane = box.screen?.pane;
-  box.screen = { open: false, pane: null, terminalId: null };
+  box.screen = { open: false, pane: null, terminalId: null, paneTerminal: null };
   api.save();
   if (pane && panes?.some(p => p.pane_id === pane)) await herdr.run(['pane', 'close', pane]).catch(() => {});
+}
+
+// 'alive': the screen pane is there and is the same terminal; 'stale': the pane id is there but its terminal is not
+// the one the screen started in (herdr restored an empty shell); 'gone': no such pane. Records from before the
+// terminal id was kept have none to compare and count as alive.
+function screenState(box, panes) {
+  const pane = box.screen?.pane && panes.find(p => p.pane_id === box.screen.pane);
+  if (!pane) return 'gone';
+  return box.screen.paneTerminal && pane.terminal_id !== box.screen.paneTerminal ? 'stale' : 'alive';
 }
 
 // The shortcut: open the screen, focus it when it is open elsewhere, close it when asked from inside it.
@@ -161,7 +172,9 @@ async function screenOpen(req) {
   if (!box?.owner) return fail('no_mailbox', `${req.pane} has no mailbox; open it from an agent pane`);
   const panes = await panesOrNull();
   if (!panes) return fail('herdr_unreachable', 'herdr did not answer');
-  const alive = box.screen?.pane && panes.some(p => p.pane_id === box.screen.pane);
+  const state = screenState(box, panes);
+  if (state === 'stale') await herdr.run(['pane', 'close', box.screen.pane]).catch(() => {});
+  const alive = state === 'alive';
   if (alive && req.pane === box.screen.pane) { await closeScreen(box, panes); return { ok: true, mailbox: box.id, closed: true }; }
   if (alive) {
     await herdr.run(['pane', 'focus', '--pane', box.owner.pane, '--direction', 'right']).catch(() => {});
@@ -170,23 +183,36 @@ async function screenOpen(req) {
   return openScreen(box, panes);
 }
 
-// pane.focused: bring back a screen that was open before herdr restarted. A pane that vanished while herdr kept
-// running (same terminal id) was closed by hand, so it stays closed.
-async function screenEnsure(req) {
-  const box = Object.values(api.state.mailboxes).find(b => b.owner?.pane === req.pane);
+// Brings one receiver's screen back if herdr restarted while it was open. A pane that vanished while herdr kept
+// running (same terminal id) was closed by hand, so it stays closed. A pane id that is still there but now holds
+// a different terminal is the empty shell herdr restored: it is closed and the screen is opened again.
+async function ensureOne(box, panes) {
   if (!box?.screen?.open || box.state !== 'connected') return { ok: true, action: 'none' };
-  const panes = await panesOrNull();
-  if (!panes) return { ok: true, action: 'none' };
-  if (box.screen.pane && panes.some(p => p.pane_id === box.screen.pane)) return { ok: true, action: 'none' };
+  const state = screenState(box, panes);
+  if (state === 'alive') return { ok: true, action: 'none' };
   const owner = panes.find(p => p.pane_id === box.owner.pane);
   if (!owner) return { ok: true, action: 'none' };
-  if (owner.terminal_id === box.screen.terminalId) {
-    box.screen = { open: false, pane: null, terminalId: null };
+  if (state === 'gone' && owner.terminal_id === box.screen.terminalId) {
+    box.screen = { open: false, pane: null, terminalId: null, paneTerminal: null };
     api.save();
     return { ok: true, action: 'closed-by-hand' };
   }
+  if (state === 'stale') await herdr.run(['pane', 'close', box.screen.pane]).catch(() => {});
   const res = await openScreen(box, panes);
   return res.ok ? { ...res, action: 'reopened' } : res;
+}
+
+// pane.focused names a pane; tab.focused names a tab, and every receiver in that tab is checked. With neither,
+// the focused tab is used.
+async function screenEnsure(req) {
+  const panes = await panesOrNull();
+  if (!panes) return { ok: true, action: 'none' };
+  const inScope = req.pane ? new Set([req.pane]) : new Set(panes.filter(p => (req.tab ? p.tab_id === req.tab : p.focused)).map(p => p.pane_id));
+  const results = [];
+  for (const box of Object.values(api.state.mailboxes)) {
+    if (box.owner && inScope.has(box.owner.pane)) results.push(await ensureOne(box, panes));
+  }
+  return results.find(r => r.ok === false) ?? results.find(r => r.action !== 'none') ?? { ok: true, action: 'none' };
 }
 
 async function close(req) {

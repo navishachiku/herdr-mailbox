@@ -491,6 +491,33 @@ test('202/AC-13 after herdr restarts, the focus event reopens the screen with th
   } finally { w.cleanup(); }
 });
 
+test('202/AC-13 after herdr restarts, focus closes the stale shell with the same pane id before reopening the screen', async () => {
+  const w = world();
+  try {
+    await ready(w);
+    assert.equal(w.cli('open').code, 0);
+    const panes = JSON.parse(fs.readFileSync(w.env.FAKE_HERDR_STATE, 'utf8')).panes;
+    const stale = panes.find(p => ![RECV, SENDER].includes(p.pane_id));
+    assert.ok(stale, 'the first open created a screen pane');
+    w.stop();
+    // Herdr restores the screen as an empty shell at the same pane id with a new terminal id.
+    w.setFake(f => {
+      f.panes = panes.map(p => ({ ...p, terminal_id: `${p.terminal_id}-restarted` }));
+    });
+    fs.writeFileSync(w.env.FAKE_HERDR_LOG, '');
+    const ev = spawnSync(process.execPath, [path.join(here, 'on-focus.mjs')], {
+      env: { ...w.env, HERDR_PANE_ID: RECV, HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: 'pane.focused', data: { pane_id: RECV } }) }, encoding: 'utf8',
+    });
+    assert.equal(ev.status, 0, ev.stderr);
+    const calls = w.log().map(entry => entry.argv);
+    const closed = calls.findIndex(args => args[0] === 'pane' && args[1] === 'close' && args.includes(stale.pane_id));
+    const split = calls.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === RECV);
+    assert.ok(closed >= 0, 'the stale screen shell is closed');
+    assert.ok(split > closed, 'the stale shell is closed before splitting the receiver');
+    assertScreenOpen(w, RECV, 48);
+  } finally { w.cleanup(); }
+});
+
 test('202/AC-14 Deliver now skips the merge wait but still waits for an empty input box', async () => {
   const w = world();
   try {
