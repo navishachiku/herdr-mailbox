@@ -444,7 +444,7 @@ async function overlayScreen(model, options, call) {
   };
 }
 
-test('202/AC-38 attachments open and scroll inside the mailbox pane without a popup and close back to the unchanged mailbox', async () => {
+test('202/AC-37 attachments open and scroll inside the mailbox pane without a popup and close back to the unchanged mailbox', async () => {
   const { parseInput } = await import('./screen/input.mjs');
   const model = interactionModel();
   model.notes = [];
@@ -489,7 +489,7 @@ test('202/AC-38 attachments open and scroll inside the mailbox pane without a po
   assert.equal(ui.requests.some(req => ['answer', 'submit'].includes(req.op)), false);
 });
 
-test('202/AC-38 a two-line attachment wrapping to one hundred rows scrolls to its final row with PageDown or the wheel', async () => {
+test('202/AC-37 a two-line attachment wrapping to one hundred rows scrolls to its final row with PageDown or the wheel', async () => {
   const { render } = await import('./screen/render.mjs');
   const { perform } = await import('./screen/actions.mjs');
   const { parseInput } = await import('./screen/input.mjs');
@@ -1319,7 +1319,7 @@ test('202/AC-25 AC-26 long options wrap completely with aligned continuations an
   }
 });
 
-test('202/AC-29 marking the second batch delivered hits the correct action and removes only its prompt, then leaves No messages after both are resolved', async () => {
+test('202/AC-28 marking the second batch delivered hits the correct action and removes only its prompt, then leaves No messages after both are resolved', async () => {
   const { render } = await import('./screen/render.mjs');
   const { perform } = await import('./screen/actions.mjs');
   const { parseInput } = await import('./screen/input.mjs');
@@ -1380,7 +1380,7 @@ test('202/AC-29 marking the second batch delivered hits the correct action and r
   }
 });
 
-test('202/AC-30 a queued click keeps the action from the displayed frame even when the layout changes before dispatch', async () => {
+test('202/AC-29 a queued click keeps the action from the displayed frame even when the layout changes before dispatch', async () => {
   // Main's input queue must use this entry point: enqueue captures the displayed hit, onEvent handles it later.
   const { createEventQueue } = await import('./screen/events.mjs');
   const { render } = await import('./screen/render.mjs');
@@ -1433,7 +1433,7 @@ test('202/AC-30 a queued click keeps the action from the displayed frame even wh
   assert.equal(requests[0].action, 'delivered');
 });
 
-test('202/AC-31 Resend asks for its batch and member count before sending, while cancelling restores the unchanged view', async () => {
+test('202/AC-30 Resend asks for its batch and member count before sending, while cancelling restores the unchanged view', async () => {
   const { render } = await import('./screen/render.mjs');
   const { perform } = await import('./screen/actions.mjs');
   const { parseInput } = await import('./screen/input.mjs');
@@ -1504,7 +1504,7 @@ test('202/AC-31 Resend asks for its batch and member count before sending, while
   }
 });
 
-test('202/AC-33 compact options show a bright yellow star before the recommended letter and reserve the same space on other options', async () => {
+test('202/AC-32 compact options show a bright yellow star before the recommended letter and reserve the same space on other options', async () => {
   const { render } = await import('./screen/render.mjs');
   const brightYellow = style => {
     let foreground = null;
@@ -1572,7 +1572,7 @@ test('202/AC-33 compact options show a bright yellow star before the recommended
   }
 });
 
-test('202/AC-35 compact cards retain detailed layout for the same short content and truncate long content with full-text tooltips', async () => {
+test('202/AC-34 compact cards retain detailed layout for the same short content and truncate long content with full-text tooltips', async () => {
   const { render } = await import('./screen/render.mjs');
   const model = interactionModel();
   model.notes = [];
@@ -1636,7 +1636,7 @@ test('202/AC-35 compact cards retain detailed layout for the same short content 
   assert.ok(popup.lines.some(line => line.includes('questionend')), 'the question tooltip renders the hidden ending');
 });
 
-test('202/AC-36 every row of a wrapped option shares hover and selection without capturing another option or the gaps', async () => {
+test('202/AC-35 every row of a wrapped option shares hover and selection without capturing another option or the gaps', async () => {
   const { render } = await import('./screen/render.mjs');
   const { parseInput } = await import('./screen/input.mjs');
   const { perform } = await import('./screen/actions.mjs');
@@ -1699,7 +1699,7 @@ test('202/AC-36 every row of a wrapped option shares hover and selection without
   assert.equal(next?.action.choice, 'B');
 });
 
-test('202/AC-37 Settings opens and saves inside the mailbox pane, shields background cards and restores the view on Escape', async () => {
+test('202/AC-36 Settings opens and saves inside the mailbox pane, shields background cards and restores the view on Escape', async () => {
   const { parseInput } = await import('./screen/input.mjs');
   const { createEventQueue } = await import('./screen/events.mjs');
   const model = interactionModel();
@@ -1771,20 +1771,478 @@ test('202/AC-19 clickable button labels do not use square brackets', async () =>
   }
 });
 
-test('202/AC-28 resting on cut-off text shows its full text in a box under it, or above it when there is no room below', async () => {
+test('202/AC-41 tooltips appear after half a second, expire after the configured stationary timeout and dismiss on interaction', async () => {
   const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  // Main uses this tracker for tooltip lifetime; the clock and stationary timeout are injectable.
+  const { createTooltipTracker } = await import('./screen/tooltip.mjs');
+  const { DEFAULTS } = await import('./prefs.mjs');
+  assert.equal(DEFAULTS.tooltipSeconds, 15, 'the default stationary timeout is fifteen seconds');
   const model = interactionModel();
   const full = `A long note that cannot fit ${'in one narrow row '.repeat(2)}END`;
-  model.notes = [{ uid: 'long', senderLabel: 'worker', text: full }];
+  model.notes = [
+    { uid: 'long', senderLabel: 'worker', text: full },
+    { uid: 'another', senderLabel: 'worker', text: `${'A different long note '.repeat(4)}OTHER END` },
+  ];
   const options = { cols: 32, rows: 60, now: 0 };
   const plain = render(model, options);
-  const tip = plain.tips.find(t => t.text.includes('END'));
+  const tip = plain.tips.find(t => t.text.includes('END') && !t.text.includes('OTHER END'));
+  const another = plain.tips.find(t => t.text.includes('OTHER END'));
   assert.ok(tip, 'the cut-off message is marked with its full text');
+  assert.ok(another);
   assert.ok(plain.lines[tip.row].includes('…') && !plain.lines[tip.row].includes('END'), 'the row itself is cut');
-  const box = render(model, { ...options, tooltip: { x: tip.c0 + 2, y: tip.row + 1 } });
+  let now = 0;
+  const tracker = createTooltipTracker({ now: () => now, getUI: () => plain, getSize: () => ({ cols: options.cols, rows: options.rows }), delayMs: 500, timeoutMs: 3000 });
+  const point = { x: tip.c0 + 2, y: tip.row + 1 };
+  const [move] = parseInput(`\x1b[<35;${point.x};${point.y}M`);
+  tracker.handle(move);
+  now = 499;
+  assert.equal(tracker.current(), null, 'the tooltip does not open before the half-second dwell');
+  now = 500;
+  assert.deepEqual(tracker.current(), point);
+  const box = render(model, { ...options, now, tooltip: tracker.current() });
   const below = box.lines.slice(tip.row + 1).join(' ').replace(/\s+/g, ' ');
   assert.ok(below.includes('in one narrow row') && below.includes('END'), 'the full text appears right under the item');
   assert.ok(box.lines.every(line => line.length <= 32), 'the box wraps to the screen width');
-  const tight = render(model, { ...options, rows: tip.row + 2, tooltip: { x: tip.c0 + 2, y: tip.row + 1 } });
+  for (const time of [501, 2999]) {
+    now = time;
+    assert.deepEqual(tracker.current(), point, 'the tooltip remains before the configured stationary timeout');
+    assert.ok(render(model, { ...options, now, tooltip: tracker.current() }).lines.slice(tip.row + 1).join(' ').includes('END'));
+  }
+  const tight = render(model, { ...options, rows: tip.row + 2, tooltip: tracker.current() });
   assert.ok(tight.lines.slice(0, tip.row).join(' ').includes('END'), 'with no room below the box goes above');
+  const show = () => {
+    tracker.handle(move);
+    now += 500;
+    assert.ok(tracker.current(), 'a new dwell opens the tooltip again');
+  };
+  for (const bytes of [`\x1b[<35;${another.c0 + 2};${another.row + 1}M`, `\x1b[<0;${point.x};${point.y}M`, '\x1b[B']) {
+    const [event] = parseInput(bytes);
+    tracker.handle(event);
+    assert.equal(tracker.current(), null, 'another element, a click or a key dismisses the tooltip');
+    show();
+  }
+  const shownAt = now;
+  now = shownAt + 2499;
+  assert.deepEqual(tracker.current(), point, 'the new tooltip stays until the configured seconds');
+  now = shownAt + 3501;
+  assert.equal(tracker.current(), null, 'a stationary pointer closes the tooltip after the configured seconds');
+  now += 1000;
+  assert.equal(tracker.current(), null, 'time alone never reopens an expired tooltip');
+
+  const defaults = createTooltipTracker({ now: () => now, getUI: () => plain, getSize: () => options });
+  defaults.handle(move);
+  const startedAt = now;
+  now = startedAt + 14_999;
+  assert.deepEqual(defaults.current(), point, 'the default lifetime is longer than a short custom timeout');
+  now = startedAt + 15_501;
+  assert.equal(defaults.current(), null, 'the default fifteen-second lifetime also expires without a leave event');
+});
+
+test('202/AC-41 movement within the same item restarts the five-second stationary tooltip timeout', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const { createTooltipTracker } = await import('./screen/tooltip.mjs');
+  const model = interactionModel();
+  model.notes = [{ uid: 'long', senderLabel: 'worker', text: `${'A long note '.repeat(8)}FULL END` }];
+  const options = { cols: 32, rows: 60, now: 0 };
+  const plain = render(model, options);
+  const tip = plain.tips.find(t => t.text.includes('FULL END'));
+  assert.ok(tip && tip.c1 - tip.c0 >= 2, 'both pointer positions belong to the same truncated item');
+  let now = 0;
+  const tracker = createTooltipTracker({ now: () => now, getUI: () => plain, getSize: () => options, timeoutMs: 5000 });
+  const move = x => tracker.handle(parseInput(`\x1b[<35;${x};${tip.row + 1}M`)[0]);
+  move(tip.c0 + 1);
+  now = 500;
+  assert.ok(tracker.current(), 'the tooltip appears after its initial half-second dwell');
+  now = 5000;
+  move(tip.c0 + 2);
+  now = 5600;
+  const visible = tracker.current();
+  assert.ok(visible, 'only six hundred milliseconds have elapsed since movement within the same item');
+  assert.ok(render(model, { ...options, now, tooltip: visible }).lines.join(' ').includes('FULL END'), 'the full-text tooltip remains rendered');
+  now = 10100;
+  assert.equal(tracker.current(), null, 'the tooltip closes after five stationary seconds since the last movement');
+});
+
+test('202/AC-42 Settings persists tooltip dwell seconds and newly opened tooltips use the saved lifetime', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const { createTooltipTracker } = await import('./screen/tooltip.mjs');
+  const { readPrefs, writePrefs } = await import('./prefs.mjs');
+  const root = fs.mkdtempSync(path.join('/tmp', 'mbs-tooltip-'));
+  const file = path.join(root, 'prefs.json');
+  try {
+    const model = interactionModel();
+    model.notes = [{ uid: 'long', senderLabel: 'worker', text: `${'A long note '.repeat(12)}FULL END` }];
+    model.prefs = readPrefs(file);
+    const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
+    const ui = await overlayScreen(model, options, async req => {
+      if (req.op === 'prefs-get') return { ok: true, ...readPrefs(file) };
+      assert.equal(req.op, 'prefs-set');
+      const { op, ...change } = req;
+      const saved = writePrefs(change, file);
+      return saved.error ? { ok: false, error: saved.error } : { ok: true, ...saved };
+    });
+    assert.equal((await ui.act(hit(ui.frame(), 'settings'))).ok, true);
+    const opened = ui.frame();
+    assert.match(opened.lines.join('\n'), /Tooltip.*(?:seconds|dwell|stay|timeout|duration|lifetime)/i, 'Settings names the tooltip lifetime control');
+    assert.equal(ui.overlay().prefs.tooltipSeconds, 15);
+    // Use a value offered by the UI; the allowed range and step belong to the implementation.
+    const change = hit(opened, 'settings-set', a => Number.isFinite(a.change?.tooltipSeconds) && a.change.tooltipSeconds > 0 && a.change.tooltipSeconds !== 15);
+    const seconds = change.change.tooltipSeconds;
+    assert.equal((await ui.act(change)).ok, true);
+    assert.ok(ui.requests.some(req => req.op === 'prefs-set' && req.tooltipSeconds === seconds));
+    assert.equal(readPrefs(file).tooltipSeconds, seconds, 'a fresh preferences read sees the persisted value');
+    assert.equal(ui.overlay().prefs.tooltipSeconds, seconds, 'Settings displays the saved value');
+    assert.equal((await ui.act({ type: 'overlay-close' })).ok, true);
+    model.prefs = readPrefs(file);
+    const plain = render(model, options);
+    const tip = plain.tips.find(t => t.text.includes('FULL END'));
+    assert.ok(tip);
+    const point = { x: tip.c0 + 1, y: tip.row + 1 };
+    let now = 0;
+    const tracker = createTooltipTracker({ now: () => now, getUI: () => plain, getSize: () => options, timeoutMs: model.prefs.tooltipSeconds * 1000 });
+    const [move] = parseInput(`\x1b[<35;${point.x};${point.y}M`);
+    tracker.handle(move);
+    now = 500;
+    assert.deepEqual(tracker.current(), point);
+    assert.ok(render(model, { ...options, tooltip: tracker.current() }).lines.join(' ').includes('FULL END'));
+    now = seconds * 1000 - 1;
+    assert.deepEqual(tracker.current(), point, 'a new tooltip stays before the saved lifetime');
+    now = seconds * 1000 + 501;
+    assert.equal(tracker.current(), null, 'a new tooltip expires using the saved lifetime');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('202/AC-38 settings and attachment layers have four borders and corners without covering their content', async () => {
+  const model = interactionModel();
+  const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
+  for (const kind of ['settings', 'attachment']) {
+    const ui = await overlayScreen(model, options, async req => req.op === 'prefs-get'
+      ? { ok: true, width: 48, cardMode: 'detailed', mergeSeconds: 60 }
+      : { ok: true, name: 'border.md', text: 'FIRST CONTENT LINE\nLAST CONTENT LINE', truncated: false });
+    assert.equal((await ui.act(hit(ui.frame(), kind))).ok, true);
+    const frame = ui.frame();
+    const cells = await Promise.all(frame.styled.map(styledCells));
+    const grid = cells.map(row => row.map(cell => cell.text));
+    const corners = { tl: '┌╭╔╒╓+', tr: '┐╮╗╕╖+', bl: '└╰╚╘╙+', br: '┘╯╝╛╜+' };
+    const horizontal = ch => '─━═-'.includes(ch ?? '\0');
+    const vertical = ch => '│┃║|'.includes(ch ?? '\0');
+    let border;
+    for (let top = 0; top < grid.length && !border; top++) {
+      for (let left = 0; left < options.cols && !border; left++) {
+        if (!corners.tl.includes(grid[top][left] ?? '\0')) continue;
+        for (let right = left + 3; right < options.cols && !border; right++) {
+          if (!corners.tr.includes(grid[top][right] ?? '\0')) continue;
+          if (!grid[top].slice(left + 1, right).every(horizontal)) continue;
+          for (let bottom = top + 3; bottom < grid.length && !border; bottom++) {
+            if (!corners.bl.includes(grid[bottom][left] ?? '\0') || !corners.br.includes(grid[bottom][right] ?? '\0')) continue;
+            if (!grid[bottom].slice(left + 1, right).every(horizontal)) continue;
+            if (!grid.slice(top + 1, bottom).every(row => vertical(row[left]) && vertical(row[right]))) continue;
+            border = { top, bottom, left, right };
+          }
+        }
+      }
+    }
+    assert.ok(border, `${kind} has a complete rectangle with four edges and four corners`);
+    const interior = grid.slice(border.top + 1, border.bottom).map(row => row.slice(border.left + 1, border.right).join('')).join('\n');
+    for (const text of kind === 'settings' ? ['Width', 'Card mode', 'Merge interval', '48', '60'] : ['border.md', 'FIRST CONTENT LINE', 'LAST CONTENT LINE']) {
+      assert.ok(interior.includes(text), `${kind}: ${text} remains visible inside the border`);
+    }
+    assert.ok(frame.hits.length > 0);
+    for (const h of frame.hits) {
+      assert.ok(h.row > border.top && h.row < border.bottom && h.c0 > border.left && h.c1 <= border.right, 'the border does not cover the layer controls');
+    }
+  }
+});
+
+test('202/AC-39 the decision heading and its mode and Settings controls stay fixed when scrolling through the middle and bottom', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { parseInput } = await import('./screen/input.mjs');
+  const { hitAt } = await import('./screen/events.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.batches = [];
+  const seed = model.questions[0];
+  model.questions = Array.from({ length: 20 }, (_, i) => ({
+    ...seed, uid: `sticky-${i}`, serial: `Q${i + 1}`, draft: i === 0 ? { choice: 'A', text: '' } : null,
+    content: { ...seed.content, question: `Question ${i + 1}?` },
+  }));
+  const options = { cols: 80, rows: 40, locale: 'en', now: 0, cardMode: 'detailed' };
+  const before = render(model, { ...options, scroll: 0 });
+  assert.ok(before.scrollMax > 2, 'the decision cards overflow the viewport');
+  const heading = before.lines.findIndex(line => line.includes('Questions · 20 · answered 1'));
+  assert.ok(heading >= 0);
+  const controls = ['card-mode', 'settings'].map(type => {
+    const h = before.hits.find(h => h.action.type === type);
+    assert.ok(h && h.row === heading, `${type} shares the decision heading row`);
+    return h;
+  });
+  for (const scroll of [Math.floor(before.scrollMax / 2), before.scrollMax]) {
+    const frame = render(model, { ...options, scroll });
+    assert.equal(frame.scroll, scroll);
+    assert.equal(frame.lines[heading], before.lines[heading], 'the question count and answered count remain at the same heading row');
+    for (const expected of controls) {
+      const h = frame.hits.find(h => h.action.type === expected.action.type);
+      assert.ok(h, 'the pinned heading control remains clickable');
+      assert.deepEqual({ row: h.row, c0: h.c0, c1: h.c1 }, { row: heading, c0: expected.c0, c1: expected.c1 });
+      const [click] = parseInput(`\x1b[<0;${h.c0 + 1};${h.row + 1}M`);
+      assert.deepEqual(hitAt(frame, click)?.action, h.action, 'clicking its displayed coordinates still selects the heading control');
+    }
+  }
+});
+
+test('202/AC-40 screen versions depend on file contents and reloading preserves scroll and drafts while duplicate requests reopen only once', async () => {
+  const { screenVersion } = await import('./screen/version.mjs');
+  const w = world();
+  try {
+    // root is a repository-shaped fixture; no source file in the working tree is changed.
+    const root = path.join(w.root, 'version-fixture');
+    const screenDir = path.join(root, 'src', 'screen');
+    fs.mkdirSync(screenDir, { recursive: true });
+    const main = path.join(screenDir, 'main.mjs');
+    const renderer = path.join(screenDir, 'render.mjs');
+    fs.writeFileSync(main, "export const main = 'screen';\n");
+    fs.writeFileSync(renderer, "export const theme = 'blue';\n");
+    const version = await screenVersion(root);
+    assert.equal(typeof version, 'string');
+    assert.ok(version.length > 0);
+    assert.equal(await screenVersion(root), version, 'unchanged files produce the same version');
+    const original = fs.statSync(renderer);
+    fs.utimesSync(renderer, original.atime, new Date(original.mtimeMs + 60_000));
+    assert.equal(await screenVersion(root), version, 'mtime-only changes do not trigger a reload');
+    fs.writeFileSync(renderer, "export const theme = 'amber';\n");
+    assert.notEqual(await screenVersion(root), version, 'changing another screen module changes the version too');
+    const mb = await ready(w);
+    const answered = await decision(w, { question: 'Keep this answer across a reload?' });
+    const drafted = await discussion(w, { question: 'Keep this draft across a reload?' });
+    await w.op('answer', { uid: answered.uid, version: answered.version, choice: 'B', text: 'Existing answer' });
+    await w.op('answer', { uid: drafted.uid, version: drafted.version, text: 'Existing draft' });
+    assert.equal(w.cli('open').code, 0);
+    const before = await w.op('view', { mailbox: mb });
+    const oldPane = before.mailbox.screen.pane;
+    assert.ok(oldPane);
+    fs.writeFileSync(w.env.FAKE_HERDR_LOG, '');
+    const request = { mailbox: mb, scroll: 7 };
+    const replies = await Promise.all([w.op('screen-reload', request), w.op('screen-reload', request)]);
+    assert.ok(replies.every(reply => reply.ok), 'both reload requests are acknowledged');
+    let calls = w.log().map(entry => entry.argv);
+    const splits = calls.filter(args => args[0] === 'pane' && args[1] === 'split');
+    assert.equal(splits.length, 1, 'duplicate reload requests open only one new screen');
+    assert.equal(splits[0][2], oldPane, 'the replacement splits the old screen pane');
+    assert.equal(splits[0][splits[0].indexOf('--ratio') + 1], '0.5');
+    assert.ok(splits[0].includes('--no-focus'), 'reload keeps the current focus');
+    assert.equal(splits.some(args => args[2] === RECV), false, 'reload never splits the receiver pane');
+    assert.equal(calls.some(args => args[0] === 'pane' && args[1] === 'close' && args.includes(oldPane)), false, 'the old screen stays open until the new one is ready');
+    const started = calls.find(args => args[0] === 'pane' && args[1] === 'run');
+    assert.ok(started && started[2] !== oldPane);
+    assert.equal((await w.op('screen-ready', { mailbox: mb, pane: started[2] })).ok, true);
+    calls = w.log().map(entry => entry.argv);
+    const closed = calls.findIndex(args => args[0] === 'pane' && args[1] === 'close' && args.includes(oldPane));
+    const split = calls.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === oldPane);
+    assert.ok(closed > split, 'the old screen closes only after the new one opens and reports ready');
+    assert.ok(splits[0].includes('HERDR_MAILBOX_SCROLL=7'), 'the new screen receives its previous scroll offset');
+    assert.equal(calls.filter(args => args[0] === 'pane' && args[1] === 'run').length, 1);
+    assert.equal(calls.some(args => args[0] === 'pane' && args[1] === 'split' && args[2] === RECV), false, 'the receiver is not split during the reload');
+    const after = await w.op('view', { mailbox: mb });
+    assert.deepEqual(after.questions, before.questions, 'answers, text drafts and question versions survive the screen reload');
+    assert.deepEqual(find(after, answered.uid).draft, { choice: 'B', text: 'Existing answer' });
+    assert.deepEqual(find(after, drafted.uid).draft, { choice: null, text: 'Existing draft' });
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-40 reload keeps the old screen until screen-ready and closes only the new screen if readiness times out', () => {
+  const w = world({ timings: { screenReadyMs: 50 } });
+  try {
+    // Isolate the module and clock from the other tests; the public op/tick contract is the daemon boundary here.
+    const script = String.raw`
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import registerScreen from ${JSON.stringify(new URL('./screen-api.mjs', import.meta.url).href)};
+      import { emptyState } from ${JSON.stringify(new URL('./store.mjs', import.meta.url).href)};
+      let now = 100000;
+      const timers = new Set();
+      Date.now = () => now;
+      globalThis.setTimeout = (fn, delay, ...args) => {
+        const timer = { at: now + Number(delay), fn: () => fn(...args), unref() { return this; } };
+        timers.add(timer);
+        return timer;
+      };
+      globalThis.clearTimeout = timer => timers.delete(timer);
+      const state = emptyState('reload-test');
+      const owner = JSON.parse(fs.readFileSync(process.env.FAKE_HERDR_STATE, 'utf8')).panes[0];
+      for (const id of ['MB-ready', 'MB-timeout']) state.mailboxes[id] = {
+        id, counter: 0, state: 'connected', paused: null, screen: { open: false },
+        owner: { pane: owner.pane_id, terminalId: owner.terminal_id, convo: 'sid-1', generation: 1 },
+      };
+      const ops = new Map();
+      const ticks = [];
+      registerScreen({
+        state, now: () => now, save() {},
+        op(name, fn) { ops.set(name, fn); },
+        tick(name, fn) { ticks.push(fn); },
+        on() {}, emit() {}, hook() {},
+      });
+      const op = async (name, fields) => {
+        assert.ok(ops.has(name), 'daemon op is registered: ' + name);
+        return ops.get(name)({ op: name, ...fields }, { caller: { pane: fields.pane ?? owner.pane_id, viaPlugin: true } });
+      };
+      const log = () => fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).argv);
+      const closeCalls = pane => log().filter(args => args[0] === 'pane' && args[1] === 'close' && args.includes(pane));
+      const advance = async ms => {
+        now += ms;
+        for (;;) {
+          const due = [...timers].filter(timer => timer.at <= now);
+          if (!due.length) break;
+          for (const timer of due) { timers.delete(timer); await timer.fn(); }
+        }
+        for (const fn of ticks) await fn({ caller: null, timings: JSON.parse(process.env.HERDR_MAILBOX_TIMINGS) });
+      };
+      for (const mailbox of ['MB-ready', 'MB-timeout']) {
+        const opened = await op('screen-open', { mailbox, pane: owner.pane_id });
+        assert.equal(opened.ok, true);
+        const oldPane = opened.pane;
+        fs.writeFileSync(process.env.FAKE_HERDR_LOG, '');
+        assert.equal((await op('screen-reload', { mailbox, scroll: 7 })).ok, true);
+        const started = log().find(args => args[0] === 'pane' && args[1] === 'run');
+        assert.ok(started && started[2] !== oldPane, 'a different screen is started first');
+        const newPane = started[2];
+        assert.equal(closeCalls(oldPane).length, 0, 'reload must not close the old screen before screen-ready');
+        assert.equal(closeCalls(newPane).length, 0);
+        if (mailbox === 'MB-ready') {
+          assert.equal((await op('screen-ready', { mailbox, pane: newPane })).ok, true);
+          assert.equal(closeCalls(oldPane).length, 1, 'readiness closes the old screen');
+          assert.equal(closeCalls(newPane).length, 0, 'the ready screen stays open');
+          assert.equal((await op('view', { mailbox })).mailbox.screen.pane, newPane);
+        } else {
+          await advance(51);
+          assert.equal(closeCalls(newPane).length, 1, 'readiness timeout closes the unready new screen');
+          assert.equal(closeCalls(oldPane).length, 0, 'readiness timeout preserves the old screen');
+          assert.equal((await op('view', { mailbox })).mailbox.screen.pane, oldPane);
+        }
+      }
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { env: w.env, encoding: 'utf8', timeout: 15000 });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-40 reload splits the old screen instead of the receiver and closes it only after screen-ready', () => {
+  const w = world();
+  try {
+    // Exercise the daemon op boundary in an isolated process with the existing fake herdr.
+    const script = String.raw`
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import registerScreen from ${JSON.stringify(new URL('./screen-api.mjs', import.meta.url).href)};
+      import { emptyState } from ${JSON.stringify(new URL('./store.mjs', import.meta.url).href)};
+      const state = emptyState('reload-width-test');
+      const owner = JSON.parse(fs.readFileSync(process.env.FAKE_HERDR_STATE, 'utf8')).panes[0];
+      const mailbox = 'MB-width';
+      state.mailboxes[mailbox] = {
+        id: mailbox, counter: 0, state: 'connected', paused: null, screen: { open: false },
+        owner: { pane: owner.pane_id, terminalId: owner.terminal_id, convo: 'sid-1', generation: 1 },
+      };
+      const ops = new Map();
+      registerScreen({
+        state, now: Date.now, save() {}, op(name, fn) { ops.set(name, fn); },
+        tick() {}, on() {}, emit() {}, hook() {},
+      });
+      const op = (name, fields = {}) => {
+        assert.ok(ops.has(name), 'daemon op is registered: ' + name);
+        return ops.get(name)({ op: name, mailbox, ...fields }, { caller: { pane: fields.pane ?? owner.pane_id, viaPlugin: true } });
+      };
+      const opened = await op('screen-open', { pane: owner.pane_id });
+      assert.equal(opened.ok, true);
+      const oldPane = opened.pane;
+      assert.ok(oldPane && oldPane !== owner.pane_id);
+      fs.writeFileSync(process.env.FAKE_HERDR_LOG, '');
+      const log = () => fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).argv);
+      assert.equal((await op('screen-reload', { scroll: 7 })).ok, true);
+      const beforeReady = log();
+      const splits = beforeReady.filter(args => args[0] === 'pane' && args[1] === 'split');
+      assert.equal(splits.length, 1, 'reload creates exactly one replacement pane');
+      assert.equal(splits[0][2], oldPane, 'reload must split the old screen pane to preserve the receiver width');
+      assert.equal(splits.some(args => args[2] === owner.pane_id), false, 'reload must never split the receiver pane');
+      const run = beforeReady.find(args => args[0] === 'pane' && args[1] === 'run');
+      assert.ok(run && run[2] !== oldPane && run[2] !== owner.pane_id);
+      const closesOld = args => args[0] === 'pane' && args[1] === 'close' && args.includes(oldPane);
+      assert.equal(beforeReady.some(closesOld), false, 'the old screen remains until readiness');
+      assert.equal((await op('screen-ready', { pane: run[2] })).ok, true);
+      const afterReady = log();
+      assert.equal(afterReady.filter(closesOld).length, 1, 'screen-ready closes the old screen exactly once');
+      assert.ok(afterReady.findIndex(closesOld) > afterReady.findIndex(args => args[0] === 'pane' && args[1] === 'run'), 'the replacement starts before the old screen closes');
+      assert.equal(afterReady.some(args => args[0] === 'pane' && args[1] === 'split' && args[2] === owner.pane_id), false);
+      assert.equal((await op('view')).mailbox.screen.pane, run[2]);
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { env: w.env, encoding: 'utf8', timeout: 15000 });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-40 reload leaves the screen closed without splitting or running a pane when the old screen has disappeared', () => {
+  const w = world();
+  try {
+    const script = String.raw`
+      import assert from 'node:assert/strict';
+      import fs from 'node:fs';
+      import registerScreen from ${JSON.stringify(new URL('./screen-api.mjs', import.meta.url).href)};
+      import { emptyState } from ${JSON.stringify(new URL('./store.mjs', import.meta.url).href)};
+      const state = emptyState('reload-missing-screen-test');
+      const owner = JSON.parse(fs.readFileSync(process.env.FAKE_HERDR_STATE, 'utf8')).panes[0];
+      const mailbox = 'MB-closed';
+      state.mailboxes[mailbox] = {
+        id: mailbox, counter: 0, state: 'connected', paused: null, screen: { open: false },
+        owner: { pane: owner.pane_id, terminalId: owner.terminal_id, convo: 'sid-1', generation: 1 },
+      };
+      const ops = new Map();
+      registerScreen({
+        state, now: Date.now, save() {}, op(name, fn) { ops.set(name, fn); },
+        tick() {}, on() {}, emit() {}, hook() {},
+      });
+      const op = (name, fields = {}) => {
+        assert.ok(ops.has(name), 'daemon op is registered: ' + name);
+        return ops.get(name)({ op: name, mailbox, ...fields }, { caller: { pane: owner.pane_id, viaPlugin: true } });
+      };
+      const opened = await op('screen-open', { pane: owner.pane_id });
+      assert.equal(opened.ok, true);
+      const oldPane = opened.pane;
+      assert.ok(oldPane && oldPane !== owner.pane_id);
+      const fake = JSON.parse(fs.readFileSync(process.env.FAKE_HERDR_STATE, 'utf8'));
+      assert.ok(fake.panes.some(p => p.pane_id === oldPane));
+      fake.panes = fake.panes.filter(p => p.pane_id !== oldPane);
+      fs.writeFileSync(process.env.FAKE_HERDR_STATE, JSON.stringify(fake));
+      fs.writeFileSync(process.env.FAKE_HERDR_LOG, '');
+      await op('screen-reload', { scroll: 7 });
+      const calls = fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).argv);
+      assert.equal(calls.some(args => args[0] === 'pane' && args[1] === 'split'), false, 'a reload must not split any pane after the old screen disappears');
+      assert.equal(calls.some(args => args[0] === 'pane' && args[1] === 'run'), false, 'a reload must not start a replacement for a manually closed screen');
+      assert.equal(state.mailboxes[mailbox].screen.open, false, 'the mailbox records its screen as closed');
+      assert.equal((await op('view')).mailbox.screen.open, false, 'the public view still reports a closed screen');
+    `;
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { env: w.env, encoding: 'utf8', timeout: 15000 });
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  } finally { w.cleanup(); }
+});
+
+test('202/AC-40 an unsent batch supplement defers screen-reload after a version change until the text is cleared', async () => {
+  const { createReloadWatch } = await import('./screen/reload.mjs');
+  const { BATCH } = await import('./screen/render.mjs');
+  let version = 'started-version';
+  const drafts = { [BATCH]: 'An unsent batch supplement' };
+  const watch = createReloadWatch({ version: async () => version, test: async () => true });
+  await watch.start();
+  version = 'changed-version';
+  const requests = [];
+  const refreshVersion = async () => {
+    // Main passes its current buffers on every check, including text left after the batch field loses focus.
+    if (await watch.check({ drafts })) requests.push({ op: 'screen-reload', mailbox: 'MB-test', scroll: 7 });
+  };
+  for (let i = 0; i < 4; i++) await refreshVersion();
+  assert.deepEqual(requests, [], 'a stable new version must not discard a non-empty batch supplement');
+  assert.equal(drafts[BATCH], 'An unsent batch supplement');
+  drafts[BATCH] = '';
+  for (let i = 0; i < 4; i++) await refreshVersion();
+  assert.deepEqual(requests, [{ op: 'screen-reload', mailbox: 'MB-test', scroll: 7 }], 'clearing the supplement releases exactly one pending reload');
 });

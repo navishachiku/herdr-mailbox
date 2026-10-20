@@ -8,6 +8,7 @@ const defaults = {
   retryMs: 30_000,
   confirmMs: 20_000,
   batchFileBytes: 100_000,
+  screenReadyMs: 10_000, // a reloaded screen that has not reported screen-ready by then is closed
 };
 
 function overrides(raw) {

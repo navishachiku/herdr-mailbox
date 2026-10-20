@@ -397,6 +397,8 @@ function questionRows(model, ctx) {
     button(t.settings, { type: 'settings', mailbox: model.mailbox.id }),
   ]);
   add([]);
+  // The heading and the free row under it stay pinned at the top of the decision area while the cards scroll.
+  rows.forEach(r => { r.sticky = true; });
   if (!model.questions.length) add([textItem(` ${t.empty}`, S.dim)]);
   // Questions that just left (sent or withdrawn) stay in place as ghosts while they fade and fold away.
   const shown = [...model.questions];
@@ -479,11 +481,14 @@ function bottomRows(model, ctx) {
 const BOX = { fg: P.text, bg: hex('#2b3245') };
 const BOX_TITLE = { fg: P.white, bg: hex('#2b3245'), bold: true };
 const BOX_DIM = { fg: hex('#9aa3b5'), bg: hex('#2b3245') };
+const BOX_EDGE = { fg: hex('#8fa3c7'), bg: hex('#2b3245') };
 const MERGE_STEP = 10;
+const TOOLTIP_STEP = 5; // prefs.mjs TOOLTIP
 const WIDTH_STEP = 4;
 
 function overlayRows(overlay, ctx, height) {
-  const { t, cols } = ctx;
+  const { t } = ctx;
+  const cols = ctx.cols - 2; // inside the border
   const rows = [];
   const add = (left, right) => rows.push(...flow(newRow, cols, left, right, BOX));
   const title = overlay.kind === 'settings' ? t.settingsTitle : `📎 ${overlay.name}`;
@@ -500,16 +505,34 @@ function overlayRows(overlay, ctx, height) {
     add([]);
     add([label(t.mergeLabel), button('−', set({ mergeSeconds: p.mergeSeconds - MERGE_STEP })), textItem(String(p.mergeSeconds).padStart(3), BOX), button('+', set({ mergeSeconds: p.mergeSeconds + MERGE_STEP }))]);
     add([]);
+    add([label(t.tooltipLabel), button('−', set({ tooltipSeconds: p.tooltipSeconds - TOOLTIP_STEP })), textItem(String(p.tooltipSeconds).padStart(3), BOX), button('+', set({ tooltipSeconds: p.tooltipSeconds + TOOLTIP_STEP }))]);
+    add([]);
     for (const l of wrap(t.settingsHint, cols - 2)) add([textItem(` ${l}`, BOX_DIM)]);
   } else {
-    const body = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n').flatMap(l => wrap(l, cols - 2));
-    const view = Math.max(1, height - rows.length - 1);
+    // The text uses the full width inside the border; the border itself is the margin.
+    const body = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n').flatMap(l => wrap(l, cols));
+    const view = Math.max(1, height - 2 - rows.length - 1);
     top = Math.min(Math.max(0, overlay.top ?? 0), Math.max(0, body.length - view));
-    for (const l of body.slice(top, top + view)) add([textItem(` ${l}`, BOX)]);
-    while (rows.length < height - 1) add([]);
+    for (const l of body.slice(top, top + view)) add([textItem(l, BOX)]);
+    while (rows.length < height - 3) add([]);
     add([textItem(` ${t.attachmentHint(Math.min(body.length, top + view), body.length)}${overlay.truncated ? ` · ${t.truncated}` : ''}`, BOX_DIM)]);
   }
-  return { rows, top };
+  return { rows: frame(rows, ctx.cols), top };
+}
+
+// A full border around the layer: corners, top and bottom edges, and a side on every content row. Everything inside
+// moves one column right, clickable areas with it.
+function frame(rows, cols) {
+  const edge = (l, r) => { const row = newRow(); row.segs.push(seg(`${l}${'─'.repeat(cols - 2)}${r}`, BOX_EDGE)); row.col = cols; return row; };
+  const sides = rows.map(r => {
+    const row = newRow();
+    row.segs.push(seg('│', BOX_EDGE), ...r.segs, seg('│', BOX_EDGE));
+    row.col = r.col + 2;
+    row.hits = r.hits.map(h => ({ ...h, c0: h.c0 + 1, c1: h.c1 + 1, i0: h.i0 + 1, i1: h.i1 + 1 }));
+    row.tips = r.tips.map(x => ({ ...x, c0: x.c0 + 1, c1: x.c1 + 1 }));
+    return row;
+  });
+  return [edge('┌', '┐'), ...sides, edge('└', '┘')];
 }
 
 // ---------- tooltip ----------
@@ -604,10 +627,13 @@ export function render(model, {
   // The pending label of Deliver now says what it is doing.
   if (feedback?.type === 'deliver-now') { const base = FB.label; FB.label = look => (look.state === 'pending' ? ctx.t.delivering : base(look)); }
   const top = spaceOut(topRows(model, ctx), cols);
-  const mid = spaceOut(questionRows(model, ctx), cols);
+  const decision = spaceOut(questionRows(model, ctx), cols);
+  const pinned = [];
+  while (decision[0]?.sticky) pinned.push(decision.shift());
+  const mid = decision; // what scrolls under the pinned heading
   // The batch bar starts with a free row, so it never touches the last visible card.
   const bottom = [newRow(), ...spaceOut(bottomRows(model, ctx), cols)];
-  const budget = Math.max(3, rows - top.length - bottom.length);
+  const budget = Math.max(3, rows - top.length - pinned.length - bottom.length);
   const scrollMax = Math.max(0, mid.length - budget);
   let from = Math.min(Math.max(0, scroll), scrollMax);
 
@@ -638,7 +664,7 @@ export function render(model, {
   const tips = [];
   let cursor = null;
   // The hovered control, and with it every row of the same group (all lines of one wrapped option).
-  const all = [...top, ...shown, ...bottom];
+  const all = [...top, ...pinned, ...shown, ...bottom];
   const pointed = hover ? all[hover.y - 1]?.hits.find(h => hover.x - 1 >= h.c0 && hover.x - 1 < h.c1) ?? null : null;
   const lit = h => h === pointed || Boolean(pointed?.group && h.group === pointed.group);
   all.forEach((r, row) => {

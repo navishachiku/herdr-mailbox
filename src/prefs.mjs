@@ -4,14 +4,18 @@ import path from 'node:path';
 import { STATE_DIR } from './paths.mjs';
 
 export const PREFS_FILE = path.join(STATE_DIR, '..', 'prefs.json');
-export const DEFAULTS = { width: 48, cardMode: 'detailed', mergeSeconds: 60 };
+export const DEFAULTS = { width: 48, cardMode: 'detailed', mergeSeconds: 60, tooltipSeconds: 15 };
 export const WIDTH = { min: 24, max: 80, step: 4 };
 const MERGE = { min: 5, max: 3600 };
+// How long a tooltip stays while the pointer rests. 5 s is about the least to read a long note; past 60 s the box
+// would in effect never leave on its own. Steps of 5 keep the − / + buttons quick across that range.
+export const TOOLTIP = { min: 5, max: 60, step: 5 };
 
 const valid = {
   width: v => Number.isInteger(v) && v >= WIDTH.min && v <= WIDTH.max && v % WIDTH.step === 0,
   cardMode: v => v === 'detailed' || v === 'compact',
   mergeSeconds: v => Number.isInteger(v) && v >= MERGE.min && v <= MERGE.max,
+  tooltipSeconds: v => Number.isInteger(v) && v >= TOOLTIP.min && v <= TOOLTIP.max && v % TOOLTIP.step === 0,
 };
 
 // A missing, unreadable or hand-edited file falls back per key, so a bad value never breaks opening the screen.

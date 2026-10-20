@@ -70,7 +70,7 @@ test('decision needs 2 to 4 options and a recommendation', () => {
   assert.equal(core.handle(decision({ options: ['a', 'b', 'c', 'd'], recommend: 'D' })).ok, true);
 });
 
-test('202/AC-32 sending strips only an option own leading letter and preserves another option letter', () => {
+test('202/AC-31 sending strips only an option own leading letter and preserves another option letter', () => {
   const { core, dir } = fresh();
   try {
     const sent = core.handle(decision({

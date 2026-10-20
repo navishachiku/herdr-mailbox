@@ -79,7 +79,7 @@ async function openOverlay(action, env) {
   return { ok: true, overlay: { kind: 'attachment', uid: action.uid, name: res.name, text: res.text, truncated: Boolean(res.truncated), top: 0 } };
 }
 
-const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds });
+const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds, tooltipSeconds: p.tooltipSeconds });
 
 // Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; in the attachment reader
 // the arrows, Page keys, Home, End and the wheel scroll (render keeps the position within the text).

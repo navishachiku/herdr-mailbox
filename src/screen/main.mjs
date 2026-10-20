@@ -8,9 +8,14 @@ import { perform } from './actions.mjs';
 import { parseInput, edit } from './input.mjs';
 import { enter, painter, size, forgetSize } from './term.mjs';
 import { createEventQueue } from './events.mjs';
+import { createTooltipTracker } from './tooltip.mjs';
+import { createReloadWatch } from './reload.mjs';
 import { wrap } from './text.mjs';
 import { Animator } from './anim.mjs';
 import { RESULT_MS, FAILED_MS, followedBatch } from './feedback.mjs';
+
+// The reload check (reload.mjs) imports this file only to prove its imports resolve; it stops here.
+if (process.env.HERDR_MAILBOX_IMPORT_CHECK) process.exit(0);
 
 const SELF = process.env.HERDR_PANE_ID;
 const caller = { pane: SELF, viaPlugin: true };
@@ -24,7 +29,8 @@ if (!mailbox) { console.error('mailbox screen: no mailbox for this pane'); proce
 
 let model = null;
 let ui = null;
-let scroll = 0;
+// After a reload the new screen starts where the old one was scrolled.
+let scroll = Math.max(0, Number(process.env.HERDR_MAILBOX_SCROLL) || 0);
 let focus = null; // { uid, pos } while a text field has the keyboard
 let notice = null;
 let noticeTimer = null;
@@ -35,10 +41,10 @@ const paint = painter(out);
 let hover = null; // { x, y } of the pointer while it is over the screen
 let hoverKey = null; // which hit it is over, so moving within one element does not redraw
 let hoverTimer = null;
-let tooltip = null; // { x, y } while the full text of a cut-off item is shown
-let tipKey = null; // which cut-off item the pointer rests on
 let tipTimer = null;
-let batchOpen = false;
+let leaveTimer = null; // redraw when a shown tooltip times out
+// After a reload the batch note row opens as it was (the note text itself never waits unsaved through a reload).
+let batchOpen = process.env.HERDR_MAILBOX_BATCH_OPEN === '1';
 let ghosts = []; // messages and questions that just left, kept on screen while they fade out
 let lastInteractionAt = null; // last mouse movement, click or key; new questions do not scroll the view meanwhile
 let feedback = null; // the operation in flight and how it went (see feedback.mjs)
@@ -48,6 +54,8 @@ let overlay = null; // settings or an attachment, open as a layer inside this pa
 let confirmPrompt = null; // { message, resolve } while the screen asks a yes / no question
 let seen = null; // questions already on screen, so a new one can be told apart
 const anim = new Animator(() => draw());
+// Tooltips for cut-off text (see tooltip.mjs).
+const tips = createTooltipTracker({ getUI: () => ui, getSize: () => size(out), timeoutMs: () => (model?.prefs?.tooltipSeconds ?? 15) * 1000 });
 const ENTER_MS = 400;
 const GLOW_MS = 2500;
 const LEAVE_MS = 300;
@@ -75,7 +83,7 @@ function draw() {
   const fx = { ...anim.values(), noShift: model.inputState === 'typing' || focus !== null };
   ui = render(model, { cols, rows, cardMode: model.prefs?.cardMode, locale, scroll, focus, drafts: buffers, notice, hover, batchOpen, fx, ghosts,
     previousQuestionIds: seen ? [...seen] : null, lastInteractionAt, confirmPrompt: confirmPrompt?.message ?? null,
-    feedback, deliveryState, deliveryConfirmedAt, tooltip, overlay });
+    feedback, deliveryState, deliveryConfirmedAt, tooltip: tips.current(), overlay });
   if (overlay?.kind === 'attachment' && ui.overlayTop !== null) overlay.top = ui.overlayTop; // keep the scroll inside the text
   // Everything now visible, or scrolled to, counts as seen; what is still behind the hint does not.
   const hidden = new Set(ui.unseen);
@@ -276,39 +284,21 @@ function keyAt({ x, y }) {
   return hit ? `${hit.row}:${hit.c0}` : null;
 }
 
-// Cut-off text under a resting pointer: after 0.5 s its full text is shown in a box (render's tooltip); moving off
-// it, or 3 s without mouse events, takes the box away. It rides on the same hover tracking and timer.
-function tipAt({ x, y }) {
-  const tip = ui?.tips.find(h => h.row === y - 1 && x - 1 >= h.c0 && x - 1 < h.c1);
-  return tip ? `${tip.row}:${tip.c0}` : null;
-}
-
-function move({ x, y }) {
+function move(event) {
+  const { x, y } = event;
   const key = keyAt({ x, y });
-  const tip = tipAt({ x, y });
   hover = { x, y };
-  clearTimeout(hoverTimer);
-  hoverTimer = setTimeout(() => {
-    hover = null;
-    const had = hoverKey || tooltip;
-    hoverKey = null;
-    clearTooltip();
-    if (had) draw();
-  }, 3000);
-  if (tip !== tipKey) {
-    const had = tooltip;
-    clearTooltip();
-    tipKey = tip;
-    if (tip) tipTimer = setTimeout(() => { tooltip = { x, y }; draw(); }, 500);
-    if (had) { hoverKey = key; draw(); return; }
-  }
-  if (key !== hoverKey) { hoverKey = key; draw(); }
-}
-
-function clearTooltip() {
+  tips.handle(event);
+  // A dwell may open a tooltip: look again once the delay has passed.
   clearTimeout(tipTimer);
-  tooltip = null;
-  tipKey = null;
+  tipTimer = setTimeout(draw, tips.delayMs + 10);
+  clearTimeout(leaveTimer);
+  leaveTimer = setTimeout(draw, tips.timeoutMs() + 20); // and once more when it times out, counted from this move
+  // herdr sends nothing when the pointer leaves the pane, so the hover style clears itself 3 s after the last
+  // mouse event. The tooltip does not: tooltip.mjs keeps it while the pointer rests.
+  clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => { hover = null; if (hoverKey) { hoverKey = null; draw(); } }, 3000);
+  if (key !== hoverKey) { hoverKey = key; draw(); }
 }
 
 async function key(event) {
@@ -355,9 +345,28 @@ out.on('resize', () => { forgetSize(); overlay = null; draw(); });
 paint.reset();
 await refresh();
 setInterval(() => { if (!busy) refresh(); }, 1000);
+
+// When the screen code changes on disk this screen asks the daemon to replace it with a fresh one, scrolled to the
+// same place (see reload.mjs for how a half-saved or broken version is kept out). It waits while something is in
+// progress here: an open text field, layer or question, or a write in flight. Saved answers and drafts live in the
+// daemon, so the new screen shows them unchanged.
+const reload = createReloadWatch();
+await reload.start().catch(() => {});
+// Text typed here but not yet saved to the daemon (a question's note while its field is open, the batch note until
+// a batch button sends it) goes along as drafts: a reload would lose it, so none happens while any of it is there.
+setInterval(async () => {
+  if (busy || focus || overlay || confirmPrompt) return;
+  const version = await reload.check({ drafts: buffers }).catch(() => null);
+  // Asked once per version (reload.mjs remembers it); a daemon that refuses or fails is not asked again for it.
+  if (version) await call({ op: 'screen-reload', mailbox, scroll, batchOpen, version }).catch(() => {});
+}, 2000);
+
+// Tell the daemon this screen is up and drawing. During a reload that is what lets it close the old screen.
+if (model) await call({ op: 'screen-ready', mailbox, pane: SELF }).catch(() => {});
 process.stdin.on('data', d => {
   const events = parseInput(d);
   if (events.length) lastInteractionAt = Date.now();
+  for (const event of events) if (event.kind !== 'move') tips.handle(event); // a click or key closes a tooltip
   events.forEach(event => queue.enqueue(event));
 });
 process.stdin.on('end', () => process.exit(0));
