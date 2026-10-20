@@ -12,7 +12,7 @@ import { canDeliver } from './identity.mjs';
 import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, notesBatch, repliesBatch } from './format.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
 import { ATTACH_DIR, STATE_DIR } from './paths.mjs';
-import { timings } from './timings.mjs';
+import { timings, mergeMs } from './timings.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 const newBatchId = taken => {
@@ -156,7 +156,7 @@ async function deliverMailbox(box, panes) {
   const kind = replies.length ? 'replies' : 'notes';
   const batch = kind === 'replies' ? replies : notes;
   if (!batch.length) { if (box.paused) box.paused = null; return; }
-  if (kind === 'notes' && !box.deliverNow && api.now() - batch[0].createdAt < timings.mergeMs) return;
+  if (kind === 'notes' && !box.deliverNow && api.now() - batch[0].createdAt < mergeMs()) return;
   if (box.paused?.nextAt > api.now()) return;
   const who = canDeliver(box.id);
   if (!who.ok) { setPaused(box, who.reason === 'waiting_conversation' ? 'waiting_conversation' : 'identity', false); return; }

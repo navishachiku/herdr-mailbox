@@ -621,3 +621,28 @@ test('201/AC-15 Codex receives the full batch metadata and reply mailbox in its 
   assert.ok(text.includes(`${replyTo} ${sender}`));
   assert.ok(text.trimEnd().endsWith(sender));
 });
+
+test('224/AC-1 a merge interval saved in the screen prefs sets when notes are delivered', async t => {
+  const r = rig(t, { mergeMs: undefined });
+  const mb = await r.bind();
+  fs.writeFileSync(path.join(r.root, 'prefs.json'), JSON.stringify({ mergeSeconds: 5 }));
+  const a = r.note(mb, 'prefs interval');
+  await sleep(1500);
+  assert.equal(r.prompts().length, 0);
+  const batch = await r.confirmed(a.uid);
+  assert.ok(batch.sentAt - r.state().letters[a.uid].createdAt < 30000, 'delivered long before the 60 s default');
+});
+
+test('224/AC-2 an out-of-range or unreadable merge interval falls back to 60 s and delivery keeps running', async t => {
+  const r = rig(t, { mergeMs: undefined });
+  const mb = await r.bind();
+  fs.writeFileSync(path.join(r.root, 'prefs.json'), JSON.stringify({ mergeSeconds: 1 }));
+  r.note(mb, 'bad interval');
+  await sleep(2500);
+  assert.equal(r.prompts().length, 0, 'an invalid 1 s must not be honoured');
+  fs.writeFileSync(path.join(r.root, 'prefs.json'), '{not json');
+  r.note(mb, 'unreadable prefs');
+  await sleep(500);
+  assert.equal(Object.keys(r.state().letters).length, 2, 'letters still accepted');
+  assert.equal(r.prompts().length, 0);
+});

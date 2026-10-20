@@ -1,3 +1,5 @@
+import { readPrefs } from './prefs.mjs';
+
 // Every time constant in one place. HERDR_MAILBOX_TIMINGS (JSON, milliseconds) overrides them; it exists only so tests need not wait.
 const defaults = {
   tickMs: 5_000,
@@ -19,3 +21,8 @@ function overrides(raw) {
 }
 
 export const timings = { ...defaults, ...overrides(process.env.HERDR_MAILBOX_TIMINGS) };
+
+// The merge interval is a screen preference read on every use, so a change applies without a restart.
+// The env override stays first so tests can pin it.
+const pinnedMerge = 'mergeMs' in overrides(process.env.HERDR_MAILBOX_TIMINGS);
+export const mergeMs = () => pinnedMerge ? timings.mergeMs : readPrefs().mergeSeconds * 1000;

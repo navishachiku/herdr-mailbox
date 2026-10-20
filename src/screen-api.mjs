@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import * as herdr from './herdr.mjs';
 import { classify } from './input-box.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
-import { timings } from './timings.mjs';
+import { timings, mergeMs } from './timings.mjs';
 import { attachmentsOf } from './core.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
@@ -64,7 +64,7 @@ async function view(req) {
     },
     notes, questions, batches, inputState,
     paused: box.paused ? { reason: box.paused.reason, since: box.paused.since } : null,
-    deliverAt: notes.length ? notes[0].createdAt + timings.mergeMs : null,
+    deliverAt: notes.length ? notes[0].createdAt + mergeMs() : null,
     prefs,
   };
 }
