@@ -26,7 +26,7 @@ Mailbox donne une boîte aux lettres au leader. Les workers peuvent y déposer d
 ![Avec une boîte aux lettres : les rapports attendent dans la boîte pendant que tu écris, arrivent en un seul lot, et les questions se règlent à la souris puis repartent d'un coup](./media/demo.gif)
 
 - **Ta zone de saisie reste à toi** — rien n'y est tapé pendant que tu écris, et rien n'arrive tant que le leader est en train de répondre.
-- **Les messages arrivent ensemble** — les messages ordinaires attendent jusqu'à une minute pour partir en un seul lot et ne réveiller le leader qu'une fois ; **Send now** évite l'attente.
+- **Les messages arrivent ensemble** — les messages ordinaires attendent jusqu'à une minute pour partir en un seul lot et ne réveiller le leader qu'une fois ; **Envoyer** évite l'attente.
 - **Les questions au même endroit** — les questions de décision deviennent des cartes à côté du leader ; réponds à la souris et toutes les réponses repartent en un seul lot.
 - **N'importe quel agent peut écrire** — l'expéditeur n'a qu'à lancer `mailbox send`, donc Claude Code, Codex et tout agent capable d'exécuter une commande shell écrivent dans la même boîte.
 - **Un accusé de réception pour chaque envoi** — chaque envoi renvoie aussitôt l'id et le statut de la lettre.

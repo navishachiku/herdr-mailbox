@@ -26,7 +26,7 @@ Mailbox dà una casella di posta al leader. Oltre ai messaggi normali, che sono 
 ![Con la mailbox: i report aspettano nella casella mentre scrivi, arrivano in un unico gruppo, e alle domande si risponde con il mouse e le risposte tornano tutte insieme](./media/demo.gif)
 
 - **La tua casella di input resta tua** — niente viene digitato mentre scrivi tu, e niente arriva mentre il leader sta ancora rispondendo.
-- **I messaggi normali arrivano insieme** — aspettano fino a un minuto per entrare in un unico gruppo e svegliare il leader una volta sola; **Send now** salta l'attesa.
+- **I messaggi normali arrivano insieme** — aspettano fino a un minuto per entrare in un unico gruppo e svegliare il leader una volta sola; **Invia ora** salta l'attesa.
 - **Le domande in un solo posto** — le domande di decisione diventano schede accanto al leader; rispondi con il mouse e invia tutte le risposte in un colpo solo.
 - **Qualsiasi agent può scrivere** — chi invia esegue soltanto `mailbox send`, quindi Claude Code, Codex e qualsiasi agent capace di lanciare un comando di shell scrivono nella stessa casella.
 - **Una ricevuta per ogni invio** — ogni invio restituisce subito l'id della lettera e il suo stato.

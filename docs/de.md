@@ -26,7 +26,7 @@ Mailbox gibt dem leader einen Briefkasten. Die worker können dort normale Nachr
 ![Mit Mailbox: Berichte warten im Briefkasten, während du tippst, kommen als ein Paket an, und die Fragen werden mit der Maus beantwortet und in einem Rutsch zurückgeschickt](./media/demo.gif)
 
 - **Dein Eingabefeld gehört dir** — während du tippst, wird nichts hineingeschrieben, und solange der leader noch antwortet, kommt auch nichts an.
-- **Normale Nachrichten kommen zusammen** — normale Nachrichten warten bis zu einer Minute, damit sie als ein Paket hineingehen und den leader nur einmal wecken; mit **Send now** entfällt das Warten.
+- **Normale Nachrichten kommen zusammen** — normale Nachrichten warten bis zu einer Minute, damit sie als ein Paket hineingehen und den leader nur einmal wecken; mit **Jetzt senden** entfällt das Warten.
 - **Fragen an einem Ort** — Entscheidungsfragen werden zu Karten neben dem leader; beantworte sie mit der Maus, und alle Antworten gehen in einem Paket zurück.
 - **Jeder Agent kann schreiben** — Absender führen nur `mailbox send` aus, also können Claude Code, Codex und jeder Agent, der einen Shell-Befehl ausführen kann, in denselben Briefkasten schreiben.
 - **Eine Quittung für jeden Versand** — jeder Versand liefert sofort die ID und den Status des Briefs zurück.

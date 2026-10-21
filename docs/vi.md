@@ -26,7 +26,7 @@ Mailbox cho leader một hộp thư. Ngoài tin nhắn thường (như tấm bư
 ![Có hộp thư: báo cáo chờ trong hộp thư lúc bạn đang gõ, rồi đến cùng một lô; câu hỏi được trả lời bằng chuột và gửi lại một lượt](./media/demo.gif)
 
 - **Ô nhập liệu luôn là của bạn** — không có gì bị gõ vào khi bạn đang gõ, và không có gì được đưa vào khi leader còn đang trả lời.
-- **Tin nhắn thường đến cùng lúc** — tin nhắn thường chờ tối đa một phút để vào thành một lô và chỉ đánh thức leader một lần; bấm **Send now** nếu không muốn chờ.
+- **Tin nhắn thường đến cùng lúc** — tin nhắn thường chờ tối đa một phút để vào thành một lô và chỉ đánh thức leader một lần; bấm **Gửi ngay** nếu không muốn chờ.
 - **Câu hỏi gom về một chỗ** — câu hỏi quyết định biến thành thẻ ngay cạnh leader; trả lời bằng chuột rồi gửi toàn bộ câu trả lời một lượt.
 - **Agent nào cũng gửi được** — bên gửi chỉ cần chạy `mailbox send`, nên Claude Code, Codex và bất kỳ agent nào chạy được lệnh shell đều gửi được vào cùng một hộp thư.
 - **Mỗi lần gửi đều có biên nhận** — mỗi lần gửi trả về ngay id và trạng thái của lá thư.

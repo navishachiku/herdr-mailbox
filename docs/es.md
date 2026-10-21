@@ -26,7 +26,7 @@ Mailbox le da un buzón al leader. Además de mensajes normales, que son como po
 ![Con buzón: los informes esperan en el buzón mientras escribes, llegan en un solo lote, y las preguntas se responden con el ratón y se devuelven todas de una vez](./media/demo.gif)
 
 - **Tu cuadro de entrada sigue siendo tuyo** — no se escribe nada mientras tú escribes, y nada llega mientras el leader sigue respondiendo.
-- **Los mensajes normales llegan juntos** — esperan hasta un minuto para entrar como un solo lote y despertar al leader una sola vez; **Send now** se salta la espera.
+- **Los mensajes normales llegan juntos** — esperan hasta un minuto para entrar como un solo lote y despertar al leader una sola vez; **Enviar ya** se salta la espera.
 - **Las preguntas, en un solo lugar** — las preguntas de decisión se convierten en tarjetas junto al leader; responde con el ratón y envía todas las respuestas de una vez.
 - **Cualquier agente puede escribir** — quien envía solo ejecuta `mailbox send`, así que Claude Code, Codex y cualquier agente que pueda ejecutar un comando de shell escriben en el mismo buzón.
 - **Un acuse de recibo por cada envío** — cada envío devuelve al instante el id de la carta y su estado.

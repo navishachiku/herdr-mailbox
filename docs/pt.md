@@ -26,7 +26,7 @@ O Mailbox dá uma caixa de correio ao leader. Além de mensagens comuns, que sã
 ![Com caixa de correio: os relatórios esperam na caixa enquanto você digita, chegam num único lote, e as perguntas são respondidas com o mouse e devolvidas de uma só vez](./media/demo.gif)
 
 - **Seu campo de texto continua sendo seu** — nada é digitado enquanto você digita, e nada chega enquanto o leader ainda está respondendo.
-- **As mensagens comuns chegam juntas** — elas esperam até um minuto para entrar num único lote e acordar o leader uma vez só; **Send now** pula a espera.
+- **As mensagens comuns chegam juntas** — elas esperam até um minuto para entrar num único lote e acordar o leader uma vez só; **Enviar já** pula a espera.
 - **Perguntas num só lugar** — as perguntas de decisão viram cartões ao lado do leader; responda com o mouse e envie todas as respostas de uma vez.
 - **Qualquer agente pode escrever** — quem envia só executa `mailbox send`, então Claude Code, Codex e qualquer agente que consiga rodar um comando de shell escrevem na mesma caixa de correio.
 - **Um recibo para cada envio** — cada envio devolve na hora o id da carta e o status dela.
