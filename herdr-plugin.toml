@@ -3,7 +3,7 @@ name = "Mailbox"
 version = "0.1.0"
 min_herdr_version = "0.9.3"
 description = "A mailbox per receiving agent: messages, decision questions and discussion questions with receipts"
-platforms = ["macos", "linux"]
+platforms = ["macos", "linux", "windows"]
 
 [[startup]]
 command = ["node", "src/ensure.mjs"]
