@@ -2,8 +2,8 @@
 // Pure, so it can be tested without a terminal. `model` is the daemon's `view` answer.
 // Look: solid colour blocks. Buttons are one row of background colour with a column of padding on each side, never
 // bracketed text; adjacent clickable things keep a column apart; the hovered one gets a brighter background.
-import { width, cut, wrap, charWidth } from './text.mjs';
-import { screenText } from './messages.mjs';
+import { width, cut, wrap, charWidth, pad } from './text.mjs';
+import { screenText, LOCALES, LANGUAGE_NAMES } from './messages.mjs';
 import { feedbackFor } from './feedback.mjs';
 
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -487,7 +487,7 @@ const MERGE_STEP = 10;
 const TOOLTIP_STEP = 5; // prefs.mjs TOOLTIP
 const WIDTH_STEP = 4;
 
-function settingsRows(p, t, cols) {
+function settingsRows(p, t, cols, locale) {
   const rows = [];
   const add = left => rows.push(...flow(newRow, cols, left, [], BOX));
   const set = change => ({ type: 'settings-set', change });
@@ -498,6 +498,12 @@ function settingsRows(p, t, cols) {
   add([label(t.modeLabel), button(t.detailed, set({ cardMode: 'detailed' }), p.cardMode === 'detailed' ? 'chosen' : 'button'), button(t.compact, set({ cardMode: 'compact' }), p.cardMode === 'compact' ? 'chosen' : 'button')]);
   add([]);
   add([label(t.mergeLabel), button('−', set({ mergeSeconds: p.mergeSeconds - MERGE_STEP })), textItem(String(p.mergeSeconds).padStart(3), BOX), button('+', set({ mergeSeconds: p.mergeSeconds + MERGE_STEP }))]);
+  add([]);
+  // ‹ and › step through the languages in a loop; the name keeps one width so the arrows never move.
+  const at = LOCALES.indexOf(locale);
+  const step = d => LOCALES[(at + d + LOCALES.length) % LOCALES.length];
+  const nameWidth = Math.max(...Object.values(LANGUAGE_NAMES).map(width));
+  add([label(t.languageLabel), button('‹', set({ locale: step(-1) })), textItem(` ${pad(LANGUAGE_NAMES[locale] ?? locale, nameWidth)} `, BOX), button('›', set({ locale: step(1) }))]);
   add([]);
   add([label(t.tooltipLabel), button('−', set({ tooltipSeconds: p.tooltipSeconds - TOOLTIP_STEP })), textItem(String(p.tooltipSeconds).padStart(3), BOX), button('+', set({ tooltipSeconds: p.tooltipSeconds + TOOLTIP_STEP }))]);
   add([]);
@@ -517,7 +523,7 @@ function overlayRows(overlay, ctx, height) {
   if (overlay.kind === 'settings') {
     // As tall as its content; on a pane too short for that, the settings scroll under the fixed title with the same
     // scrollbar as the attachment reader, so the last one can still be reached.
-    const body = w => settingsRows(overlay.prefs ?? {}, t, w);
+    const body = w => settingsRows(overlay.prefs ?? {}, t, w, ctx.locale);
     let content = body(cols);
     const room = height - 2 - rows.length; // inside the border, under the title
     if (content.length > room && room > 0) {
@@ -656,7 +662,7 @@ export function render(model, {
   previousQuestionIds = null, lastInteractionAt = null, confirmPrompt = null,
   feedback = null, deliveryState = null, deliveryConfirmedAt = null, tooltip = null, overlay = null,
 } = {}) {
-  const ctx = { t: screenText(locale), cols, compact: cardMode === 'compact', model, drafts, focus, notice, now, batchOpen, fx, ghosts, confirmPrompt };
+  const ctx = { t: screenText(locale), locale, cols, compact: cardMode === 'compact', model, drafts, focus, notice, now, batchOpen, fx, ghosts, confirmPrompt };
   FB = {
     look: action => feedbackFor(action, feedback, { now, deliveryState, deliveryConfirmedAt }),
     label: look => ({

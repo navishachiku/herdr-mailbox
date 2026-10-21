@@ -79,7 +79,7 @@ async function openOverlay(action, env) {
   return { ok: true, overlay: { kind: 'attachment', uid: action.uid, name: res.name, text: res.text, truncated: Boolean(res.truncated), top: 0 } };
 }
 
-const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds, tooltipSeconds: p.tooltipSeconds });
+const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds, tooltipSeconds: p.tooltipSeconds, locale: p.locale });
 
 // Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; the arrows, Page keys,
 // Home, End and the wheel scroll it (render keeps the position within the content, and only draws a scrollbar

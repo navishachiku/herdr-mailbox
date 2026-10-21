@@ -1,5 +1,17 @@
-// Screen text, English and Traditional Chinese. The render takes a locale so a test or a caller can pin the language.
+// Screen text, English and Traditional Chinese here, the other languages in locales/. The render takes a locale so a
+// test or a caller can pin the language.
 import { pickLocale } from '../messages.mjs';
+import zhCN from './locales/zh-CN.mjs';
+import ja from './locales/ja.mjs';
+import ko from './locales/ko.mjs';
+import de from './locales/de.mjs';
+import fr from './locales/fr.mjs';
+import es from './locales/es.mjs';
+import it from './locales/it.mjs';
+import pt from './locales/pt.mjs';
+import ru from './locales/ru.mjs';
+import th from './locales/th.mjs';
+import vi from './locales/vi.mjs';
 
 const en = {
   disconnected: reason => `⚠ Mailbox disconnected (${reason})`,
@@ -52,6 +64,7 @@ const en = {
   modeLabel: 'Card mode',
   mergeLabel: 'Merge interval (s)',
   tooltipLabel: 'Tooltip stays (s)',
+  languageLabel: 'Language',
   settingsHint: 'Width applies the next time the mailbox opens · Esc closes',
   attachmentHint: (shown, total) => `↑↓ scroll · Esc closes · ${shown}/${total}`,
   truncated: 'truncated',
@@ -126,6 +139,7 @@ const zh = {
   modeLabel: '卡片模式',
   mergeLabel: '合併間隔（秒）',
   tooltipLabel: '提示框停留（秒）',
+  languageLabel: '語言',
   settingsHint: '寬度在下次開信箱時套用 · Esc 關閉',
   attachmentHint: (shown, total) => `↑↓ 捲動 · Esc 關閉 · ${shown}/${total}`,
   truncated: '已截斷',
@@ -149,8 +163,17 @@ const zh = {
   appliesTo: list => `補充會加到 ${list}；已寫的單題補充保留`,
 };
 
-const tables = { en, 'zh-TW': zh };
+// The same languages as the docs/ translations.
+const tables = { en, 'zh-TW': zh, 'zh-CN': zhCN, ja, ko, de, fr, es, it, pt, ru, th, vi };
+export const LOCALES = Object.keys(tables);
 
 // The default is English so a render is the same wherever it runs; the screen process passes the system language.
 export const screenText = locale => tables[locale] ?? en;
-export const localeOf = pickLocale;
+export const screenLocale = tag => pickLocale(tag, LOCALES);
+// The language picked in Settings wins; 'auto' (nothing picked) follows the system language.
+export const activeLocale = (chosen, system) => (LOCALES.includes(chosen) ? chosen : system);
+// Each language is named in itself, so someone who cannot read the current one still finds their own.
+export const LANGUAGE_NAMES = {
+  en: 'English', 'zh-TW': '繁體中文', 'zh-CN': '简体中文', ja: '日本語', ko: '한국어', de: 'Deutsch', fr: 'Français',
+  es: 'Español', it: 'Italiano', pt: 'Português', ru: 'Русский', th: 'ไทย', vi: 'Tiếng Việt',
+};

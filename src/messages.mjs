@@ -22,11 +22,15 @@ export function systemLocale(env = process.env, platform = process.platform, exe
 }
 
 // Match on the language part (`zh` of `zh_TW.UTF-8`) against each key, so a new language needs only a new table. No match → en.
+// Chinese is the one language split by script: Simplified (Hans, CN, SG) picks a zh-CN table when there is one, and
+// anything else Chinese picks zh-TW, as it did before zh-CN existed.
 const language = tag => String(tag).split(/[._@-]/)[0].toLowerCase();
+const SIMPLIFIED = /[-_](hans|cn|sg)\b/i;
 
 export function pickLocale(tag = systemLocale(), keys = ['en', 'zh-TW']) {
   const lang = language(tag);
-  return keys.find(key => language(key) === lang) ?? 'en';
+  if (lang === 'zh' && SIMPLIFIED.test(tag) && keys.includes('zh-CN')) return 'zh-CN';
+  return keys.find(key => language(key) === lang && key !== 'zh-CN') ?? keys.find(key => language(key) === lang) ?? 'en';
 }
 
 // table({ en, 'zh-TW': ... }) → the table for the system language.

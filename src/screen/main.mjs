@@ -2,7 +2,7 @@
 // mouse clicks and typing into actions, and keeps nothing of its own except what is being typed.
 import { call as daemon } from '../ipc.mjs';
 import * as herdr from '../herdr.mjs';
-import { pickLocale } from '../messages.mjs';
+import { screenLocale, activeLocale } from './messages.mjs';
 import { render, BATCH } from './render.mjs';
 import { perform } from './actions.mjs';
 import { parseInput, edit } from './input.mjs';
@@ -20,7 +20,7 @@ if (process.env.HERDR_MAILBOX_IMPORT_CHECK) process.exit(0);
 const SELF = process.env.HERDR_PANE_ID;
 const caller = { pane: SELF, viaPlugin: true };
 const call = req => daemon({ caller, ...req });
-const locale = pickLocale();
+const systemLocale = screenLocale(); // read once; the language picked in Settings, if any, wins (see draw)
 const out = process.stdout;
 
 let mailbox = process.env.HERDR_MAILBOX_ID;
@@ -81,7 +81,7 @@ function draw() {
   // Nothing that moves rows runs while the receiver is typing, or while one of this screen's own fields is open:
   // a row shift would move the caret, and an input method's candidate window with it.
   const fx = { ...anim.values(), noShift: model.inputState === 'typing' || focus !== null };
-  ui = render(model, { cols, rows, cardMode: model.prefs?.cardMode, locale, scroll, focus, drafts: buffers, notice, hover, batchOpen, fx, ghosts,
+  ui = render(model, { cols, rows, cardMode: model.prefs?.cardMode, locale: activeLocale(model.prefs?.locale, systemLocale), scroll, focus, drafts: buffers, notice, hover, batchOpen, fx, ghosts,
     previousQuestionIds: seen ? [...seen] : null, lastInteractionAt, confirmPrompt: confirmPrompt?.message ?? null,
     feedback, deliveryState, deliveryConfirmedAt, tooltip: tips.current(), overlay });
   if (overlay && ui.overlayTop !== null) overlay.top = ui.overlayTop; // keep the scroll inside the content

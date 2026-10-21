@@ -2500,3 +2500,85 @@ test('225/AC-3 the Chinese screen keeps its original heading buttons', async () 
   const line = render(interactionModel(), { cols: 48, rows: 60, cardMode: 'detailed', locale: 'zh-TW', now: 0 }).lines.find(l => l.includes('決策區'));
   assert.match(line, / 精簡 {3}設定 $/);
 });
+
+test('232/AC-1 with no language chosen the screen follows the system language, and falls back to English outside the list', async () => {
+  const { screenLocale } = await import('./screen/messages.mjs');
+  const cases = {
+    'zh_TW.UTF-8': 'zh-TW', 'zh-Hant-TW': 'zh-TW', 'zh-HK': 'zh-TW', 'zh_CN.UTF-8': 'zh-CN', 'zh-Hans-CN': 'zh-CN', 'zh-SG': 'zh-CN',
+    'ja-JP': 'ja', 'ko_KR.UTF-8': 'ko', 'de-DE': 'de', 'fr_FR': 'fr', 'es-419': 'es', 'it-IT': 'it', 'pt-BR': 'pt', 'ru_RU': 'ru',
+    'th-TH': 'th', 'vi-VN': 'vi', 'en_US.UTF-8': 'en',
+  };
+  for (const [tag, want] of Object.entries(cases)) assert.equal(screenLocale(tag), want, tag);
+  for (const tag of ['nl_NL.UTF-8', 'C', '']) assert.equal(screenLocale(tag), 'en', `${tag || '(empty)'} is not supported`);
+});
+
+test('232/AC-2 all 13 screen languages translate every text the English screen has, and the screen draws each one', async () => {
+  const { LOCALES, screenText } = await import('./screen/messages.mjs');
+  const { render } = await import('./screen/render.mjs');
+  assert.deepEqual([...LOCALES].sort(), ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt', 'ru', 'th', 'vi', 'zh-CN', 'zh-TW']);
+  const en = screenText('en');
+  const shape = (t, ref, where) => {
+    for (const [k, v] of Object.entries(ref)) {
+      assert.ok(k in t, `${where}.${k} is missing`);
+      if (typeof v === 'object') shape(t[k], v, `${where}.${k}`);
+      else assert.equal(typeof t[k], typeof v, `${where}.${k} has the wrong type`);
+    }
+  };
+  for (const locale of LOCALES) {
+    const t = screenText(locale);
+    shape(t, en, locale);
+    if (locale === 'en') continue;
+    assert.notEqual(t, en, `${locale} has its own table`);
+    const lines = render(interactionModel(), { cols: 80, rows: 60, cardMode: 'detailed', locale, now: 0 }).lines.join('\n');
+    assert.ok(lines.includes(t.questions(3, 0).split(' · ')[0]), `${locale} heading drawn`);
+    assert.ok(!lines.includes('Questions ·') || locale === 'fr', `${locale} does not fall back to the English heading`);
+  }
+});
+
+test('232/AC-3 the language row in Settings switches the screen language at once and the choice is kept for the next opening', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const { activeLocale } = await import('./screen/messages.mjs');
+  const { readPrefs, writePrefs } = await import('./prefs.mjs');
+  const root = fs.mkdtempSync(path.join('/tmp', 'mbs-locale-'));
+  const file = path.join(root, 'prefs.json');
+  try {
+    const model = interactionModel();
+    model.prefs = readPrefs(file);
+    const system = 'zh-TW';
+    const options = { cols: 48, rows: 40, now: 0 };
+    const ui = await overlayScreen(model, { ...options, locale: activeLocale(model.prefs.locale, system) }, async req => {
+      if (req.op === 'prefs-get') return { ok: true, ...readPrefs(file) };
+      const { op, ...change } = req;
+      const saved = writePrefs(change, file);
+      return saved.error ? { ok: false, error: saved.error } : { ok: true, ...saved };
+    });
+    assert.equal((await ui.act(hit(ui.frame(), 'settings'))).ok, true);
+    assert.match(ui.frame().lines.join('\n'), /語言 .*‹ +繁體中文 +›/, 'with no choice saved the row shows the system language');
+    const next = hit(ui.frame(), 'settings-set', a => typeof a.change?.locale === 'string' && a.change.locale !== 'en');
+    assert.equal(next.change.locale, 'zh-CN', '› steps to the language after the one shown');
+    assert.equal(hit(ui.frame(), 'settings-set', a => a.change?.locale === 'en').change.locale, 'en', '‹ steps back');
+    assert.equal((await ui.act(next)).ok, true);
+    // The screen draws with the saved choice on its next frame, and a fresh read of the file (a new opening) keeps it.
+    model.prefs = readPrefs(file);
+    assert.equal(model.prefs.locale, 'zh-CN');
+    const now = render(model, { ...options, locale: activeLocale(model.prefs.locale, system), overlay: ui.overlay() }).lines.join('\n');
+    assert.match(now, /决策区/);
+    assert.match(now, /语言 .*‹ +简体中文 +›/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('232/AC-3 an unknown language is not saved, and without a saved choice the screen keeps following the system', async () => {
+  const { activeLocale } = await import('./screen/messages.mjs');
+  const { readPrefs, writePrefs } = await import('./prefs.mjs');
+  const root = fs.mkdtempSync(path.join('/tmp', 'mbs-locale-'));
+  const file = path.join(root, 'prefs.json');
+  try {
+    assert.equal(readPrefs(file).locale, 'auto');
+    assert.equal(writePrefs({ locale: 'xx' }, file).error, 'locale');
+    assert.equal(readPrefs(file).locale, 'auto');
+    fs.writeFileSync(file, JSON.stringify({ locale: 'klingon' }));
+    assert.equal(readPrefs(file).locale, 'auto', 'a hand-edited bad value falls back');
+    assert.equal(activeLocale('auto', 'ja'), 'ja');
+    assert.equal(activeLocale(undefined, 'de'), 'de');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

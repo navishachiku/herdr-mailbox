@@ -16,7 +16,8 @@ const WIDE = [
 
 export function charWidth(ch) {
   const c = ch.codePointAt(0);
-  if (c === 0x200d || (c >= 0xfe00 && c <= 0xfe0f) || (c >= 0x300 && c <= 0x36f)) return 0;
+  // Combining marks (accents, Thai vowel and tone marks, variation selectors) sit on the character before them.
+  if (c === 0x200d || /\p{M}/u.test(ch)) return 0;
   return WIDE.some(([a, b]) => c >= a && c <= b) ? 2 : 1;
 }
 
