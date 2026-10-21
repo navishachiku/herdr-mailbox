@@ -10,60 +10,21 @@ herdr plugin list --json
 
 Take `plugin_root` of the entry whose `plugin_id` is `herdr-mailbox`. On Windows, drop a leading `\\?\`. Below it is called `<plugin dir>`. If there is no such entry, stop and tell the user the plugin is not installed.
 
-## 2. Put `mailbox` on the PATH
+## 2. Run the setup script
 
-Agents run `mailbox send …`, so the command must be found from any shell.
+One script puts `mailbox` on the PATH, merges the Claude Code hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`) and, only if Codex is installed, adds the Codex rule. It backs up each existing file to `<file>.bak-<date>` before changing it, keeps every hook that is already there, and does nothing twice when rerun.
 
-- **macOS, Linux**: make the entry file executable and link it into a folder on the `PATH`, usually `~/.local/bin`:
-
-  ```sh
-  chmod +x "<plugin dir>/src/mailbox.mjs"
-  ln -sf "<plugin dir>/src/mailbox.mjs" ~/.local/bin/mailbox
-  ```
-
-- **Windows**: create `mailbox.cmd` in a folder on the user's `PATH` (for example `%USERPROFILE%\.local\bin`, adding that folder to the user `PATH` if it is not there) with this one line:
-
-  ```bat
-  @node "<plugin dir>\src\mailbox.mjs" %*
-  ```
-
-Check: in a new shell, `mailbox` prints its usage.
-
-## 3. Register the Claude Code hooks
-
-Merge these three hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`). Keep every hook that is already there; add these entries next to them.
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      { "matcher": "startup|resume|clear|compact",
-        "hooks": [{ "type": "command", "command": "node \"<plugin dir>/src/session-start.mjs\"", "timeout": 10 }] }
-    ],
-    "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "node \"<plugin dir>/src/prompt-submit.mjs\"", "timeout": 10 }] }
-    ],
-    "PreToolUse": [
-      { "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "node \"<plugin dir>/src/send-guard.mjs\"", "timeout": 10 }] }
-    ]
-  }
-}
+```sh
+node "<plugin dir>/src/setup.mjs" install
 ```
 
-Herdr's own Claude integration must be installed too, so the mailbox can tell which conversation is in a pane. Run `herdr integration install claude`; it is safe to run again.
+Check: in a new shell, `mailbox` prints its usage. To undo everything the script added, run `node "<plugin dir>/src/setup.mjs" uninstall`.
 
-Check: the file is valid JSON and each of the three commands appears once.
+## 3. Herdr's Claude integration
 
-## 4. Codex (only if the user has Codex)
+The mailbox needs herdr's own Claude integration to tell which conversation is in a pane. Run `herdr integration install claude`; it is safe to run again.
 
-Codex runs commands in a sandbox where the mailbox daemon cannot start. Add this rule to `~/.codex/rules/default.rules`, creating the file if needed:
-
-```
-prefix_rule(pattern=["mailbox"], decision="allow")
-```
-
-## 5. The shortcut
+## 4. The shortcut
 
 Add this to Herdr's `config.toml` (`~/.config/herdr/config.toml`; on Windows `%APPDATA%\herdr\config.toml`), unless a `[[keys.command]]` for `herdr-mailbox.open` is already there. If a `[ui.toast]` section exists, set `delivery = "herdr"` in it instead of adding a second one.
 
