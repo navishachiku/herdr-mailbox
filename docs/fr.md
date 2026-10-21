@@ -40,7 +40,7 @@ Nécessite Herdr 0.9.3 ou plus récent et Node 18 ou plus récent.
 herdr plugin install navishachiku/herdr-mailbox
 ```
 
-Le reste de la configuration (la commande `mailbox`, les hooks de Claude Code, le raccourci et, si tu utilises Codex, une règle), confie-le à ton coding agent. Colle-lui ceci :
+Le reste de la configuration (la commande `mailbox`, les hooks de Claude Code, le raccourci et, si tu utilises Codex, une règle), confie-le à ton coding agent. Pour la commande, les hooks et la règle Codex, il exécute `node <plugin dir>/src/setup.mjs install` ; `uninstall` les annule. Colle-lui ceci :
 
 ```
 Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md

@@ -40,7 +40,7 @@ Mailbox даёт leader почтовый ящик. Worker могут броса�
 herdr plugin install navishachiku/herdr-mailbox
 ```
 
-Остальную настройку (команду `mailbox`, hooks для Claude Code, сочетание клавиш и, если ты пользуешься Codex, одно правило) поручи своему coding agent. Вставь ему это:
+Остальную настройку (команду `mailbox`, hooks для Claude Code, сочетание клавиш и, если ты пользуешься Codex, одно правило) поручи своему coding agent. Для команды, hooks и правила Codex он запускает `node <plugin dir>/src/setup.mjs install`; `uninstall` отменяет это. Вставь ему это:
 
 ```
 Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md

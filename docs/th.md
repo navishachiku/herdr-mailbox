@@ -40,7 +40,7 @@ Mailbox มอบกล่องจดหมายให้ leader นอกจ�
 herdr plugin install navishachiku/herdr-mailbox
 ```
 
-การตั้งค่าที่เหลือ (คำสั่ง `mailbox`, hooks ของ Claude Code, ปุ่มลัด และถ้าใช้ Codex ก็เพิ่มกฎอีกหนึ่งข้อ) ให้ coding agent ของคุณทำแทน วางประโยคนี้ให้มัน:
+การตั้งค่าที่เหลือ (คำสั่ง `mailbox`, hooks ของ Claude Code, ปุ่มลัด และถ้าใช้ Codex ก็เพิ่มกฎอีกหนึ่งข้อ) ให้ coding agent ของคุณทำแทน สำหรับคำสั่ง hooks และกฎของ Codex มันจะรัน `node <plugin dir>/src/setup.mjs install` และใช้ `uninstall` เพื่อย้อนกลับ วางประโยคนี้ให้มัน:
 
 ```
 Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md

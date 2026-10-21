@@ -40,7 +40,7 @@ Cần Herdr 0.9.3 trở lên và Node 18 trở lên.
 herdr plugin install navishachiku/herdr-mailbox
 ```
 
-Phần cài đặt còn lại (lệnh `mailbox`, hooks của Claude Code, phím tắt, và nếu bạn dùng Codex thì thêm một quy tắc) cứ giao cho coding agent của bạn. Dán câu này cho nó:
+Phần cài đặt còn lại (lệnh `mailbox`, hooks của Claude Code, phím tắt, và nếu bạn dùng Codex thì thêm một quy tắc) cứ giao cho coding agent của bạn. Với lệnh, hooks và quy tắc Codex, nó chạy `node <plugin dir>/src/setup.mjs install`; `uninstall` hoàn tác tất cả. Dán câu này cho nó:
 
 ```
 Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md

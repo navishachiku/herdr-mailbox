@@ -10,7 +10,7 @@ The full reference behind the [README](../README.md): setting up the `mailbox` c
 
 Agents call `mailbox send …`, so `mailbox` has to be on the `PATH`. If you deploy Herdr with jockey and keep the `herdr-mailbox` option, it puts a small launcher at `~/.local/bin/mailbox` that finds the installed plugin and runs its `src/mailbox.mjs`.
 
-By hand, link the entry file onto your `PATH` yourself (`<plugin dir>` is the `plugin_root` that `herdr plugin list --json` reports for `herdr-mailbox`):
+`node <plugin dir>/src/setup.mjs install` does this, the hooks below and the Codex rule in one go, and `uninstall` reverts them. By hand, link the entry file onto your `PATH` yourself (`<plugin dir>` is the `plugin_root` that `herdr plugin list --json` reports for `herdr-mailbox`):
 
 ```sh
 chmod +x <plugin dir>/src/mailbox.mjs

@@ -40,7 +40,7 @@ Mailbox 給 leader 一個信箱。worker 除了寄一般訊息（像明信片）
 herdr plugin install navishachiku/herdr-mailbox
 ```
 
-剩下的設定（`mailbox` 指令、Claude Code 的 hooks、快捷鍵，有用 Codex 的話再加一條規則）交給你的 coding agent，把這句貼給它：
+剩下的設定（`mailbox` 指令、Claude Code 的 hooks、快捷鍵，有用 Codex 的話再加一條規則）交給你的 coding agent，指令、hooks 和 Codex 規則由它執行 `node <plugin dir>/src/setup.mjs install`，`uninstall` 可還原。把這句貼給它：
 
 ```
 Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md
