@@ -76,7 +76,7 @@ function world({ timings = {} } = {}) {
   const prompts = () => log().filter(e => /agent/.test(JSON.stringify(e)) && /prompt/.test(JSON.stringify(e)));
   const setFake = fn => { fn(fake); writeFake(); };
   const stop = () => { try { process.kill(Number(fs.readFileSync(path.join(dir, 'daemon.pid'), 'utf8')), 'SIGKILL'); } catch { /* not running */ } };
-  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true }); };
+  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); };
   return { root, dir, env, cli, cliAs, raw, op, log, calls, prompts, setFake, stop, cleanup, transcript };
 }
 

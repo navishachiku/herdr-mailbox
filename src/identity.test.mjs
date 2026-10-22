@@ -78,7 +78,7 @@ function rig() {
   });
   const state = () => JSON.parse(fs.readFileSync(path.join(dir, 'state.json'), 'utf8'));
   const stop = () => { try { process.kill(Number(fs.readFileSync(path.join(dir, 'daemon.pid'), 'utf8')), 'SIGKILL'); } catch { /* not running */ } };
-  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true }); };
+  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); };
   const R = { root, env, fake, write, cli, cliAsync, sessionStart, raw, state, cleanup };
   // The main conversation of w1:p1 registers and binds its mailbox; returns the mailbox id.
   R.bindReceiver = async () => {

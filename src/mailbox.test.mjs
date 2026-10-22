@@ -297,7 +297,7 @@ function sandbox({ root = fs.mkdtempSync(path.join('/tmp', 'mbe-')), session = '
   });
   const pid = () => Number(fs.readFileSync(path.join(currentDir(), 'daemon.pid'), 'utf8'));
   const stop = () => { try { process.kill(pid(), 'SIGKILL'); } catch { /* not running */ } };
-  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true }); };
+  const cleanup = () => { stop(); fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); };
   const bind = async (to = TO, { cold = false } = {}) => {
     const started = cli('status');
     if (started.code !== 0) throw new Error(`mailbox setup failed: ${JSON.stringify(started)}`);
