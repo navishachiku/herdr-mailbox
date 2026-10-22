@@ -9,7 +9,7 @@ import { waitForReceiver, START_WINDOW_MS } from './wait.mjs';
 import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
 
-const COMMANDS = ['send', 'status', 'edit', 'withdraw', 'claim', 'open', 'close', 'deliver'];
+const COMMANDS = ['send', 'status', 'edit', 'withdraw', 'claim', 'open', 'close', 'deliver', 'skill'];
 const dir = new URL('./cli/', import.meta.url);
 
 const commands = Object.create(null);
@@ -41,6 +41,9 @@ const helpers = {
     try { return await resolvePane(to); } catch { console.error(`unknown agent or pane: ${to}`); process.exit(1); }
   },
 };
+
+// A command with run() answers locally and never reaches the daemon.
+if (command.run) { await command.run(values, positionals); process.exit(0); }
 
 const req = await command.build(values, positionals, helpers);
 // Who is asking, for ops that only an owner (or the user, through a herdr plugin action) may run.
