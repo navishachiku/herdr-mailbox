@@ -45,3 +45,22 @@ export function prompt(pane, text) {
 export function pressEnter(pane) {
   return run(['pane', 'send-keys', pane, 'Enter']);
 }
+
+const PROMPT_END = /[$#%>❯➜»λ→]\s*$/;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// A shell that is still loading (WSL can take many seconds) only echoes a command sent to it and never runs it, and herdr
+// reports no error. herdr has no "input is ready" signal, so read the screen: ready is a last line ending in a prompt
+// character, seen on two reads in a row with the same screen. Gives up at the timeout and returns false; the caller then
+// sends the command anyway, never earlier.
+export async function waitPromptReady(pane, timeoutMs, pollMs = 500) {
+  const end = Date.now() + timeoutMs;
+  let prev = null;
+  while (Date.now() < end) {
+    const screen = (await run(['pane', 'read', pane, '--lines', '5'], 3000).catch(() => '')).trimEnd();
+    if (screen && screen === prev && PROMPT_END.test(screen.split('\n').pop().trimEnd())) return true;
+    prev = screen;
+    await sleep(pollMs);
+  }
+  return false;
+}

@@ -42,7 +42,7 @@ function world({ timings = {} } = {}) {
     ...process.env, HERDR_MAILBOX_STATE_DIR: root, HERDR_SOCKET_PATH: socket, HERDR_PANE_ID: RECV,
     HERDR_MAILBOX_SID: 'sid-1', HERDR_PLUGIN_ID: 'herdr-mailbox', LANG: 'en_US.UTF-8', LC_ALL: 'en_US.UTF-8',
     HERDR_BIN_PATH: FAKE, FAKE_HERDR_STATE: stateFile, FAKE_HERDR_LOG: logFile,
-    HERDR_MAILBOX_TIMINGS: JSON.stringify({ tickMs: 50, reconcileMs: 50, mergeMs: 600_000, retryMs: 100, confirmMs: 400, registerGraceMs: 300, ...timings }),
+    HERDR_MAILBOX_TIMINGS: JSON.stringify({ tickMs: 50, reconcileMs: 50, mergeMs: 600_000, retryMs: 100, confirmMs: 400, promptPollMs: 10, promptWaitMs: 2000, registerGraceMs: 300, ...timings }),
   };
   delete env.HERDR_PLUGIN_STATE_DIR;
   const cliAs = (caller, ...args) => {
@@ -144,7 +144,9 @@ function answerLine(ui, uid) {
   return line;
 }
 
-function assertScreenOpen(w, owner, width) {
+async function assertScreenOpen(w, owner, width) {
+  // The start command is sent in the background once the new pane shows a prompt.
+  await until(() => w.calls('"run"').length > 0);
   const calls = w.log().map(entry => entry.argv);
   const layout = calls.findIndex(args => args[0] === 'pane' && args[1] === 'layout' && args.includes(owner));
   const split = calls.findIndex((args, i) => i > layout && args[0] === 'pane' && args[1] === 'split' && args[2] === owner);
@@ -172,7 +174,115 @@ test('202/AC-1 the open action splits a 48-column pane to the right of the recei
     await ready(w);
     const r = w.cli('open');
     assert.equal(r.code, 0, r.err);
-    assertScreenOpen(w, RECV, 48);
+    await assertScreenOpen(w, RECV, 48);
+  } finally { w.cleanup(); }
+});
+
+// The shortcut action as herdr runs it: a plugin process in the focused pane, with no session id of its own.
+const shortcut = (w, pane) => spawnSync(process.execPath, [path.join(here, 'open.mjs')], { env: { ...w.env, HERDR_PANE_ID: pane, HERDR_MAILBOX_SID: '' }, encoding: 'utf8', timeout: 10000 });
+
+test('243/AC-1,2 the shortcut in an agent pane with no mailbox creates it and opens the screen; the agent binding later finds the same one', async () => {
+  const w = world();
+  try {
+    assert.equal(w.cli('status').code, 0);
+    const r = shortcut(w, RECV);
+    assert.equal(r.status, 0, r.stderr);
+    await assertScreenOpen(w, RECV, 48);
+    const made = await w.raw({ op: 'screen-find', pane: RECV, caller: { pane: RECV, viaPlugin: true } });
+    assert.match(made.mailbox, /^MB-/);
+    const again = await w.raw({ op: 'bind', pane: RECV, caller: { pane: RECV, sid: 'sid-1' } });
+    assert.equal(again.ok, true);
+    assert.equal(again.created, false);
+    assert.equal(again.mailbox, made.mailbox);
+  } finally { w.cleanup(); }
+});
+
+test('243/AC-3 the shortcut in a pane that is not an agent shows a notice and opens nothing', async () => {
+  const w = world();
+  try {
+    assert.equal(w.cli('status').code, 0);
+    w.setFake(f => { f.panes.push({ pane_id: 'w1:p9', terminal_id: 't-w1:p9', width: 200, height: 50, workspace_id: 'w1', tab_id: 'w1:t1', label: 'shell' }); });
+    const r = shortcut(w, 'w1:p9');
+    assert.equal(r.status, 1);
+    assert.equal(w.calls('notification').length, 1);
+    assert.match(JSON.stringify(w.calls('notification')[0]), /not an agent/);
+    assert.equal(w.calls('split').length, 0);
+  } finally { w.cleanup(); }
+});
+
+test('243/AC-1 the shortcut in an agent pane whose conversation id herdr has not recorded yet says so and creates no mailbox', async () => {
+  const w = world();
+  try {
+    assert.equal(w.cli('status').code, 0);
+    w.setFake(f => { delete f.panes[0].agent_session; });
+    const r = shortcut(w, RECV);
+    assert.equal(r.status, 1);
+    assert.match(JSON.stringify(w.calls('notification')[0]), /not started a conversation/);
+    const found = await w.raw({ op: 'screen-find', pane: RECV, caller: { pane: RECV, viaPlugin: true } });
+    assert.equal(found.mailbox, null);
+  } finally { w.cleanup(); }
+});
+
+const echoedOnly = w => JSON.parse(fs.readFileSync(path.join(w.root, 'fake-herdr.json'), 'utf8')).echoedOnly ?? [];
+
+test('243/AC-5 the start command waits until the new pane shows a prompt, so it is not only echoed', async () => {
+  const w = world();
+  try {
+    w.env.FAKE_NOPROMPT = '6';
+    const r = shortcut(w, RECV);
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(await until(() => w.calls('"run"').length > 0), 'the start command is sent in the end');
+    await assertScreenOpen(w, RECV, 48);
+    assert.deepEqual(echoedOnly(w), []);
+  } finally { w.cleanup(); }
+});
+
+test('243/AC-5 a prompt that never shows is waited out, then the command is sent anyway', async () => {
+  const w = world({ timings: { promptWaitMs: 300 } });
+  try {
+    w.env.FAKE_NOPROMPT = '9999';
+    const t0 = Date.now();
+    const r = shortcut(w, RECV);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(w.calls('"run"').length, 0, 'not sent before the wait ran out');
+    assert.ok(await until(() => w.calls('"run"').length > 0), 'sent after the wait');
+    assert.ok(Date.now() - t0 >= 300);
+    assert.equal(w.calls('"run"').length, 1);
+  } finally { w.cleanup(); }
+});
+
+test('243/AC-5 while a new pane waits for its prompt the daemon keeps answering, and a second press does not open a second pane', async () => {
+  const w = world({ timings: { promptWaitMs: 1500 } });
+  try {
+    w.env.FAKE_NOPROMPT = '9999';
+    const t0 = Date.now();
+    assert.equal(shortcut(w, RECV).status, 0);
+    assert.ok(Date.now() - t0 < 2500, 'the press returns without waiting for the prompt');
+    const t1 = Date.now();
+    const st = await w.raw({ op: 'status', from: SENDER, caller: { pane: SENDER, sid: 'sid-2' } });
+    assert.equal(st.ok, true);
+    assert.ok(Date.now() - t1 < 1000, 'other requests are not queued behind the wait');
+    assert.equal(w.calls('"run"').length, 0, 'still waiting');
+    assert.equal(shortcut(w, RECV).status, 0);
+    assert.equal(w.calls('"split"').length, 1, 'no second pane');
+    // Let the background wait finish before cleanup removes the directory it still writes to.
+    assert.ok(await until(() => w.calls('"run"').length > 0, 5000));
+    await sleep(200);
+  } finally { w.cleanup(); }
+});
+
+test('243/AC-5 when the start command cannot be sent the empty pane is closed, the user is told, and the screen is not recorded as open', async () => {
+  const w = world();
+  try {
+    w.env.FAKE_RUN_FAILS = '1';
+    assert.equal(shortcut(w, RECV).status, 0);
+    assert.ok(await until(() => w.calls('"close"').length > 0), 'the empty pane is closed');
+    assert.ok(await until(() => w.calls('notification').length > 0));
+    assert.match(JSON.stringify(w.calls('notification')[0]), /could not start/);
+    assert.match(JSON.stringify(w.calls('"close"')[0]), /w1:p1-s1/);
+    const view = await w.raw({ op: 'screen-find', pane: RECV, caller: { pane: RECV, viaPlugin: true } });
+    const state = await w.raw({ op: 'view', mailbox: view.mailbox, caller: { pane: RECV, viaPlugin: true } });
+    assert.equal(state.mailbox.screen.open, false);
   } finally { w.cleanup(); }
 });
 
@@ -405,7 +515,7 @@ test('202/AC-9 saved width and card mode apply to every later open, including fr
     assert.equal(other.code, 0, other.err);
     const saved = await w.op('prefs-get');
     assert.equal(saved.cardMode, 'compact');
-    assertScreenOpen(w, SENDER, 32);
+    await assertScreenOpen(w, SENDER, 32);
   } finally { w.cleanup(); }
 });
 
@@ -568,7 +678,7 @@ test('202/AC-11 after herdr restarts, the focus event reopens the screen with th
       env: { ...w.env, HERDR_PANE_ID: RECV, HERDR_PLUGIN_EVENT_JSON: JSON.stringify({ event: 'pane.focused', data: { pane_id: RECV } }) }, encoding: 'utf8',
     });
     assert.equal(ev.status, 0, ev.stderr);
-    assertScreenOpen(w, RECV, 48);
+    await assertScreenOpen(w, RECV, 48);
     const after = await w.op('view', { mailbox: mb });
     assert.deepEqual(after.questions, before.questions);
     assert.deepEqual(after.notes, before.notes);
@@ -598,7 +708,7 @@ test('202/AC-11 after herdr restarts, focus closes the stale shell with the same
     const split = calls.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === RECV);
     assert.ok(closed >= 0, 'the stale screen shell is closed');
     assert.ok(split > closed, 'the stale shell is closed before splitting the receiver');
-    assertScreenOpen(w, RECV, 48);
+    await assertScreenOpen(w, RECV, 48);
   } finally { w.cleanup(); }
 });
 
@@ -641,7 +751,7 @@ test('202/AC-11 focus backfills a legacy screen terminal without reopening, then
     const split = calls.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === RECV);
     assert.ok(closed >= 0, 'the shell with the changed terminal is closed');
     assert.ok(split > closed, 'the stale shell is closed before splitting the receiver');
-    assertScreenOpen(w, RECV, 48);
+    await assertScreenOpen(w, RECV, 48);
   } finally { w.cleanup(); }
 });
 
@@ -2027,6 +2137,7 @@ test('202/AC-40 screen versions depend on file contents and reloading preserves 
     const request = { mailbox: mb, scroll: 7 };
     const replies = await Promise.all([w.op('screen-reload', request), w.op('screen-reload', request)]);
     assert.ok(replies.every(reply => reply.ok), 'both reload requests are acknowledged');
+    await until(() => w.calls('"run"').length > 0);
     let calls = w.log().map(entry => entry.argv);
     const splits = calls.filter(args => args[0] === 'pane' && args[1] === 'split');
     assert.equal(splits.length, 1, 'duplicate reload requests open only one new screen');
@@ -2053,7 +2164,7 @@ test('202/AC-40 screen versions depend on file contents and reloading preserves 
 });
 
 test('202/AC-40 reload keeps the old screen until screen-ready and closes only the new screen if readiness times out', () => {
-  const w = world({ timings: { screenReadyMs: 50 } });
+  const w = world({ timings: { screenReadyMs: 50, promptWaitMs: 0 } });
   try {
     // Isolate the module and clock from the other tests; the public op/tick contract is the daemon boundary here.
     const script = String.raw`
@@ -2062,6 +2173,7 @@ test('202/AC-40 reload keeps the old screen until screen-ready and closes only t
       import registerScreen from ${JSON.stringify(new URL('./screen-api.mjs', import.meta.url).href)};
       import { emptyState } from ${JSON.stringify(new URL('./store.mjs', import.meta.url).href)};
       let now = 100000;
+      const realSetTimeout = globalThis.setTimeout;
       const timers = new Set();
       Date.now = () => now;
       globalThis.setTimeout = (fn, delay, ...args) => {
@@ -2089,6 +2201,11 @@ test('202/AC-40 reload keeps the old screen until screen-ready and closes only t
         return ops.get(name)({ op: name, ...fields }, { caller: { pane: fields.pane ?? owner.pane_id, viaPlugin: true } });
       };
       const log = () => fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).argv);
+      const launched = async () => {
+        // The start command goes in the background; give it and its bookkeeping a chance to finish.
+        for (let i = 0; i < 200000 && !log().some(args => args[0] === 'pane' && args[1] === 'run'); i++) await new Promise(r => setImmediate(r));
+        await new Promise(r => realSetTimeout(r, 200));
+      };
       const closeCalls = pane => log().filter(args => args[0] === 'pane' && args[1] === 'close' && args.includes(pane));
       const advance = async ms => {
         now += ms;
@@ -2105,6 +2222,7 @@ test('202/AC-40 reload keeps the old screen until screen-ready and closes only t
         const oldPane = opened.pane;
         fs.writeFileSync(process.env.FAKE_HERDR_LOG, '');
         assert.equal((await op('screen-reload', { mailbox, scroll: 7 })).ok, true);
+        await launched();
         const started = log().find(args => args[0] === 'pane' && args[1] === 'run');
         assert.ok(started && started[2] !== oldPane, 'a different screen is started first');
         const newPane = started[2];
@@ -2157,9 +2275,17 @@ test('202/AC-40 reload splits the old screen instead of the receiver and closes 
       assert.equal(opened.ok, true);
       const oldPane = opened.pane;
       assert.ok(oldPane && oldPane !== owner.pane_id);
+      await new Promise(r => setTimeout(r, 300)); // the first screen's start command is sent in the background
       fs.writeFileSync(process.env.FAKE_HERDR_LOG, '');
       const log = () => fs.readFileSync(process.env.FAKE_HERDR_LOG, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).argv);
+      const realSetTimeout = globalThis.setTimeout;
+      const launched = async () => {
+        // The start command goes in the background; give it and its bookkeeping a chance to finish.
+        for (let i = 0; i < 200000 && !log().some(args => args[0] === 'pane' && args[1] === 'run'); i++) await new Promise(r => setImmediate(r));
+        await new Promise(r => realSetTimeout(r, 200));
+      };
       assert.equal((await op('screen-reload', { scroll: 7 })).ok, true);
+      await launched();
       const beforeReady = log();
       const splits = beforeReady.filter(args => args[0] === 'pane' && args[1] === 'split');
       assert.equal(splits.length, 1, 'reload creates exactly one replacement pane');

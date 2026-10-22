@@ -142,7 +142,8 @@ async function bind(req, ctx) {
   let pane;
   try { pane = await herdr.paneGet(req.pane); } catch { return fail('pane_not_found', `no pane ${req.pane}`); }
   const convo = pane.agent_session?.value;
-  if (!convo) return fail('not_agent', `pane ${req.pane} has no agent conversation`);
+  // An agent that herdr detects but has no conversation id for yet (a start-up prompt is still open) is not a non-agent.
+  if (!convo) return fail(pane.agent ? 'agent_not_ready' : 'not_agent', `pane ${req.pane} has no agent conversation`);
   const caller = ctx.caller ?? {};
   const allowed = caller.viaPlugin || (caller.pane === req.pane && caller.sid && caller.sid === convo);
   if (!allowed) return fail('not_owner', 'only the user or the main conversation of this pane can bind its mailbox');

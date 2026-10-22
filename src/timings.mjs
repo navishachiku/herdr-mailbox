@@ -11,6 +11,8 @@ const defaults = {
   nudgeMs: 5_000,
   confirmMs: 20_000,
   batchFileBytes: 100_000,
+  promptWaitMs: 60_000, // how long a new screen pane may take to show a shell prompt before the start command is sent anyway
+  promptPollMs: 500,
   screenReadyMs: 10_000, // a reloaded screen that has not reported screen-ready by then is closed
 };
 

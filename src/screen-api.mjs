@@ -135,7 +135,9 @@ async function openScreen(box, panes, extraEnv = [], adopt = true) {
   let screenPane;
   if (cols > width) {
     const ratio = Number((1 - width / cols).toFixed(4));
-    screenPane = await startScreen(owner.pane_id, ratio, env);
+    screenPane = await startScreen(owner.pane_id, ratio, env, {
+      onFailed: () => { if (adopt && box.screen?.pane === screenPane) { box.screen = { open: false, pane: null, terminalId: null, paneTerminal: null }; api.save(); } },
+    });
     if (!screenPane) return fail('split_failed', 'herdr did not report the new pane');
   } else {
     // The layout could not be read: let herdr place the pane itself, at its own default width.
@@ -149,11 +151,25 @@ async function openScreen(box, panes, extraEnv = [], adopt = true) {
 }
 
 // Splits `target` to the right and starts a screen in the new pane; the target keeps `ratio` of the width.
-async function startScreen(target, ratio, env) {
+// The start command goes in the background once the pane shows a prompt (a slow shell can take a minute), so this
+// returns as soon as the pane exists and the daemon's request chain is free meanwhile. onLaunched runs after the
+// command was sent, or after the wait gave up and sent it anyway. If the command cannot be sent the empty pane is
+// closed, the user is told, and onFailed runs so the caller forgets the screen it recorded.
+async function startScreen(target, ratio, env, { onLaunched = () => {}, onFailed = () => {} } = {}) {
   const out = await herdr.run(['pane', 'split', target, '--direction', 'right', '--ratio', String(ratio), '--no-focus', ...env.flatMap(e => ['--env', e])]);
   const pane = paneIdIn(out);
-  if (pane) await herdr.run(['pane', 'run', pane, `node ${quote(MAIN)}`]);
-  return pane ?? null;
+  if (!pane) return null;
+  herdr.waitPromptReady(pane, timings.promptWaitMs, timings.promptPollMs)
+    .then(() => herdr.run(['pane', 'run', pane, `node ${quote(MAIN)}`]))
+    .then(onLaunched, async err => {
+      // Forget the screen first so nothing sees it as open while the empty pane is being closed.
+      onFailed();
+      await herdr.run(['pane', 'close', pane]).catch(() => {});
+      await herdr.notify('Mailbox', `The mailbox screen could not start (${err?.code ?? 'herdr error'}). Press the shortcut again.`).catch(() => {});
+      onLaunched();
+    })
+    .catch(() => { /* a bookkeeping error must not take the daemon down */ });
+  return pane;
 }
 
 // The screen pane's own terminal id tells a live screen from the empty shell herdr restores in its place.
@@ -266,10 +282,16 @@ async function screenReload(req) {
     api.save();
     return { ok: true, mailbox: box.id, reloaded: false, skipped: true, reason: 'screen_closed' };
   }
-  const pane = await startScreen(box.screen.pane, 0.5, [`HERDR_MAILBOX_ID=${box.id}`, `HERDR_MAILBOX_TARGET=${box.owner.pane}`, ...env]);
+  // The readiness clock starts when the start command is sent, not while the new pane waits for its shell.
+  const job = { pane: null, old: box.screen?.pane ?? null, version: req.version ?? null, since: null };
+  const pane = await startScreen(box.screen.pane, 0.5, [`HERDR_MAILBOX_ID=${box.id}`, `HERDR_MAILBOX_TARGET=${box.owner.pane}`, ...env], {
+    onLaunched: () => { job.since = api.now(); },
+    onFailed: () => { if (pending.get(box.id) === job) pending.delete(box.id); },
+  });
   const res = pane ? { ok: true, mailbox: box.id, pane, opened: true } : fail('split_failed', 'herdr did not report the new pane');
   if (!res.ok) return res;
-  pending.set(box.id, { pane: res.pane, old: box.screen?.pane ?? null, version: req.version ?? null, since: api.now() });
+  job.pane = res.pane;
+  pending.set(box.id, job);
   return { ...res, reloaded: true, waiting: true };
 }
 
@@ -291,7 +313,7 @@ async function screenReady(req) {
 // again.
 async function expireReloads() {
   for (const [id, job] of pending) {
-    if (api.now() - job.since < timings.screenReadyMs) continue;
+    if (job.since === null || api.now() - job.since < timings.screenReadyMs) continue;
     pending.delete(id);
     if (job.version) rejected.add(job.version);
     await herdr.run(['pane', 'close', job.pane]).catch(() => {});

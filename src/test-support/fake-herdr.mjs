@@ -25,7 +25,13 @@ else if (group === 'pane' && verb === 'get') {
   out({ pane });
 } else if (group === 'pane' && verb === 'read') {
   if (!paneById(positional[0])) die('pane_not_found', `no pane ${positional[0]}`);
-  process.stdout.write(world.screens?.[positional[0]] ?? '');
+  // FAKE_NOPROMPT=N: a pane that was split off shows no prompt on its first N reads, like a shell still loading its profile.
+  const id = positional[0];
+  const split = /-s\d+$/.test(id);
+  world.reads = { ...world.reads, [id]: (world.reads?.[id] ?? 0) + 1 };
+  if (statePath) fs.writeFileSync(statePath, JSON.stringify(world));
+  if (split) process.stdout.write(world.reads[id] <= Number(process.env.FAKE_NOPROMPT || 0) ? 'loading shell...\n' : 'user@host:~$ \n');
+  else process.stdout.write(world.screens?.[id] ?? '');
 } else if (group === 'pane' && verb === 'layout') {
   const pane = paneById(rest[rest.indexOf('--pane') + 1]);
   if (!pane) die('pane_not_found', 'no pane for layout');
@@ -42,7 +48,15 @@ else if (group === 'pane' && verb === 'get') {
   world.panes = panes;
   fs.writeFileSync(statePath, JSON.stringify(world));
   out({ pane });
-} else if (group === 'pane' && verb === 'run') out({ ok: true });
+} else if (group === 'pane' && verb === 'run') {
+  if (process.env.FAKE_RUN_FAILS) die('run_failed', 'herdr could not type into the pane');
+  // A command sent before the prompt shows is only echoed, never run, and herdr says nothing.
+  if ((world.reads?.[positional[0]] ?? 0) <= Number(process.env.FAKE_NOPROMPT || 0)) {
+    world.echoedOnly = [...(world.echoedOnly ?? []), positional[0]];
+    if (statePath) fs.writeFileSync(statePath, JSON.stringify(world));
+  }
+  out({ ok: true });
+}
 else if (group === 'pane' && verb === 'focus') out({ focused: positional[0] });
 else if (group === 'agent' && verb === 'get') {
   // The target is a pane id or an agent name (the pane label).
