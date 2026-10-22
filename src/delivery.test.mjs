@@ -698,3 +698,61 @@ test('226/AC-1 a long batch folded into a "[Pasted text]" placeholder still gets
   assert.equal(r.prompts().length, 1);
   assert.match(r.calls().find(c => c.argv[1] === 'send-keys').argv[2], /w1:p1/);
 });
+
+// agy receivers: screens captured from agy 1.4.5 in herdr; the transcript sits under the isolated home where agy keeps it.
+const agyScreen = name => fs.readFileSync(path.join(here, 'test-support', 'screens', `agy-${name}.ansi`), 'utf8');
+function agyReceiver(r) {
+  r.env.HOME = r.root;
+  const logs = path.join(r.root, '.gemini', 'antigravity-cli', 'brain', 'sid-w1:p1', '.system_generated', 'logs');
+  fs.mkdirSync(logs, { recursive: true });
+  const transcript = path.join(logs, 'transcript.jsonl');
+  fs.writeFileSync(transcript, '');
+  Object.assign(r.world.panes[0], { agent: 'agy' });
+  r.world.transcripts['w1:p1'] = transcript;
+  r.world.screens['w1:p1'] = agyScreen('empty');
+  r.write();
+  return transcript;
+}
+
+test('251/AC-1 an agy receiver with an empty input box gets the note and the batch is confirmed in its transcript', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  const transcript = agyReceiver(r);
+  const mb = await r.bind('w1:p1', { register: false });
+  const letter = r.note(mb, 'note for agy');
+  const batch = await r.confirmed(letter.uid);
+  assert.ok(r.prompts()[0].argv[3].includes('note for agy'));
+  assert.ok(fs.readFileSync(transcript, 'utf8').includes(batch.id));
+});
+
+test('251/AC-1 text typed in agy\'s input box holds the note as typing', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  agyReceiver(r);
+  r.world.screens['w1:p1'] = agyScreen('typing');
+  r.write();
+  const mb = await r.bind('w1:p1', { register: false });
+  r.note(mb, 'must wait for agy typing');
+  await until(() => r.state().mailboxes[mb].paused?.reason === 'typing', 'typing pause');
+  assert.equal(r.prompts().length, 0);
+  const view = await r.raw({ op: 'view', mailbox: mb });
+  assert.equal(view.inputState, 'typing');
+});
+
+test('251/AC-2 an answer submitted on an agy mailbox screen reaches the working agy conversation', async t => {
+  const r = rig(t, { mergeMs: 60000, workingMs: 60000 });
+  agyReceiver(r);
+  const mb = await r.bind('w1:p1', { register: false });
+  r.world.panes[0].agent_status = 'working';
+  r.world.screens['w1:p1'] = agyScreen('working');
+  r.write();
+  const q = r.decision(mb);
+  const view = await r.raw({ op: 'view', mailbox: mb });
+  assert.equal(view.inputState, 'empty', 'the screen enables Send only for an empty input box');
+  const generation = r.state().mailboxes[mb].owner.generation;
+  const caller = { viaPlugin: true };
+  assert.equal((await r.raw({ op: 'answer', mailbox: mb, generation, caller, uid: q.uid, version: 1, choice: 'B' })).ok, true);
+  const submitted = await r.raw({ op: 'submit', mailbox: mb, generation, caller, items: [{ uid: q.uid, version: 1 }] });
+  assert.equal(submitted.results[0].ok, true);
+  const batch = await r.confirmed(q.uid);
+  assert.equal(batch.kind, 'replies');
+  assert.match(r.prompts()[0].argv[3], /^Answer:\s*B\s*["']?Wait until tomorrow["']?\s*$/m);
+});

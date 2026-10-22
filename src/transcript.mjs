@@ -1,4 +1,4 @@
-// Reads a receiver's Claude transcript (JSON lines) to see whether a batch landed in the conversation.
+// Reads a receiver's transcript (JSON lines, Claude Code or agy) to see whether a batch landed in the conversation.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -27,15 +27,22 @@ export function landed(file, offset, id) {
       const entry = JSON.parse(line);
       // A prompt that arrives while Claude is working is first logged as a queue-operation (enqueue, which proves
       // nothing) and, once it is taken into the turn, as a queued_command attachment: that is the landing.
-      return entry.type === 'user' || (entry.type === 'attachment' && entry.attachment?.type === 'queued_command');
+      // agy logs every prompt it takes, queued ones included, as a USER_INPUT step.
+      return entry.type === 'user' || (entry.type === 'attachment' && entry.attachment?.type === 'queued_command')
+        || entry.type === 'USER_INPUT';
     } catch { return false; } // a half-written last line is not there yet
   });
 }
 
 // Without a SessionStart registration the file is found by the conversation id herdr reports:
-// <claude config dir>/projects/<project>/<id>.jsonl. null when there is none.
-export function findByConversation(id) {
+// <claude config dir>/projects/<project>/<id>.jsonl, or for agy ~/.gemini/antigravity-cli/brain/<id>/.system_generated/logs/transcript.jsonl.
+// null when there is none.
+export function findByConversation(id, agent = 'claude') {
   if (!id || !/^[\w:-]+$/.test(String(id))) return null;
+  if (agent === 'agy') {
+    const file = path.join(os.homedir(), '.gemini', 'antigravity-cli', 'brain', id, '.system_generated', 'logs', 'transcript.jsonl');
+    return fs.existsSync(file) ? file : null;
+  }
   const projects = path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects');
   try {
     for (const dir of fs.readdirSync(projects)) {

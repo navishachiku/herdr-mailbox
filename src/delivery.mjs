@@ -127,6 +127,7 @@ async function sendMailboxBatch(box, kind, letters, owner) {
     // Claude gets only who wrote what; the rest is added back by the UserPromptSubmit hook.
     ...(owner.agent === 'claude' ? { concise: marker => (kind === 'replies' ? conciseReplies({ marker, letters, sigs }) : conciseNotes({ marker, letters, sigs })) } : {}),
   });
+  batch.agent = owner.agent ?? null;
   const text = batch.sendText;
   delete batch.sendText;
   const was = letters.map(l => [l, l.status]);
@@ -141,9 +142,9 @@ async function sendMailboxBatch(box, kind, letters, owner) {
 }
 
 // Is the receiver's input box safe to type into? Records why not on the mailbox.
-async function inputIsEmpty(box, pane) {
+async function inputIsEmpty(box, pane, agent) {
   let state = 'unknown';
-  try { state = classify(await herdr.readScreen(pane)); } catch { /* unreadable counts as unknown */ }
+  try { state = classify(await herdr.readScreen(pane), agent); } catch { /* unreadable counts as unknown */ }
   if (state === 'empty') return true;
   setPaused(box, state);
   return false;
@@ -168,15 +169,16 @@ async function deliverMailbox(box, panes) {
     const long = workingSince.has(who.pane) && api.now() - workingSince.get(who.pane) >= timings.workingMs;
     if (!['idle', 'done'].includes(status) && !long) { setPaused(box, 'working', false); return; }
   }
-  if (!await inputIsEmpty(box, who.pane)) return;
+  const agent = panes.find(p => p.pane_id === who.pane)?.agent;
+  if (!await inputIsEmpty(box, who.pane, agent)) return;
   const convo = panes.find(p => p.pane_id === who.pane)?.agent_session?.value ?? box.owner.convo;
-  await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, agent: panes.find(p => p.pane_id === who.pane)?.agent, transcript: who.transcript ?? findByConversation(convo) });
+  await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, agent, transcript: who.transcript ?? findByConversation(convo, agent) });
 }
 
 // The transcript of a pane that has no mailbox: what its conversation last registered, else the file named by its id.
 function transcriptOfPane(pane) {
   const convo = pane.agent_session?.value;
-  return (api.state.registrations[pane.pane_id] ?? []).filter(r => r.sid === convo).at(-1)?.transcript ?? findByConversation(convo);
+  return (api.state.registrations[pane.pane_id] ?? []).filter(r => r.sid === convo).at(-1)?.transcript ?? findByConversation(convo, pane.agent);
 }
 
 async function deliverDirect(panes) {
@@ -187,14 +189,14 @@ async function deliverDirect(panes) {
     const pane = panes.find(p => p.pane_id === b.pane);
     if (!pane?.agent) { b.status = 'failed'; api.save(); continue; }
     let state = 'unknown';
-    try { state = classify(await herdr.readScreen(b.pane)); } catch { /* unknown */ }
-    // Only Claude's input box can be read. Another agent (Codex) always reads as unknown, so there
+    try { state = classify(await herdr.readScreen(b.pane), pane.agent); } catch { /* unknown */ }
+    // Only Claude's and agy's input boxes can be read. Another agent (Codex) always reads as unknown, so there
     // unknown goes through and herdr's agent_blocked is the guard; text seen in the box still holds the message.
     const hold = pane.agent === 'claude' ? state !== 'empty' : state === 'typing';
     if (hold) { b.nextAt = api.now() + timings.retryMs; api.save(); continue; }
     busy.add(b.pane);
     const transcript = transcriptOfPane(pane);
-    Object.assign(b, { status: 'sending', transcript, convo: pane.agent_session?.value ?? null, transcriptOffset: transcript ? sizeOf(transcript) : 0 });
+    Object.assign(b, { status: 'sending', transcript, convo: pane.agent_session?.value ?? null, agent: pane.agent, transcriptOffset: transcript ? sizeOf(transcript) : 0 });
     await send(b, b.pane, b.text, () => { b.status = 'pending'; b.nextAt = api.now() + timings.retryMs; });
   }
 }
@@ -205,7 +207,7 @@ async function deliverDirect(panes) {
 function findTranscript(b) {
   if (b.transcript && fs.existsSync(b.transcript)) return;
   const registered = (api.state.registrations[b.pane] ?? []).filter(r => r.sid === b.convo).at(-1)?.transcript;
-  const file = registered && fs.existsSync(registered) ? registered : findByConversation(b.convo);
+  const file = registered && fs.existsSync(registered) ? registered : findByConversation(b.convo, b.agent);
   if (file) Object.assign(b, { transcript: file, transcriptOffset: 0 });
 }
 
@@ -218,7 +220,7 @@ async function nudge(b) {
   try {
     // A long paste that is not folded runs past the visible 40 rows, so look further back for the input box.
     const screen = await herdr.readScreen(b.pane, { source: 'recent', lines: 200 });
-    const typed = typedText(screen);
+    const typed = typedText(screen, b.agent);
     // The box must hold this batch and end where it ends: anything typed after it belongs to a person. A folded
     // paste shows no text, so it counts as this batch only when it is alone in the box and its line count fits.
     const folded = pastedLines(screen);
@@ -366,7 +368,7 @@ async function deliveryState(req) {
   if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
   let inputState = 'unknown';
   if (box.owner && box.state === 'connected') {
-    try { inputState = classify(await herdr.readScreen(box.owner.pane)); } catch { /* unknown */ }
+    try { inputState = classify(await herdr.readScreen(box.owner.pane), (await herdr.paneGet(box.owner.pane)).agent); } catch { /* unknown */ }
   }
   const queued = Object.values(api.state.letters).filter(l => l.mailbox === box.id && l.status === 'queued' && !l.batch).map(l => l.uid);
   return { ok: true, paused: pausedOf(box.id), queued, inputState, batches: batchesOf(box.id).sort((a, b) => a.createdAt - b.createdAt) };

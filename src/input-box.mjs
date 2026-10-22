@@ -1,6 +1,6 @@
-// Tell whether anyone has typed into the Claude input box. Same approach as the send guard:
+// Tell whether anyone has typed into an agent's input box (Claude Code or agy). Same approach as the send guard:
 // filter out dim and gray foreground text (suggestions, placeholders); anything else counts as
-// typed. A screen that is not a Claude input box always counts as having no text.
+// typed. A screen that is not that agent's input box always counts as having no text.
 const SGR_OR_ANSI_RE = /\x1b\[([0-9;]*)m|\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
 const ANSI_RE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])/g;
 
@@ -49,22 +49,29 @@ function visibleText(rawLine) {
   return out;
 }
 
-// Index of the "❯" line that sits right under a rule: the Claude input box. -1 when the screen has none.
-function findInputBox(plain) {
+// Both draw the box between two rules and open it with a prompt character: "❯" in Claude Code, ">" in agy.
+// Any other agent is read as Claude.
+const promptOf = (agent) => (agent === 'agy' ? />/ : /❯/);
+const startsWith = (agent) => new RegExp(`^\\s*${promptOf(agent).source}`);
+
+// Index of the prompt line that sits right under a rule: the input box. -1 when the screen has none. Earlier
+// prompts in agy's history look the same, so the lowest one counts.
+function findInputBox(plain, agent) {
+  const start = startsWith(agent);
   for (let i = plain.length - 1; i >= 1; i--) {
-    if (isRule(plain[i - 1]) && /^\s*❯/.test(plain[i])) return i;
+    if (isRule(plain[i - 1]) && start.test(plain[i])) return i;
   }
   return -1;
 }
 
-// Returns the text typed in the Claude input box, or '' when there is none or
-// the screen is not a Claude input box.
-export function typedText(screen) {
+// Returns the text typed in the agent's input box, or '' when there is none or
+// the screen is not that agent's input box.
+export function typedText(screen, agent = 'claude') {
   const rawLines = screen.split(/\r?\n/);
   const plain = rawLines.map((l) => l.replace(ANSI_RE, ''));
-  const start = findInputBox(plain);
+  const start = findInputBox(plain, agent);
   if (start < 0) return '';
-  const parts = [visibleText(rawLines[start]).replace(/^\s*❯/, '')];
+  const parts = [visibleText(rawLines[start]).replace(startsWith(agent), '')];
   for (let i = start + 1; i < rawLines.length && !isRule(plain[i]); i++) parts.push(visibleText(rawLines[i]));
   return parts.map((s) => s.replace(ANSI_RE, '').trim()).filter(Boolean).join(' ');
 }
@@ -77,11 +84,12 @@ export function pastedLines(screen) {
 }
 
 // Three-way reading for delivery: 'empty' is the only state that allows typing into the pane. A screen that is
-// blank, has no Claude input box, or shows the background-agent list (it takes the arrow keys) is 'unknown'.
-export function classify(screen) {
+// blank, has no input box, or shows a list that takes the arrow keys (Claude's background agents, agy's
+// trust and approval prompts) is 'unknown'.
+export function classify(screen, agent = 'claude') {
   if (typeof screen !== 'string' || !screen.trim()) return 'unknown';
   const plain = screen.split(/\r?\n/).map((l) => l.replace(ANSI_RE, ''));
-  if (plain.some((l) => l.includes('↑/↓ to select'))) return 'unknown';
-  if (findInputBox(plain) < 0) return 'unknown';
-  return typedText(screen) ? 'typing' : 'empty';
+  if (plain.some((l) => l.includes('↑/↓ to select') || l.includes('↑/↓ Navigate'))) return 'unknown';
+  if (findInputBox(plain, agent) < 0) return 'unknown';
+  return typedText(screen, agent) ? 'typing' : 'empty';
 }

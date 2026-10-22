@@ -80,7 +80,11 @@ else if (group === 'agent' && verb === 'get') {
     world.screens = { ...world.screens, [target]: `────────────\n❯ ${shown}\n────────────` };
     fs.writeFileSync(statePath, JSON.stringify(world));
   } else if (result !== 'lost' && transcript) {
-    fs.appendFileSync(transcript, `${JSON.stringify({ type: 'user', message: { role: 'user', content: text.join(' ') } })}\n`);
+    // agy logs a prompt as a USER_INPUT step wrapped in <USER_REQUEST>; Claude as a user entry.
+    const entry = pane.agent === 'agy'
+      ? { step_index: 0, source: 'USER_EXPLICIT', type: 'USER_INPUT', status: 'DONE', content: `<USER_REQUEST>\n${text.join(' ')}\n</USER_REQUEST>` }
+      : { type: 'user', message: { role: 'user', content: text.join(' ') } };
+    fs.appendFileSync(transcript, `${JSON.stringify(entry)}\n`);
   }
   out({ pane_id: target, sent: true });
 } else if (group === 'pane' && verb === 'send-keys') {

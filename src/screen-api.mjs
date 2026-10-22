@@ -47,7 +47,8 @@ async function view(req) {
     .map(l => ({ ...base(l), status: l.status === 'delivered' ? 'submitted' : l.status, priority: l.priority, version: l.version, edited: l.edited, tags: l.tags ?? [], content: l.content, draft: l.draft ?? null }));
   let inputState = 'unknown';
   if (box.owner && box.state === 'connected') {
-    try { inputState = classify(await herdr.readScreen(box.owner.pane)); } catch { /* unreadable counts as unknown */ }
+    const agent = panes.find(p => p.pane_id === box.owner.pane)?.agent;
+    try { inputState = classify(await herdr.readScreen(box.owner.pane), agent); } catch { /* unreadable counts as unknown */ }
   }
   const batches = Object.values(api.state.batches)
     .filter(b => b.mailbox === box.id && ['unconfirmed', 'sending'].includes(b.status))

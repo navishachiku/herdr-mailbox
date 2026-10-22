@@ -89,10 +89,11 @@ Longer material goes with the letter as a file (`--attach <file>`); the card sho
 ## Limits
 
 - A question is up to 200 characters and a note up to 500; longer text goes in a file with `--attach`.
-- The agent that owns the mailbox (the leader) has to be Claude Code, because delivery waits until its input box is empty; senders can be any agent.
+- The agent that owns the mailbox (the leader) has to be Claude Code or agy, because delivery waits until its input box is empty and only those two input boxes can be read; senders can be any agent.
 
 ## Known issues
 
+- **Codex: it cannot own a mailbox yet.** Codex 0.163 runs its conversations in one shared background server, so Herdr's Codex integration reports every conversation to the pane that started that server, and the Codex pane itself never gets a conversation id to bind a mailbox to. Codex can still send letters, and a note sent to a Codex pane that has no mailbox is typed straight into it.
 - **agy: the skill is not installed where agy reads it.** The `skills` CLI cannot install into the folder agy loads skills from, so `npx skills add` does not reach it. This is a limit of that CLI; the mailbox does not work around it.
 - **agy: it sees the skill but does not use the mailbox on its own.** Told only to "report to agent-a", agy reaches for its built-in messaging tool instead of `mailbox send`. Name the command in the request ("send it with `mailbox send`").
 
