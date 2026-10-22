@@ -37,16 +37,37 @@ Mailbox gives the leader a mailbox. Workers can drop in plain notes, like postca
 Requires Herdr 0.9.3 or newer and Node 18 or newer.
 
 ```sh
+# 1. Install the plugin
 herdr plugin install navishachiku/herdr-mailbox
+
+# 2. Run its setup action: the `mailbox` command, the Claude Code hooks, and the Codex and agy allow rules
+herdr plugin action invoke setup --plugin herdr-mailbox
+
+# 3. Herdr's own agent integrations, for each agent you use
+herdr integration install claude
+herdr integration install codex
+herdr integration install antigravity-cli
+
+# 4. The skill that teaches agents to send letters
+npx skills add navishachiku/herdr-mailbox
 ```
 
-Then hand the rest of the setup (the `mailbox` command, the Claude Code hooks, the shortcut, and Codex if you use it) to your coding agent; for the command, the hooks and the Codex rule it runs `node <plugin dir>/src/setup.mjs install`, and `uninstall` reverts them. Paste this to it:
+The setup action backs up every file before it changes it (`<file>.bak-<date>`), adds nothing twice when run again, and keeps working after `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` reverts it. Restart the Claude Code sessions that should receive mail.
 
-```
-Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md
+Add the shortcut to Herdr's `config.toml` (`~/.config/herdr/config.toml`; on Windows `%APPDATA%\herdr\config.toml`), then reload with `prefix+shift+r`:
+
+```toml
+[[keys.command]]
+key = "prefix+shift+m"
+type = "plugin_action"
+command = "herdr-mailbox.open"
+description = "open the mailbox"
+
+[ui.toast]
+delivery = "herdr"
 ```
 
-When it is done, reload Herdr with `prefix+shift+r` and press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it (`prefix` is `ctrl+b` unless you changed it). The steps the agent follows are in [AGENT-SETUP.md](AGENT-SETUP.md).
+Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it (`prefix` is `ctrl+b` unless you changed it). If the action does not work on your machine, [AGENT-SETUP.md](AGENT-SETUP.md) has the same steps for a coding agent to follow.
 
 ## Sending a letter
 

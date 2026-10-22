@@ -3,12 +3,14 @@
 // hooks into the user's settings and, when Codex is there, adds the Codex rule; `node setup.mjs uninstall` undoes
 // exactly that. Every existing file is copied to <file>.bak-<date> before its first change, rerunning adds nothing
 // twice, and what install created is recorded in ~/.herdr-mailbox-setup.json so uninstall can remove it again.
-// It does not touch herdr's own config (integration, shortcut); AGENT-SETUP.md covers those.
+// Hooks and the PATH link go through ~/.herdr-mailbox/run.mjs (see stable.mjs), so a plugin update does not strand them.
+// It does not touch herdr's own config (integration, shortcut); the README covers those.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { STABLE_DIR, POINTER } from './stable.mjs';
 
 const WIN = process.platform === 'win32';
 const HOME = os.homedir();
@@ -27,7 +29,10 @@ const HOOKS = [
   ['UserPromptSubmit', 'prompt-submit.mjs'],
   ['PreToolUse', 'send-guard.mjs', 'Bash'],
 ];
-const hookCommand = file => `node "${posix(path.join(PLUGIN, 'src', file))}"`;
+const RUN = path.join(STABLE_DIR, 'run.mjs');
+const hookCommand = file => `node "${posix(RUN)}" --hook ${file}`;
+const AGY_SETTINGS = path.join(HOME, '.gemini', 'antigravity-cli', 'settings.json');
+const AGY_RULE = 'command(mailbox)';
 
 const manifest = (() => {
   try { return JSON.parse(fs.readFileSync(MANIFEST, 'utf8')); } catch { return {}; }
@@ -74,10 +79,24 @@ const dropCreated = () => {
   }
 };
 
+// --- the stable entry ---
+const installStable = () => {
+  const shim = fs.readFileSync(path.join(PLUGIN, 'src', 'shim.mjs'), 'utf8');
+  if (!fs.existsSync(STABLE_DIR)) { mkdirp(STABLE_DIR); manifest.added.stable = true; }
+  if (readText(RUN) !== shim) { fs.writeFileSync(RUN, shim); say(`wrote ${RUN}`); }
+  if (readText(POINTER).trim() !== PLUGIN) fs.writeFileSync(POINTER, `${PLUGIN}\n`);
+};
+const uninstallStable = () => {
+  if (!manifest.added.stable) return;
+  fs.rmSync(RUN, { force: true });
+  fs.rmSync(POINTER, { force: true });
+  say(`removed ${STABLE_DIR}`);
+};
+
 // --- mailbox on the PATH ---
-const entry = path.join(PLUGIN, 'src', 'mailbox.mjs');
+const entry = RUN;
 const cmdFile = path.join(BIN_DIR, 'mailbox.cmd');
-const cmdText = `@node "${path.join(PLUGIN, 'src', 'mailbox.mjs')}" %*\r\n`;
+const cmdText = `@node "${RUN}" %*\r\n`;
 const link = path.join(BIN_DIR, 'mailbox');
 
 const psUserPath = script => {
@@ -122,7 +141,9 @@ const installPath = () => {
   fs.chmodSync(entry, 0o755);
   let st = null;
   try { st = fs.lstatSync(link); } catch { /* absent */ }
-  if (st && !(st.isSymbolicLink() && path.resolve(BIN_DIR, fs.readlinkSync(link)) === entry)) die(`${link} exists and is not ours; remove it first`);
+  // A link the user made straight to the plugin's mailbox.mjs stays as it is; anything else there is not ours.
+  const handMade = st?.isSymbolicLink() && /[\\/]src[\\/]mailbox\.mjs$/.test(path.resolve(BIN_DIR, fs.readlinkSync(link)));
+  if (st && !handMade && !(st.isSymbolicLink() && path.resolve(BIN_DIR, fs.readlinkSync(link)) === entry)) die(`${link} exists and is not ours; remove it first`);
   if (!st) {
     mkdirp(BIN_DIR);
     fs.symlinkSync(entry, link);
@@ -173,6 +194,13 @@ const installHooks = () => {
   settings.hooks ??= {};
   for (const [event, file, matcher] of HOOKS) {
     const command = hookCommand(file);
+    // An earlier install wrote the plugin folder's own path; swap exactly those entries (the manifest knows them) for the stable one.
+    const old = manifest.added.hooks.filter(c => c !== command && c.endsWith(`${file}"`));
+    if (old.length) {
+      for (const g of settings.hooks[event] ?? []) for (const h of g.hooks ?? []) if (old.includes(h.command)) h.command = command;
+      manifest.added.hooks = manifest.added.hooks.filter(c => !old.includes(c));
+      if (!manifest.added.hooks.includes(command)) manifest.added.hooks.push(command);
+    }
     if (hasCommand(settings.hooks[event], command)) continue;
     manifest.added.hooks.push(command);
     (settings.hooks[event] ??= []).push({ ...(matcher && { matcher }), hooks: [{ type: 'command', command, timeout: 10 }] });
@@ -195,6 +223,27 @@ const uninstallHooks = () => {
   if ((restored ? writeFile(SETTINGS, original) : writeSettings(settings))) say(`removed the mailbox hooks from ${SETTINGS}`);
 };
 
+// --- agy rule ---
+const agyPresent = () => fs.existsSync(AGY_SETTINGS);
+const installAgy = () => {
+  if (!agyPresent()) return say('agy settings not found, skipped the agy rule');
+  let settings;
+  try { settings = JSON.parse(readText(AGY_SETTINGS)); } catch (e) { return die(`${AGY_SETTINGS} is not valid JSON (${e.message}); fix it and rerun`); }
+  const allow = ((settings.permissions ??= {}).allow ??= []);
+  if (allow.includes(AGY_RULE)) return;
+  allow.push(AGY_RULE);
+  if (writeFile(AGY_SETTINGS, JSON.stringify(settings, null, 2))) manifest.added.agy = true, say(`added the mailbox rule to ${AGY_SETTINGS}`);
+};
+const uninstallAgy = () => {
+  if (!manifest.added.agy || !agyPresent()) return;
+  const settings = JSON.parse(readText(AGY_SETTINGS));
+  const allow = settings.permissions?.allow;
+  if (!allow?.includes(AGY_RULE)) return;
+  settings.permissions.allow = allow.filter(r => r !== AGY_RULE);
+  fs.writeFileSync(AGY_SETTINGS, JSON.stringify(settings, null, 2));
+  say(`removed the mailbox rule from ${AGY_SETTINGS}`);
+};
+
 // --- Codex rule ---
 const codexPresent = () => fs.existsSync(CODEX_DIR)
   || spawnSync(WIN ? 'where' : 'which', ['codex'], { stdio: 'ignore' }).status === 0;
@@ -213,11 +262,11 @@ const uninstallCodex = () => {
 
 const cmd = process.argv[2];
 if (cmd === 'install') {
-  installPath(); installHooks(); installCodex();
+  installStable(); installPath(); installHooks(); installCodex(); installAgy();
   save();
   say('done. Open a new terminal, restart Claude Code sessions that should get mail, and press prefix+shift+r in herdr.');
 } else if (cmd === 'uninstall') {
-  uninstallPath(); uninstallHooks(); uninstallCodex();
+  uninstallPath(); uninstallHooks(); uninstallCodex(); uninstallAgy(); uninstallStable();
   dropCreated();
   fs.rmSync(MANIFEST, { force: true });
   say('done. Backups (*.bak-*) were left in place.');

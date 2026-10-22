@@ -25,6 +25,14 @@ title = "Open mailbox"
 contexts = ["pane"]
 command = ["node", "src/open.mjs"]
 
+# The install action: backs up, then writes the hooks, the `mailbox` PATH link and the Codex and agy allow rules.
+# Running it again changes nothing.
+[[actions]]
+id = "setup"
+title = "Set up mailbox"
+contexts = ["workspace", "pane"]
+command = ["node", "src/setup.mjs", "install"]
+
 [[panes]]
 id = "screen"
 title = "Mailbox"

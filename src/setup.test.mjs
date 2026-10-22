@@ -41,7 +41,7 @@ test('228/AC-1 install puts mailbox on the PATH of a new shell', { skip: !posix 
   const r = run(home, 'install');
   assert.equal(r.status, 0, r.stderr);
   const link = path.join(home, '.local', 'bin', 'mailbox');
-  assert.equal(fs.realpathSync(link), path.join(here, 'mailbox.mjs'));
+  assert.equal(fs.realpathSync(link), path.join(home, '.herdr-mailbox', 'run.mjs'));
   assert.match(fs.readFileSync(path.join(home, '.zshrc'), 'utf8'), /\.local\/bin/);
   // A new shell reads the rc file, then finds the command.
   const sh = spawnSync('zsh', ['-c', `source ${home}/.zshrc; command -v mailbox`],
@@ -128,4 +128,73 @@ test('228/AC-5 regression: settings.json comes back byte for byte whatever its f
   assert.equal(run(home, 'install').status, 0);
   assert.equal(run(home, 'uninstall').status, 0);
   assert.equal(fs.readFileSync(file, 'utf8'), original);
+});
+
+// 249 install action. The stable entry is what keeps hooks and the PATH link working after a plugin update.
+const stableTest = home => path.join(home, '.herdr-mailbox');
+
+test('249/AC-1 AC-2 the manifest declares the action, and install adds the agy rule once with a backup', () => {
+  const toml = fs.readFileSync(path.join(here, '..', 'herdr-plugin.toml'), 'utf8');
+  assert.match(toml, /\[\[actions\]\]\s*id = "setup"[\s\S]*?command = \["node", "src\/setup\.mjs", "install"\]/);
+  const home = newHome();
+  const agy = path.join(home, '.gemini', 'antigravity-cli', 'settings.json');
+  fs.mkdirSync(path.dirname(agy), { recursive: true });
+  fs.writeFileSync(agy, JSON.stringify({ model: 'm', permissions: { allow: ['command(ls)'], deny: ['command(sudo)'] } }, null, 2));
+  assert.equal(run(home, 'install').status, 0);
+  assert.equal(run(home, 'install').status, 0);
+  const s = JSON.parse(fs.readFileSync(agy, 'utf8'));
+  assert.deepEqual(s.permissions.allow, ['command(ls)', 'command(mailbox)']);
+  assert.deepEqual(s.permissions.deny, ['command(sudo)']);
+  assert.equal(fs.readdirSync(path.dirname(agy)).filter(f => f.startsWith('settings.json.bak-')).length, 1);
+  assert.equal(run(home, 'uninstall').status, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(agy, 'utf8')).permissions.allow, ['command(ls)']);
+});
+
+test('249/AC-3 hooks follow the pointer, and the plugin re-points it from its own folder after an update', () => {
+  const home = newHome();
+  assert.equal(run(home, 'install').status, 0);
+  const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
+  assert.ok(commands(settings).every(c => c.includes(stableTest(home))), 'hooks point into the stable folder');
+  // Two fake plugin folders stand for the old and the new install; the old one is still on disk.
+  const fake = name => {
+    const dir = path.join(home, name, 'src');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'mailbox.mjs'), `console.log('${name}');\n`);
+    fs.writeFileSync(path.join(dir, 'session-start.mjs'), `console.log('${name}');\n`);
+    return path.join(home, name);
+  };
+  const [oldRoot, newRoot] = [fake('old'), fake('new')];
+  const hook = () => spawnSync(process.execPath, [path.join(stableTest(home), 'run.mjs'), '--hook', 'session-start.mjs'], { encoding: 'utf8' }).stdout.trim();
+  fs.writeFileSync(path.join(stableTest(home), 'root'), oldRoot);
+  assert.equal(hook(), 'old');
+  fs.writeFileSync(path.join(stableTest(home), 'root'), newRoot);
+  assert.equal(hook(), 'new');
+  // The real plugin's startup/focus code corrects a pointer left on an old folder.
+  fs.writeFileSync(path.join(stableTest(home), 'root'), oldRoot);
+  spawnSync(process.execPath, ['--input-type=module', '-e', `import('${path.join(here, 'stable.mjs')}').then(m => m.refreshPointer())`], { env: { ...process.env, HOME: home, USERPROFILE: home } });
+  assert.equal(fs.readFileSync(path.join(stableTest(home), 'root'), 'utf8').trim(), path.resolve(here, '..'));
+});
+
+test('249/AC-4 the README install section lists the plugin install, the action and the three integrations', () => {
+  const readme = fs.readFileSync(path.join(here, '..', 'README.md'), 'utf8');
+  const install = readme.slice(readme.indexOf('## Install'), readme.indexOf('## Sending a letter'));
+  for (const text of ['herdr plugin install navishachiku/herdr-mailbox', 'herdr plugin action invoke setup --plugin herdr-mailbox',
+    'herdr integration install claude', 'herdr integration install codex', 'herdr integration install antigravity-cli'])
+    assert.ok(install.includes(text), text);
+});
+
+test('249/AC-3 regression: a home set up by the old install is switched to the stable hooks without doubling them', () => {
+  const home = newHome();
+  const file = path.join(home, '.claude', 'settings.json');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const olds = ['session-start', 'prompt-submit', 'send-guard'].map(n => `node "/old/plugin/src/${n}.mjs"`);
+  fs.writeFileSync(file, JSON.stringify({ hooks: {
+    SessionStart: [{ matcher: 'startup|resume|clear|compact', hooks: [{ type: 'command', command: olds[0], timeout: 10 }] }],
+    UserPromptSubmit: [{ hooks: [{ type: 'command', command: olds[1], timeout: 10 }] }],
+    PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: olds[2], timeout: 10 }] }] } }));
+  fs.writeFileSync(path.join(home, '.herdr-mailbox-setup.json'), JSON.stringify({ createdFiles: [], createdDirs: [], added: { hooks: olds } }));
+  assert.equal(run(home, 'install').status, 0);
+  const cmds = commands(JSON.parse(fs.readFileSync(file, 'utf8')));
+  assert.equal(cmds.length, 3);
+  assert.ok(cmds.every(c => c.includes('.herdr-mailbox') && c.includes('--hook')));
 });

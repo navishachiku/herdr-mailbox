@@ -12,11 +12,13 @@ Take `plugin_root` of the entry whose `plugin_id` is `herdr-mailbox`. On Windows
 
 ## 2. Run the setup script
 
-One script puts `mailbox` on the PATH, merges the Claude Code hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`) and, only if Codex is installed, adds the Codex rule. It backs up each existing file to `<file>.bak-<date>` before changing it, keeps every hook that is already there, and does nothing twice when rerun.
+This is what the plugin's `setup` action runs. One script puts `mailbox` on the PATH, merges the Claude Code hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`) and, only if Codex is installed, adds the Codex rule. It backs up each existing file to `<file>.bak-<date>` before changing it, keeps every hook that is already there, and does nothing twice when rerun.
 
 ```sh
 node "<plugin dir>/src/setup.mjs" install
 ```
+
+Hooks and the `mailbox` command go through `~/.herdr-mailbox/run.mjs`, so they keep working after a plugin update.
 
 Check: in a new shell, `mailbox` prints its usage. To undo everything the script added, run `node "<plugin dir>/src/setup.mjs" uninstall`.
 
