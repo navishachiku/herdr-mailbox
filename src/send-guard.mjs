@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // PreToolUse hook (matcher Bash): sends between agents go through the mailbox instead of typing into the receiver.
-//   - `herdr agent prompt <target> <text>` (no --wait) and herdr-holdback's `send.mjs --to <target> <text>` to an
-//     agent pane are rewritten to `mailbox send --to <target> --type note <text>`; the daemon decides between
+//   - `herdr agent prompt <target> <text>` (no --wait) to an
+//     agent pane is rewritten to `mailbox send --to <target> --type note <text>`; the daemon decides between
 //     the mailbox and a direct send.
 //   - A target without a mailbox is never rewritten (with or without --wait): only the input box is checked,
 //     and typed or unreadable text blocks (exit 2). A target that has a mailbox is rewritten, --wait included.
 //   - Slash commands, sends to the sender's own pane and non-agent panes pass untouched.
 // Short-term limit (rewrite correctness): a call is rewritten only in the plain form
-//   herdr agent prompt <target> <one literal argument> [--wait]   (or holdback's send.mjs --to <target> <text>)
+//   herdr agent prompt <target> <one literal argument> [--wait]
 // with no `$` or backtick in it and nothing else in the command (no redirect, pipe, &&, ;). Anything else sent to
 // an agent that has a mailbox is blocked with the mailbox command to use instead,
 // because rewriting would change what the shell does with expansions and redirects.
@@ -141,7 +141,6 @@ function tokenize(command) {
 }
 
 const isHerdr = (tok) => /^herdr(?:\.exe)?$/i.test(tok.split(/[\\/]/).pop());
-const isHoldbackSend = (tok) => /(?:^|[\\/])herdr-holdback[\\/]src[\\/]send\.mjs$/.test(tok);
 
 // Delivery calls found in one segment: { target, text, wait, from, to } where from/to are the character
 // range of the whole call in the command (so only that call is rewritten).
@@ -171,16 +170,6 @@ function actionsIn(tokens, single) {
       if (pos.length >= 2) {
         const plain = single && i === 0 && tokens.length - (wait ? 1 : 0) - (timeout === null ? 0 : tokens.some((t) => t.startsWith('--timeout=')) ? 1 : 2) === 5 && !tokens.substitutions.some(Boolean) && literal(tokens[pos[0]], tokens[pos[1]]);
         out.push({ target: tokens[pos[0]], text: tokens[pos[1]], wait, timeout, plain, range: range(i) });
-      }
-    } else if (isHoldbackSend(tokens[i])) {
-      const to = tokens.indexOf('--to', i + 1);
-      const target = to >= 0 ? tokens[to + 1] : undefined;
-      const text = tokens.slice(i + 1).find((t, n) => !t.startsWith('--') && i + 1 + n !== to + 1);
-      const at = text === undefined ? -1 : tokens.indexOf(text, i + 1);
-      if (target && at >= 0) {
-        const start = tokens[i - 1] === 'node' ? i - 1 : i;
-        const plain = single && start === 0 && tokens.length - start === (start === i ? 4 : 5) && !tokens.substitutions.some(Boolean) && literal(target, text);
-        out.push({ target, text, wait: false, plain, range: range(start) });
       }
     }
   }

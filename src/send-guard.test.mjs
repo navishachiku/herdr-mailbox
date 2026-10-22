@@ -62,7 +62,6 @@ test('201/AC-11 201/AC-12 PreToolUse rewrites mailbox and unbound sends and prot
     ['herdr agent prompt w1:p1 "report with spaces"', { agent_id: 'child-agent', agent_type: 'general-purpose' }],
     ['herdr agent prompt w1:p1 "report with spaces" --wait', {}],
     ['herdr agent prompt w1:p1 "report with spaces" --wait --timeout 600000', {}],
-    ['node /tmp/herdr-holdback/src/send.mjs --to w1:p1 "report with spaces"', {}],
   ]) {
     const result = hook(command, context);
     assert.equal(result.status, 0, result.stderr);
@@ -76,13 +75,16 @@ test('201/AC-11 201/AC-12 PreToolUse rewrites mailbox and unbound sends and prot
     assert.equal(/--timeout 600000/.test(rewritten), command.includes('--timeout 600000'), 'the wait limit is carried over');
     assert.doesNotMatch(rewritten, /💬/, 'the guard no longer signs: the mailbox does');
     assert.ok(rewritten.includes('report with spaces'));
-    assert.doesNotMatch(rewritten, /herdr agent prompt|herdr-holdback\/src\/send\.mjs/);
+    assert.doesNotMatch(rewritten, /herdr agent prompt/);
   }
+  // A command that is not a delivery call is left as written.
+  const other = hook('node /tmp/other-tool/send.mjs --to w1:p1 "report with spaces"');
+  assert.equal(other.status, 0, other.stderr);
+  assert.equal(other.stdout.trim(), '', 'an unrecognized send command is not rewritten');
   const longText = 'A'.repeat(750);
   for (const command of [
     `herdr agent prompt w1:p3 "${longText}"`,
     `herdr agent prompt w1:p3 "${longText}" --wait`,
-    `node /tmp/herdr-holdback/src/send.mjs --to w1:p3 "${longText}"`,
   ]) {
     for (const screen of ['────────────\n❯ draft in progress\n────────────', 'unrecognized screen']) {
       world.screens['w1:p3'] = screen;
