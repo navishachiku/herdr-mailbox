@@ -803,3 +803,19 @@ test('256/AC-1 a send herdr never started (text too large to pass as an argument
   assert.equal(res.error, 'not_sent');
   assert.equal(r.batches().length, 0);
 });
+
+test('263/AC-1 the words "↑/↓ to select" inside a Claude conversation do not hold delivery when the input box is empty', () => {
+  const talk = `● The guard once matched "Enter to select · ↑/↓ to select" anywhere on screen.\n${emptyScreen}`;
+  assert.equal(classify(talk, 'claude'), 'empty');
+});
+
+test('263/AC-2 regression guard: a Claude selection list with no input box stays unknown', () => {
+  const list = [' Do you want to proceed?', ' ❯ 1. Yes', '   2. No', ' Esc to cancel · Tab to amend'].join('\n');
+  assert.equal(classify(list, 'claude'), 'unknown');
+});
+
+test('263/AC-2 the background-agent list holding the arrow keys stays unknown although the input box is still drawn', () => {
+  const rule = '─'.repeat(12);
+  const focused = ['● done', rule, '❯ ', rule, '  Haiku (Medium) │ Context 6%', '  ↑/↓ to select', '❯ ⏺ main'].join('\n');
+  assert.equal(classify(focused, 'claude'), 'unknown');
+});

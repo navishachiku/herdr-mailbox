@@ -84,13 +84,16 @@ export function pastedLines(screen) {
 }
 
 // Three-way reading for delivery: 'empty' is the only state that allows typing into the pane. A screen that is
-// blank, has no input box, or shows a list that takes the arrow keys (Claude's background agents, agy's
-// trust and approval prompts) is 'unknown'.
+// blank, has no input box, or shows a list that takes the arrow keys is 'unknown'. Claude's lists replace the
+// input box (checked on Claude Code 2.1.309), so its missing box is the signal; agy keeps its box under a
+// list and is told apart by its hint line.
 export function classify(screen, agent = 'claude') {
   if (typeof screen !== 'string' || !screen.trim()) return 'unknown';
   const plain = screen.split(/\r?\n/).map((l) => l.replace(ANSI_RE, ''));
-  const menu = agent === 'agy' ? '↑/↓ Navigate' : '↑/↓ to select';
-  if (plain.some((l) => l.includes(menu))) return 'unknown';
-  if (findInputBox(plain, agent) < 0) return 'unknown';
+  if (agent === 'agy' && plain.some((l) => l.includes('↑/↓ Navigate'))) return 'unknown';
+  const box = findInputBox(plain, agent);
+  if (box < 0) return 'unknown';
+  // Claude's background-agent list keeps the box drawn while it takes the arrow keys; its hint line sits below the box.
+  if (agent === 'claude' && plain.slice(box + 1).some((l) => /^\s*↑\/↓ to select/.test(l))) return 'unknown';
   return typedText(screen, agent) ? 'typing' : 'empty';
 }
