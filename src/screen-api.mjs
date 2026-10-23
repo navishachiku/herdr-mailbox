@@ -327,8 +327,22 @@ async function close(req) {
   return { ok: true, mailbox: box.id };
 }
 
+// A decision or discussion that arrives while the mailbox screen is not open raises a herdr notification with the
+// question; with the screen open the card is already in front of the user, so nothing is raised.
+const SUMMARY_CHARS = 80;
+async function notifyNewQuestion({ letter }) {
+  if (letter.type === 'note') return;
+  const box = api.state.mailboxes[letter.mailbox];
+  const panes = await panesOrNull();
+  if (!box || !panes || screenState(box, panes) === 'alive') return;
+  const text = String(letter.content.question ?? '').replace(/\s+/g, ' ').trim();
+  const summary = text.length > SUMMARY_CHARS ? `${text.slice(0, SUMMARY_CHARS)}…` : text;
+  await herdr.notify('Mailbox', `${letter.serial}: ${summary}`).catch(() => {});
+}
+
 export default function registerScreen(a) {
   api = a;
+  api.on('letter', l => { notifyNewQuestion(l).catch(() => {}); });
   api.op('view', view);
   api.op('bulk', bulk, { mutates: true });
   api.op('prefs-get', prefsGet);

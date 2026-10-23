@@ -2669,3 +2669,34 @@ test('232/AC-3 an unknown language is not saved, and without a saved choice the 
     assert.equal(activeLocale(undefined, 'de'), 'de');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+const notifications = w => w.log().filter(e => e.argv[0] === 'notification' && e.argv[1] === 'show');
+
+test('266/AC-1 a decision or discussion sent while the mailbox screen is closed raises a herdr notification with the question', async () => {
+  const w = world();
+  try {
+    await ready(w);
+    assert.equal((await decision(w, { question: 'Install the plugin now?' })).ok, true);
+    assert.equal((await discussion(w, { question: 'Split the readme?' })).ok, true);
+    await until(() => notifications(w).length === 2);
+    const bodies = notifications(w).map(e => e.argv.join(' '));
+    assert.ok(bodies[0].includes('Install the plugin now?'));
+    assert.ok(bodies[1].includes('Split the readme?'));
+    assert.equal((await send(w, { type: 'note', text: 'fyi' })).ok, true);
+    await sleep(200);
+    assert.equal(notifications(w).length, 2, 'a note raises no notification');
+  } finally { w.cleanup(); }
+});
+
+test('266/AC-2 a decision or discussion sent while the mailbox screen is open raises no notification', async () => {
+  const w = world();
+  try {
+    await ready(w);
+    assert.equal(w.cli('open').code, 0);
+    await assertScreenOpen(w, RECV, 48);
+    assert.equal((await decision(w, { question: 'Install the plugin now?' })).ok, true);
+    assert.equal((await discussion(w, { question: 'Split the readme?' })).ok, true);
+    await sleep(300);
+    assert.equal(notifications(w).length, 0);
+  } finally { w.cleanup(); }
+});
