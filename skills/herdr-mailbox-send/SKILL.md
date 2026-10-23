@@ -21,7 +21,7 @@ Run `mailbox`. If it prints a usage list, it is found. If the shell does not fin
 | You want to | `--type` | Required |
 | --- | --- | --- |
 | Report, hand off or inform; no answer needed | `note` | one line of text |
-| Ask for a pick among 2 to 4 options | `decision` | `--question`, 2 to 4 `--option`, `--recommend <letter>` (always give a recommendation) |
+| Ask for a pick among 2 to 4 options | `decision` | `--question`, 2 to 4 `--option`, `--recommend <letter>` (optional: give it when you have checked, leave it off when you have not) |
 | Ask for an opinion with no fixed options | `discussion` | `--question`, optionally `--idea` |
 
 ```sh
@@ -66,5 +66,5 @@ For a note, add `--wait [--timeout <ms>]` to block until the letter is delivered
 ## Gotchas
 
 - Refer to a letter by its `uid` only. Short serials such as `Q003` that the receiver sees on screen are refused by every command.
-- A decision letter without a recommendation is rejected; do not replace it with "up to you".
+- A decision letter may go without a recommendation; do not fake one, and do not replace it with "up to you".
 - The sender defaults to your own pane (`HERDR_PANE_ID`); `--from` is rarely needed. Your signature is added by the program, so do not write one in the letter.

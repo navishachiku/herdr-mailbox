@@ -61,7 +61,7 @@ The rule matches the command prefix, so `send`, `status`, `edit` and `withdraw` 
 
 ## Sending a letter
 
-- **Three kinds of letter** — a note, a decision question (2 to 4 options, a recommended one is required) and a discussion question.
+- **Three kinds of letter** — a note, a decision question (2 to 4 options, a recommended one is optional) and a discussion question.
 - **No double sends** — an identical letter within 30 seconds is not created again, and neither is an identical unanswered decision question from the same sender.
 - **Change your mind, until you answer** — edit, withdraw or supersede a question; once you have answered, the answer is locked in.
 
@@ -98,8 +98,8 @@ Messages are signed `[workspace/]position/role 💬 ` from the sender pane's lab
 `prefix+shift+m` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `prefix+shift+m` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. While the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised. The text follows the system language (English or Traditional Chinese).
 
 - **Messages** — up to four queued notes, why delivery is paused (typing, unreadable input box, receiver working or unverified), and **Send now**. A batch whose arrival could not be confirmed shows **Mark delivered** and **Resend (may duplicate)**.
-- **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked, and a note field. Click an option, or use **Accept** or **Ask**. A note alone, with no option, is an answer too. **Void** sends a question back at once as "no answer needed".
-- **Batch answers** — **Accept all** and **Ask all** apply to the decision questions still unanswered, and **Reset all** clears the drafts. **Void all** does the same for every unsent question, drafts included, after you confirm how many.
+- **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked (a card without a recommendation has no mark and no **Accept**), and a note field. Click an option, or use **Accept** or **Ask**. A note alone, with no option, is an answer too. **Void** sends a question back at once as "no answer needed".
+- **Batch answers** — **Accept all** applies to the unanswered decision questions that have a recommendation, **Ask all** to the unanswered decision questions, and **Reset all** clears the drafts. **Void all** does the same for every unsent question, drafts included, after you confirm how many.
 - **Send** — sends your answers back to the agent as a single batch. It is greyed out, with the reason, while the agent's input box has text or cannot be read, so an answer never lands on top of a draft.
 - **Attachments** — a letter with an attachment shows a link; clicking it opens the file in the system's default program (an image in the image viewer, a text file in its default app). A web address in a question opens in the default browser. These open on the machine where herdr runs.
 

@@ -82,7 +82,7 @@ function bulk(req) {
   for (const uid of req.uids ?? []) {
     const l = api.state.letters[uid];
     if (!l || l.mailbox !== box.id || l.status !== 'pending' || answered(l)) continue;
-    if (l.type === 'discussion' && choice === 'P') continue;
+    if (choice === 'P' && !(l.type === 'decision' && l.content.recommend)) continue;
     l.draft = { choice, text: note };
     l.updatedAt = api.now();
     applied.push(uid);

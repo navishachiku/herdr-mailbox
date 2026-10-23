@@ -61,14 +61,22 @@ test('pending list holds only this sender in this mailbox', () => {
   assert.deepEqual(mine.pending.map(p => p.uid), [mine.uid]);
 });
 
-test('decision needs 2 to 4 options and a recommendation', () => {
+test('decision needs 2 to 4 options; a recommendation is optional but must be a valid letter when given', () => {
   const { core } = fresh();
   const one = core.handle(decision({ options: ['a'] }));
   const five = core.handle(decision({ options: ['a', 'b', 'c', 'd', 'e'] }));
-  const none = core.handle(decision({ recommend: undefined }));
-  assert.deepEqual([one.error, five.error, none.error], ['bad_options', 'bad_options', 'missing_recommend']);
-  assert.match(none.message, /--recommend/);
+  const bad = core.handle(decision({ recommend: 'C' }));
+  assert.deepEqual([one.error, five.error, bad.error], ['bad_options', 'bad_options', 'bad_recommend']);
   assert.equal(core.handle(decision({ options: ['a', 'b', 'c', 'd'], recommend: 'D' })).ok, true);
+});
+
+test('259/AC-1 a decision question without a recommendation is accepted, stored without one, and refuses the take-the-recommendation choice', () => {
+  const { core } = fresh();
+  const sent = core.handle(decision({ recommend: undefined }));
+  assert.equal(sent.ok, true);
+  assert.equal('recommend' in core.state.letters[sent.uid].content, false);
+  assert.equal(core.handle({ op: 'answer', uid: sent.uid, version: 1, choice: 'P' }).error, 'bad_choice');
+  assert.equal(core.handle({ op: 'answer', uid: sent.uid, version: 1, choice: 'B' }).ok, true);
 });
 
 test('202/AC-31 sending strips only an option own leading letter and preserves another option letter', () => {

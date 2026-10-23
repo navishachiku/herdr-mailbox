@@ -156,7 +156,7 @@ export function forwardQuestion({ letterType, content, from, label, attachments 
   if (letterType === 'decision') {
     lines.push(`${t.options}${t.colon}`);
     content.options.forEach((o, i) => lines.push(t.option('ABCD'[i], sanitize(o))));
-    lines.push(`${t.recommend}${t.colon}${t.picked(content.recommend, sanitize(content.options['ABCD'.indexOf(content.recommend)]))}`);
+    if (content.recommend) lines.push(`${t.recommend}${t.colon}${t.picked(content.recommend, sanitize(content.options['ABCD'.indexOf(content.recommend)]))}`);
   } else if (content.idea) {
     lines.push(`${t.idea}${t.colon}${sanitize(content.idea)}`);
   }

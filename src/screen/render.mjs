@@ -264,7 +264,7 @@ function card(q, ctx) {
   }
 
   blank();
-  const actions = q.type === 'decision'
+  const actions = q.type === 'decision' && q.content.recommend
     ? [button(t.recommend, { type: 'recommend', ...base, text: draftText(q) }), button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton]
     : [button(t.explain, { type: 'explain', ...base, text: draftText(q) }), voidButton];
   add(actions, [chip]);
@@ -448,7 +448,7 @@ function bottomRows(model, ctx) {
   const ready = pending.filter(q => isAnswered(q) && !q.draft.reconfirm);
   // Questions with a note typed but not saved yet are left out, so the batch note never replaces one.
   const free = open.filter(q => !drafts[q.uid]?.trim());
-  const recs = free.filter(q => q.type === 'decision');
+  const recs = free.filter(q => q.type === 'decision' && q.content.recommend);
   const note = drafts[BATCH]?.trim() ? drafts[BATCH] : '';
   const withNote = (type, list) => ({ type, mailbox, uids: list.map(q => q.uid), text: note });
   const answeredNow = pending.filter(isAnswered);

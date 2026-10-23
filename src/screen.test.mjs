@@ -2713,3 +2713,40 @@ test('262/AC-5 an older background program that sends no path is reported, and n
   assert.match(res.error, /older than this screen/);
   assert.deepEqual(opened, [], 'open is never called with an undefined target');
 });
+
+test('259/AC-3 a decision card without a recommendation shows no star, no accept button and no "no recommendation" mark', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const model = interactionModel();
+  model.notes = [];
+  model.batches = [];
+  const content = { question: 'Choose a plan?', options: ['alpha', 'beta'] };
+  model.questions = [{ ...model.questions[0], content }];
+  const options = { cols: 48, rows: 100, locale: 'en', now: 0 };
+  for (const cardMode of ['detailed', 'compact']) {
+    const ui = render(model, { ...options, cardMode });
+    assert.equal(ui.hits.some(h => h.action.uid === 'Q1' && h.action.type === 'recommend'), false, `${cardMode}: no accept button`);
+    assert.ok(ui.hits.some(h => h.action.uid === 'Q1' && h.action.type === 'explain'), `${cardMode}: explain stays`);
+    const text = (await Promise.all(ui.styled.map(styledCells))).map(r => r.map(c => c.text).join('')).join('\n');
+    assert.ok(!text.includes('★'), `${cardMode}: no star`);
+    assert.ok(!/no recommend|無推薦|沒有推薦/i.test(text), `${cardMode}: no mark`);
+  }
+  model.questions = [{ ...model.questions[0], content: { ...content, recommend: 'A' } }];
+  const withRec = render(model, { ...options, cardMode: 'detailed' });
+  assert.ok(withRec.hits.some(h => h.action.uid === 'Q1' && h.action.type === 'recommend'), 'a recommended card keeps its accept button');
+});
+
+test('259/AC-4 Recommend-all skips a decision question without a recommendation and applies to the rest', async () => {
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const plain = await decision(w, { question: 'No recommendation?', recommend: undefined });
+    const rec = await decision(w, { question: 'With recommendation?', recommend: 'B' });
+    const ui = await screen(w, mb);
+    assert.deepEqual(hit(ui, 'bulk-recommend').uids, [rec.uid], 'the button targets only recommended cards');
+    const r = await w.op('bulk', { mailbox: mb, action: 'recommend', uids: [plain.uid, rec.uid] });
+    assert.equal(r.ok, true);
+    const v = await w.op('view', { mailbox: mb });
+    assert.equal(find(v, plain.uid).draft, null);
+    assert.equal(find(v, rec.uid).draft.choice, 'P');
+  } finally { w.cleanup(); }
+});

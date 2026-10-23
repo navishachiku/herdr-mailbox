@@ -125,9 +125,9 @@ export class Mailboxes {
       const long = options.findIndex(o => len(o) > LIMITS.option);
       if (long >= 0) return tooLong(`option ${LETTERS[long]}`, LIMITS.option);
       const recommend = String(f.recommend ?? '').toUpperCase();
-      if (!recommend) return fail('missing_recommend', `a decision question needs --recommend <${LETTERS.slice(0, options.length).split('').join('|')}>`);
-      if (!LETTERS.slice(0, options.length).includes(recommend) || recommend.length !== 1) return fail('bad_recommend', `--recommend must be one of ${LETTERS.slice(0, options.length).split('').join(', ')}`);
-      Object.assign(content, { options, recommend });
+      // The recommendation is optional; a card without one has no `recommend` key at all.
+      if (recommend && (!LETTERS.slice(0, options.length).includes(recommend) || recommend.length !== 1)) return fail('bad_recommend', `--recommend must be one of ${LETTERS.slice(0, options.length).split('').join(', ')}`);
+      Object.assign(content, recommend ? { options, recommend } : { options });
     }
     if (type === 'discussion' && f.idea) {
       if (len(f.idea) > LIMITS.idea) return tooLong('idea', LIMITS.idea);
@@ -321,7 +321,7 @@ export class Mailboxes {
     const choice = req.choice ? String(req.choice).toUpperCase() : null;
     const text = String(req.text ?? '');
     // X voids the question: the user says it no longer needs an answer.
-    const valid = l.type === 'decision' ? [...LETTERS.slice(0, l.content.options.length), 'P', 'E', 'X'] : ['E', 'X'];
+    const valid = l.type === 'decision' ? [...LETTERS.slice(0, l.content.options.length), ...(l.content.recommend ? ['P'] : []), 'E', 'X'] : ['E', 'X'];
     if (choice && !valid.includes(choice)) return fail('bad_choice', `choice must be one of ${valid.join(', ')}`);
     l.draft = choice || text.trim() ? { choice, text } : null;
     l.updatedAt = this.now();

@@ -11,7 +11,7 @@ export const options = {
 };
 
 export const usage = `  mailbox send --to <address|MB-id> --type note <text>
-  mailbox send --to <address|MB-id> --type decision --question <q> --option <o> --option <o> [--option <o>...] --recommend <letter>
+  mailbox send --to <address|MB-id> --type decision --question <q> --option <o> --option <o> [--option <o>...] [--recommend <letter>]
   mailbox send --to <address|MB-id> --type discussion --question <q> [--idea <text>]
     optional: --priority high|medium|low  --tag <t>  --attach <file> (up to 5, repeat the flag)  --supersedes <uid>
     --wait [--timeout <ms>]  after the receipt, block until the receiver has taken the letter and finished its turn (exit 3: not delivered in 120s, letter still arrives; exit 4: receiver outlasted --timeout; never resend)`;
