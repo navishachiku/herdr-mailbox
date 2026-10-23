@@ -317,7 +317,9 @@ test('201/AC-7 direct notes include the attachment snapshot path', async t => {
     const file = path.join(dir, entry.name);
     return entry.isDirectory() ? files(file) : entry.isFile() ? [file] : [];
   });
-  const snapshots = files(r.dir).filter(file => fs.readFileSync(file, 'utf8') === contents);
+  // The daemon rewrites state.json through a temp file that can vanish between listing and reading.
+  const readable = file => { try { return fs.readFileSync(file, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
+  const snapshots = files(r.dir).filter(file => readable(file) === contents);
   assert.equal(snapshots.length, 1, 'direct delivery must preserve one readable attachment snapshot');
   const text = r.prompts('w1:p3')[0].argv[3];
   assert.ok(text.includes('See the attached report'));

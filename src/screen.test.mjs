@@ -150,7 +150,12 @@ function answerLine(ui, uid) {
 
 async function assertScreenOpen(w, owner, width) {
   // The start command is sent in the background once the new pane shows a prompt.
-  await until(() => w.calls('"run"').length > 0);
+  // An earlier open in the same test may already have logged a run, so wait for the run that follows this owner's split.
+  await until(() => {
+    const argvs = w.log().map(entry => entry.argv);
+    const at = argvs.findIndex(args => args[0] === 'pane' && args[1] === 'split' && args[2] === owner);
+    return at >= 0 && argvs.some((args, i) => i > at && args[0] === 'pane' && args[1] === 'run');
+  });
   const calls = w.log().map(entry => entry.argv);
   const layout = calls.findIndex(args => args[0] === 'pane' && args[1] === 'layout' && args.includes(owner));
   const split = calls.findIndex((args, i) => i > layout && args[0] === 'pane' && args[1] === 'split' && args[2] === owner);
