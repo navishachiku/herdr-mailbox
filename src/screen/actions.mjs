@@ -82,6 +82,8 @@ async function openExternal(action, env) {
   if (action.type === 'attachment') {
     const res = await env.call({ op: 'attachment', uid: action.uid, index: action.index });
     if (res.ok === false) return { ok: false, error: res.error };
+    // A background program started before this screen's version answers without a path.
+    if (typeof res.path !== 'string') return { ok: false, error: 'The mailbox background program is older than this screen; restart it to open attachments' };
     target = res.path;
   } else if (!isWebUrl(target ?? '')) return { ok: false, error: 'bad_url' };
   if (!env.open) return { ok: false, error: 'cannot_open' };

@@ -2700,3 +2700,11 @@ test('266/AC-2 a decision or discussion sent while the mailbox screen is open ra
     assert.equal(notifications(w).length, 0);
   } finally { w.cleanup(); }
 });
+
+test('262/AC-5 an older background program that sends no path is reported, and nothing is opened', async () => {
+  const opened = [];
+  const res = await perform({ type: 'attachment', uid: 'u', index: 0 }, { call: async () => ({ ok: true, name: 'a.md', text: 'hi' }), open: async t => opened.push(t), generation: 1 });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /older than this screen/);
+  assert.deepEqual(opened, [], 'open is never called with an undefined target');
+});
