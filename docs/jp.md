@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-長めの内容はファイルにして手紙に添付できます（`--attach <file>`）。カードにリンクが出て、クリックするとメールボックス画面の中でそのまま開きます。
-
-![テストレポートを添付した判断カード：リンクをクリックすると、メールボックス画面内のボックスでレポートが開く](./media/attachment.png)
+長めの内容はファイルにして手紙に添付できます（`--attach <file>`）。カードにリンクが出て、クリックするとシステム既定のプログラムで開きます（画像は画像ビューア、テキストファイルは既定のアプリ）。質問の中のウェブアドレスは既定のブラウザで開きます。
 
 `--to` には pane id、agent 名、メールボックス id を指定できます。leader の pane で `prefix+shift+m` を押すと、その隣にメールボックス画面が開きます。相談の質問、手紙の編集と取り下げ、画面上の各ボタンの使い方は[詳しいガイド](./guide.md)にあります。
 
@@ -80,7 +78,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/daemon.mjs`, `src/core.mjs` | daemon と手紙のルール：受領通知、重複排除、編集と取り下げ、文字数制限。 |
 | `src/identity.mjs` | メールボックスと受け取り手の紐づけ、定期的な突き合わせ、引き受け。 |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | バッチ配信、入力欄のチェック、到着確認、バッチの本文。 |
-| `src/screen/` | メールボックス画面。設定と添付も画面内に表示します。 |
+| `src/screen/` | メールボックス画面。設定は画面内に表示し、添付とリンクはシステム既定のプログラムに渡します。 |
 | `src/open.mjs`, `src/on-focus.mjs` | `prefix+shift+m` の動作と、Herdr 再起動後の画面の再表示。 |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Claude Code の hooks。 |
 

@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-긴 내용은 파일로 편지에 첨부할 수 있습니다(`--attach <file>`). 카드에 링크가 나타나고, 누르면 우편함 화면 안에서 바로 열립니다.
-
-![테스트 보고서가 첨부된 결정 카드: 링크를 누르면 우편함 화면 안의 상자에서 보고서가 열림](./media/attachment.png)
+긴 내용은 파일로 편지에 첨부할 수 있습니다(`--attach <file>`). 카드에 링크가 나타나고, 누르면 시스템 기본 프로그램으로 열립니다(이미지는 이미지 뷰어, 텍스트 파일은 기본 앱). 질문 속 웹 주소는 기본 브라우저로 열립니다.
 
 `--to`에는 pane id, agent 이름, 우편함 id를 쓸 수 있습니다. leader의 pane에서 `prefix+shift+m`을 누르면 그 옆에 우편함 화면이 열립니다. 토론 질문, 편지 수정과 철회, 화면의 각 버튼 사용법은 [전체 가이드](./guide.md)에 있습니다.
 
@@ -80,7 +78,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/daemon.mjs`, `src/core.mjs` | 데몬과 편지 규칙: 수신 확인, 중복 제거, 수정과 철회, 길이 제한. |
 | `src/identity.mjs` | 우편함을 수신자에 연결, 주기적 대조, 우편함 인수. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | 묶음 전달, 입력창 확인, 도착 확인, 묶음 본문. |
-| `src/screen/` | 우편함 화면. 설정과 첨부도 화면 안에 표시됩니다. |
+| `src/screen/` | 우편함 화면. 설정은 화면 안에 표시하고, 첨부와 링크는 시스템 기본 프로그램으로 넘깁니다. |
 | `src/open.mjs`, `src/on-focus.mjs` | `prefix+shift+m` 동작, Herdr 재시작 후 화면 다시 열기. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Claude Code hooks. |
 

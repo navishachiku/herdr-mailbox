@@ -80,9 +80,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Longer material goes with the letter as a file (`--attach <file>`); the card shows a link, and the file opens right inside the mailbox screen.
-
-![A decision card with an attached test report: clicking the link opens the report in a box inside the mailbox screen](docs/media/attachment.png)
+Longer material goes with the letter as a file (`--attach <file>`); the card shows a link, and clicking it opens the file in your system's default program (an image in the image viewer, a text file in its default app). Web addresses in a question open in your default browser.
 
 `--to` takes a pane id, an agent name or a mailbox id. Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it. Discussion questions, editing and withdrawing letters, and every screen button are in [the full guide](docs/guide.md).
 
@@ -109,7 +107,7 @@ A small daemon owns the state file and handles one request at a time. The CLI ta
 | `src/daemon.mjs`, `src/core.mjs` | The daemon and the letter rules: receipts, deduplication, edit and withdraw, limits. |
 | `src/identity.mjs` | Binding a mailbox to a receiver, the reconcile loop, claims. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Batching, the input-box check, confirmation, batch text. |
-| `src/screen/` | The mailbox screen, with settings and attachments shown inside it. |
+| `src/screen/` | The mailbox screen, with settings shown inside it; attachments and links go to the system's default programs. |
 | `src/open.mjs`, `src/on-focus.mjs` | The `prefix+shift+m` action and reopening the screen after a Herdr restart. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
 

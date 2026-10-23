@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Material mais longo vai junto com a carta como arquivo (`--attach <file>`); o cartão mostra um link e o arquivo abre ali mesmo, dentro da tela da caixa de correio.
-
-![Um cartão de decisão com um relatório de testes anexado: ao clicar no link, o relatório abre numa caixa dentro da tela da caixa de correio](./media/attachment.png)
+Material mais longo vai junto com a carta como arquivo (`--attach <file>`); o cartão mostra um link e, ao clicar, o arquivo abre no programa padrão do sistema (uma imagem no visualizador de imagens, um arquivo de texto no aplicativo padrão). Endereços web numa pergunta abrem no navegador padrão.
 
 `--to` aceita um id de pane, um nome de agente ou um id de caixa de correio. Pressione `prefix+shift+m` no pane do leader para abrir a tela da caixa de correio ao lado dele. Perguntas de discussão, como editar e retirar cartas, e cada botão da tela estão no [guia completo](./guide.md).
 
@@ -80,7 +78,7 @@ Um pequeno daemon é dono do arquivo de estado e trata um pedido por vez. A CLI 
 | `src/daemon.mjs`, `src/core.mjs` | O daemon e as regras das cartas: recibos, deduplicação, editar e retirar, limites. |
 | `src/identity.mjs` | Vincular uma caixa de correio a um destinatário, o laço de reconciliação, reivindicações. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Agrupamento em lotes, verificação do campo de texto, confirmação, texto do lote. |
-| `src/screen/` | A tela da caixa de correio, com configurações e anexos exibidos dentro dela. |
+| `src/screen/` | A tela da caixa de correio, com as configurações exibidas dentro dela; anexos e links vão para os programas padrão do sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | A ação `prefix+shift+m` e a reabertura da tela depois de reiniciar o Herdr. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Os hooks do Claude Code. |
 

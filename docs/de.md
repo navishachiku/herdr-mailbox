@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Längere Inhalte hängst du als Datei an den Brief an (`--attach <file>`); die Karte zeigt einen Link, und die Datei öffnet sich direkt im Briefkasten-Bildschirm.
-
-![Eine Entscheidungskarte mit angehängtem Testbericht: Ein Klick auf den Link öffnet den Bericht in einem Fenster im Briefkasten-Bildschirm](./media/attachment.png)
+Längere Inhalte hängst du als Datei an den Brief an (`--attach <file>`); die Karte zeigt einen Link; ein Klick öffnet die Datei im Standardprogramm deines Systems (ein Bild im Bildbetrachter, eine Textdatei in ihrer Standard-App). Webadressen in einer Frage öffnen sich im Standardbrowser.
 
 `--to` akzeptiert eine Pane-ID, einen Agent-Namen oder eine Mailbox-ID. Drücke `prefix+shift+m` im Pane des leaders, um den Briefkasten-Bildschirm daneben zu öffnen. Diskussionsfragen, das Bearbeiten und Zurückziehen von Briefen und jede Schaltfläche des Bildschirms stehen in der [vollständigen Anleitung](./guide.md).
 
@@ -80,7 +78,7 @@ Ein kleiner Daemon besitzt die Zustandsdatei und bearbeitet jeweils eine Anfrage
 | `src/daemon.mjs`, `src/core.mjs` | Der Daemon und die Briefregeln: Quittungen, Deduplizierung, Bearbeiten und Zurückziehen, Limits. |
 | `src/identity.mjs` | Einen Briefkasten an einen Empfänger binden, die Abgleichsschleife, Übernahmen. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Bündelung, Prüfung des Eingabefelds, Bestätigung, Text des Pakets. |
-| `src/screen/` | Der Briefkasten-Bildschirm, mit darin angezeigten Einstellungen und Anhängen. |
+| `src/screen/` | Der Briefkasten-Bildschirm, mit darin angezeigten Einstellungen; Anhänge und Links gehen an die Standardprogramme des Systems. |
 | `src/open.mjs`, `src/on-focus.mjs` | Die Aktion `prefix+shift+m` und das erneute Öffnen des Bildschirms nach einem Herdr-Neustart. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Die Claude-Code-Hooks. |
 

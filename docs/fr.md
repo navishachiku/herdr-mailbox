@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <file>`) ; la carte affiche un lien, et le fichier s'ouvre directement dans l'écran de la boîte aux lettres.
-
-![Une carte de décision avec un rapport de tests joint : un clic sur le lien ouvre le rapport dans un cadre à l'intérieur de l'écran de la boîte](./media/attachment.png)
+Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <file>`) ; la carte affiche un lien, et un clic ouvre le fichier avec le programme par défaut du système (une image dans la visionneuse d'images, un fichier texte dans son application par défaut). Les adresses web d'une question s'ouvrent dans le navigateur par défaut.
 
 `--to` accepte un id de pane, un nom d'agent ou un id de boîte. Appuie sur `prefix+shift+m` dans le pane du leader pour ouvrir l'écran de la boîte à côté. Les questions de discussion, la modification et le retrait des lettres, ainsi que chaque bouton de l'écran, sont décrits dans le [guide complet](./guide.md).
 
@@ -80,7 +78,7 @@ Un petit démon possède le fichier d'état et traite une requête à la fois. L
 | `src/daemon.mjs`, `src/core.mjs` | Le démon et les règles des lettres : accusés de réception, déduplication, modification et retrait, limites. |
 | `src/identity.mjs` | Lier une boîte à un destinataire, la boucle de réconciliation, les prises en charge. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Regroupement en lots, vérification de la zone de saisie, confirmation, texte du lot. |
-| `src/screen/` | L'écran de la boîte, avec les réglages et les pièces jointes affichés à l'intérieur. |
+| `src/screen/` | L'écran de la boîte, avec les réglages affichés à l'intérieur ; les pièces jointes et les liens vont aux programmes par défaut du système. |
 | `src/open.mjs`, `src/on-focus.mjs` | L'action `prefix+shift+m` et la réouverture de l'écran après un redémarrage de Herdr. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Les hooks de Claude Code. |
 

@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`); trên thẻ sẽ có một liên kết, bấm vào là tệp mở ngay trong màn hình hộp thư.
-
-![Thẻ quyết định có kèm báo cáo kiểm thử: bấm vào liên kết, báo cáo mở trong một khung ngay trên màn hình hộp thư](./media/attachment.png)
+Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`); trên thẻ sẽ có một liên kết, bấm vào là tệp mở bằng chương trình mặc định của hệ thống (ảnh mở trong trình xem ảnh, tệp văn bản mở trong ứng dụng mặc định). Địa chỉ web trong câu hỏi mở bằng trình duyệt mặc định.
 
 `--to` nhận pane id, tên agent hoặc id hộp thư. Bấm `prefix+shift+m` trên pane của leader để mở màn hình hộp thư ngay bên cạnh. Câu hỏi thảo luận, cách sửa và thu hồi thư, cùng công dụng của từng nút trên màn hình đều có trong [hướng dẫn đầy đủ](./guide.md).
 
@@ -80,7 +78,7 @@ Một daemon nhỏ giữ tệp trạng thái và xử lý lần lượt từng y
 | `src/daemon.mjs`, `src/core.mjs` | Daemon và các quy tắc về thư: biên nhận, loại trùng, sửa và thu hồi, giới hạn độ dài. |
 | `src/identity.mjs` | Gắn hộp thư với người nhận, vòng đối chiếu định kỳ, nhận quyền sở hữu hộp thư. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Chuyển thư theo lô, kiểm tra ô nhập liệu, xác nhận đã đến, nội dung của lô. |
-| `src/screen/` | Màn hình hộp thư, cài đặt và tệp đính kèm cũng hiển thị ngay trong đó. |
+| `src/screen/` | Màn hình hộp thư, cài đặt hiển thị ngay trong đó; tệp đính kèm và liên kết được chuyển cho các chương trình mặc định của hệ thống. |
 | `src/open.mjs`, `src/on-focus.mjs` | Thao tác `prefix+shift+m` và mở lại màn hình hộp thư sau khi Herdr khởi động lại. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Các hook của Claude Code. |
 

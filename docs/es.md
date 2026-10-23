@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-El material más largo viaja con la carta como archivo (`--attach <file>`); la tarjeta muestra un enlace y el archivo se abre dentro de la propia pantalla del buzón.
-
-![Una tarjeta de decisión con un informe de pruebas adjunto: al hacer clic en el enlace, el informe se abre en un cuadro dentro de la pantalla del buzón](./media/attachment.png)
+El material más largo viaja con la carta como archivo (`--attach <file>`); la tarjeta muestra un enlace y, al hacer clic, el archivo se abre con el programa predeterminado del sistema (una imagen en el visor de imágenes, un archivo de texto en su aplicación predeterminada). Las direcciones web de una pregunta se abren en el navegador predeterminado.
 
 `--to` acepta un id de pane, un nombre de agente o un id de buzón. Pulsa `prefix+shift+m` en el pane del leader para abrir la pantalla del buzón a su lado. Las preguntas de debate, cómo editar y retirar cartas, y cada botón de la pantalla están en la [guía completa](./guide.md).
 
@@ -80,7 +78,7 @@ Un pequeño daemon es dueño del archivo de estado y atiende una petición a la 
 | `src/daemon.mjs`, `src/core.mjs` | El daemon y las reglas de las cartas: acuses de recibo, deduplicación, editar y retirar, límites. |
 | `src/identity.mjs` | Vincular un buzón a un destinatario, el bucle de reconciliación, reclamaciones. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Agrupación en lotes, comprobación del cuadro de entrada, confirmación, texto del lote. |
-| `src/screen/` | La pantalla del buzón, con los ajustes y los adjuntos mostrados dentro de ella. |
+| `src/screen/` | La pantalla del buzón, con los ajustes mostrados dentro de ella; los adjuntos y los enlaces van a los programas predeterminados del sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | La acción `prefix+shift+m` y la reapertura de la pantalla tras reiniciar Herdr. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Los hooks de Claude Code. |
 

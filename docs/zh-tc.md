@@ -57,9 +57,8 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-較長的內容可以用檔案附在信上（`--attach <file>`）；卡片上會出現連結，點下去就在信箱畫面裡直接打開。
+較長的內容可以用檔案附在信上（`--attach <file>`）；卡片上會出現連結，點下去用系統預設的程式打開（圖片用看圖程式、文字檔用預設的程式）。問題裡的網址會用預設瀏覽器打開。
 
-![附上測試報告的決策卡：點連結，報告就在信箱畫面裡的框中打開](./media/attachment.png)
 
 `--to` 可以填 pane id、agent 名稱或信箱 id。在 leader 的 pane 上按 `prefix+shift+m`，信箱畫面就會開在它旁邊。討論題、修改與撤回信件，以及信箱畫面上每個按鈕的用法，見[完整說明](./guide.md)。
 
@@ -80,7 +79,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/daemon.mjs`、`src/core.mjs` | 常駐程式與信件規則：回條、去重、修改與撤回、長度限制。 |
 | `src/identity.mjs` | 把信箱綁定到收件者、定期核對、認領信箱。 |
 | `src/delivery.mjs`、`src/format.mjs`、`src/input-box.mjs` | 成批投遞、輸入框檢查、送達確認、批次內文。 |
-| `src/screen/` | 信箱畫面，設定與附件也在畫面內顯示。 |
+| `src/screen/` | 信箱畫面，設定在畫面內顯示；附件與連結交給系統預設的程式。 |
 | `src/open.mjs`、`src/on-focus.mjs` | `prefix+shift+m` 的動作，以及 Herdr 重啟後重新開啟信箱畫面。 |
 | `src/session-start.mjs`、`src/prompt-submit.mjs`、`src/send-guard.mjs` | Claude Code 的 hooks。 |
 

@@ -57,9 +57,7 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Il materiale più lungo viaggia con la lettera come file (`--attach <file>`); la scheda mostra un link e il file si apre direttamente nella schermata della mailbox.
-
-![Una scheda di decisione con un report di test allegato: cliccando il link, il report si apre in un riquadro dentro la schermata della mailbox](./media/attachment.png)
+Il materiale più lungo viaggia con la lettera come file (`--attach <file>`); la scheda mostra un link e, cliccandolo, il file si apre con il programma predefinito del sistema (un'immagine nel visualizzatore di immagini, un file di testo nella sua app predefinita). Gli indirizzi web in una domanda si aprono nel browser predefinito.
 
 `--to` accetta un id di pane, un nome di agent o un id di mailbox. Premi `prefix+shift+m` sul pane del leader per aprire la schermata della mailbox accanto a lui. Le domande di discussione, la modifica e il ritiro delle lettere, e ogni pulsante della schermata sono nella [guida completa](./guide.md).
 
@@ -80,7 +78,7 @@ Un piccolo daemon possiede il file di stato e gestisce una richiesta alla volta.
 | `src/daemon.mjs`, `src/core.mjs` | Il daemon e le regole delle lettere: ricevute, deduplicazione, modifica e ritiro, limiti. |
 | `src/identity.mjs` | Collegare una mailbox a un destinatario, il ciclo di riconciliazione, rivendicazioni. |
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Raggruppamento in lotti, controllo della casella di input, conferma, testo del lotto. |
-| `src/screen/` | La schermata della mailbox, con impostazioni e allegati mostrati al suo interno. |
+| `src/screen/` | La schermata della mailbox, con le impostazioni mostrate al suo interno; allegati e link vanno ai programmi predefiniti del sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | L'azione `prefix+shift+m` e la riapertura della schermata dopo un riavvio di Herdr. |
 | `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Gli hook di Claude Code. |
 
