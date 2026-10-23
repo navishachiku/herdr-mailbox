@@ -22,3 +22,10 @@ test('212/AC-2 with a busy receiver idle is awaited only after delivery; deliver
   const r = await waitForReceiver('w1:p1', 1000, { delivered: async () => true, wait: async (_t, until) => until[0] === 'working' });
   assert.equal(r.code, 4);
 });
+
+test('256 a direct send that never sees the receiver start gives exit 3 without promising a later delivery', async () => {
+  const r = await waitForReceiver('w1:p3', undefined, { wait: async () => false });
+  assert.equal(r.code, 3);
+  assert.equal(r.fields.queued, false);
+  assert.match(r.fields.waitError, /unknown.*nothing is queued/);
+});

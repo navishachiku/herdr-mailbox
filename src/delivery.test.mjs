@@ -766,3 +766,40 @@ test('251/AC-1 only agy\'s arrow-key menu reads as unknown; the same words in a 
   const talk = `● The guard treats "↑/↓ Navigate" as a menu.\n${emptyScreen}`;
   assert.equal(classify(talk, 'claude'), 'empty');
 });
+
+// 256: a receiver without a mailbox gets the signed text typed once, at send time; nothing is queued or followed.
+test('256/AC-1 a note to a Claude pane without a mailbox is typed once and leaves no batch behind', async t => {
+  const r = rig(t, { mergeMs: 60000 });
+  const receipt = r.note('w1:p3', 'one shot note');
+  assert.equal(receipt.status, 'direct');
+  assert.equal(r.prompts('w1:p3').length, 1, 'typed before the CLI returns');
+  assert.ok(r.prompts('w1:p3')[0].argv[3].includes('one shot note'));
+  await sleep(r.clock.tickMs * 4);
+  assert.equal(r.prompts('w1:p3').length, 1);
+  assert.equal(r.batches().filter(b => b.kind === 'direct').length, 0, 'no batch is kept to follow');
+});
+
+test('256/AC-2 a note to a pane whose input box holds text is refused, not queued or retried', async t => {
+  const r = rig(t, { mergeMs: 60000, retryMs: 100 });
+  r.world.screens['w1:p3'] = '────────────\n❯ half a sentence\n────────────';
+  r.write();
+  const run = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), 'send', '--to', 'w1:p3', '--type', 'note', '--text', 'must not land'], { env: r.env, encoding: 'utf8', timeout: 15000 });
+  assert.equal(run.status, 1, run.stderr);
+  const receipt = JSON.parse(run.stdout);
+  assert.equal(receipt.ok, false);
+  assert.equal(receipt.error, 'receiver_typing');
+  r.world.screens['w1:p3'] = emptyScreen;
+  r.write();
+  await sleep(r.clock.tickMs * 6);
+  assert.equal(r.prompts('w1:p3').length, 0, 'the box emptying later does not release it');
+  assert.equal(r.batches().length, 0);
+});
+
+test('256/AC-1 a send herdr never started (text too large to pass as an argument) is reported as not sent', async t => {
+  const r = rig(t, { mergeMs: 60000 });
+  r.cli(['status']);
+  const res = await r.raw({ op: 'send', to: 'w1:p3', from: 'w1:p2', type: 'note', text: 'x'.repeat(2_000_000) });
+  assert.equal(res.ok, false, JSON.stringify(res).slice(0, 200));
+  assert.equal(res.error, 'not_sent');
+  assert.equal(r.batches().length, 0);
+});

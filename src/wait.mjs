@@ -18,6 +18,10 @@ const herdrWait = (target, until, timeout) => new Promise(resolve => {
 // (a direct send, which is typed at once) the receiver starting a turn is the delivery signal.
 export async function waitForReceiver(target, timeout, { delivered, wait = herdrWait } = {}) {
   const arrived = delivered ? await delivered() : await wait(target, ['working'], START_WINDOW_MS);
+  if (!arrived && !delivered) {
+    // A direct send keeps no queue: there is nothing that could still arrive.
+    return { code: 3, fields: { waited: false, queued: false, waitError: `the receiver did not start a turn within ${START_WINDOW_MS / 1000}s of the message being typed; whether it arrived is unknown, nothing is queued and nothing will be retried` } };
+  }
   if (!arrived) {
     return { code: 3, fields: { waited: false, queued: true, waitError: `the letter was not delivered within ${START_WINDOW_MS / 1000}s; it is queued and will still be delivered, do not send it again` } };
   }

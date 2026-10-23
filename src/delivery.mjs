@@ -175,32 +175,6 @@ async function deliverMailbox(box, panes) {
   await sendMailboxBatch(box, kind, batch, { pane: who.pane, convo, agent, transcript: who.transcript ?? findByConversation(convo, agent) });
 }
 
-// The transcript of a pane that has no mailbox: what its conversation last registered, else the file named by its id.
-function transcriptOfPane(pane) {
-  const convo = pane.agent_session?.value;
-  return (api.state.registrations[pane.pane_id] ?? []).filter(r => r.sid === convo).at(-1)?.transcript ?? findByConversation(convo, pane.agent);
-}
-
-async function deliverDirect(panes) {
-  const direct = Object.values(api.state.batches).filter(b => b.kind === 'direct');
-  const busy = new Set(direct.filter(b => b.status === 'sending').map(b => b.pane));
-  for (const b of direct.filter(x => x.status === 'pending').sort((x, y) => x.createdAt - y.createdAt)) {
-    if (busy.has(b.pane) || (b.nextAt ?? 0) > api.now()) continue;
-    const pane = panes.find(p => p.pane_id === b.pane);
-    if (!pane?.agent) { b.status = 'failed'; api.save(); continue; }
-    let state = 'unknown';
-    try { state = classify(await herdr.readScreen(b.pane), pane.agent); } catch { /* unknown */ }
-    // Only Claude's and agy's input boxes can be read. Another agent (Codex) always reads as unknown, so there
-    // unknown goes through and herdr's agent_blocked is the guard; text seen in the box still holds the message.
-    const hold = pane.agent === 'claude' ? state !== 'empty' : state === 'typing';
-    if (hold) { b.nextAt = api.now() + timings.retryMs; api.save(); continue; }
-    busy.add(b.pane);
-    const transcript = transcriptOfPane(pane);
-    Object.assign(b, { status: 'sending', transcript, convo: pane.agent_session?.value ?? null, agent: pane.agent, transcriptOffset: transcript ? sizeOf(transcript) : 0 });
-    await send(b, b.pane, b.text, () => { b.status = 'pending'; b.nextAt = api.now() + timings.retryMs; });
-  }
-}
-
 // A receiver's first message can create its transcript after the prompt went out, so while a batch is waiting the file
 // is looked up again on every poll: first by the opening registration, then by the conversation id. A file that did not
 // exist when the batch was sent is read from the start.
@@ -262,16 +236,23 @@ async function tick() {
   for (const box of Object.values(api.state.mailboxes)) {
     if (box.owner) await deliverMailbox(box, panes);
   }
-  await deliverDirect(panes);
   api.save();
 }
 
-// Questions and notes for an agent without a mailbox. The text is fixed now and typed when the box is empty.
+// Questions and notes for an agent without a mailbox: signed and typed once, now. Nothing is queued, retried, nudged
+// or followed. Text in the receiver's input box (or a Claude box that cannot be read) refuses the letter.
 async function direct(req, content) {
   const to = req.to;
   let pane;
   try { pane = await herdr.paneGet(to); } catch { return fail('pane_not_found', `no pane ${to}`); }
   if (!pane.agent) return fail('no_agent', `pane ${to} runs no agent, so a letter cannot be typed into it`);
+  let state = 'unknown';
+  let screen = '';
+  try { screen = await herdr.readScreen(pane.pane_id); state = classify(screen, pane.agent); } catch { /* unknown */ }
+  // Only Claude's and agy's input boxes can be read. Another agent (Codex) always reads as unknown, so there
+  // unknown goes through and herdr's agent_blocked is the guard; text seen in the box still holds the message.
+  if (state === 'typing') return fail('receiver_typing', `someone is typing in ${to}'s input box, so nothing was sent and nothing is queued; send again once it is empty`, { typed: typedText(screen, pane.agent) });
+  if (pane.agent === 'claude' && state !== 'empty') return fail('input_unreadable', `cannot confirm ${to}'s input box is empty, so nothing was sent and nothing is queued; send again in a moment`);
   const from = req.from ?? 'unknown';
   const people = await peopleOf([from]);
   const downgraded = content.type !== 'note';
@@ -295,9 +276,15 @@ async function direct(req, content) {
     const body = content.text || '';
     text = directNote({ text: signature ? withSignature(body, signature) : body, people, from, attachments });
   }
-  api.state.batches[id] = { id, mailbox: null, pane: pane.pane_id, kind: 'direct', members: [], status: 'pending', text, createdAt: api.now() };
-  api.save();
-  return { ok: true, status: downgraded ? 'downgraded' : 'direct', batch: id, to: pane.pane_id, pending: [] };
+  try {
+    await herdr.prompt(pane.pane_id, text);
+  } catch (e) {
+    // herdr says nothing was typed, or the herdr process never started (e.g. E2BIG, ENOENT): nothing was sent.
+    // Any other failure leaves the outcome unknown, which counts as sent.
+    const neverStarted = typeof e.code === 'string' && /^spawn/.test(e.syscall ?? '');
+    if (notSent(e) || neverStarted) return fail('not_sent', `herdr did not take the message to ${to} (${(e.stderr || e.message || '').toString().trim().slice(0, 200)}); nothing was sent and nothing is queued`);
+  }
+  return { ok: true, status: downgraded ? 'downgraded' : 'direct', to: pane.pane_id, pending: [] };
 }
 
 function pausedOf(mbId) {

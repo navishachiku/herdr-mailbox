@@ -91,7 +91,7 @@ Longer material goes with the letter as a file (`--attach <file>`); the card sho
 
 ## Known issues
 
-- **Codex: it cannot own a mailbox yet.** Codex 0.163 runs its conversations in one shared background server, so Herdr's Codex integration reports every conversation to the pane that started that server, and the Codex pane itself never gets a conversation id to bind a mailbox to. Codex can still send letters, and a note sent to a Codex pane that has no mailbox is typed straight into it.
+- **Codex: it cannot own a mailbox yet.** Codex 0.163 runs its conversations in one shared background server, so Herdr's Codex integration reports every conversation to the pane that started that server, and the Codex pane itself never gets a conversation id to bind a mailbox to. Codex can still send letters, and a note sent to a Codex pane that has no mailbox is signed and typed straight into it once. Codex's pane id in `HERDR_PANE_ID` can be wrong, so a Codex sender must name its own pane with `--from <pane id>`.
 - **agy: the skill is not installed where agy reads it.** The `skills` CLI cannot install into the folder agy loads skills from, so `npx skills add` does not reach it. This is a limit of that CLI; the mailbox does not work around it.
 - **agy: it sees the skill but does not use the mailbox on its own.** Told only to "report to agent-a", agy reaches for its built-in messaging tool instead of `mailbox send`. Name the command in the request ("send it with `mailbox send`").
 

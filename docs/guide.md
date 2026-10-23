@@ -144,7 +144,9 @@ A batch begins with a header (how many letters, from whom, a batch id) saying th
 
 After typing a batch the mailbox looks for it in the agent's transcript. Found within 20 seconds it is `confirmed`; otherwise `unconfirmed`, and the screen offers **Mark delivered** and **Resend (may duplicate)**. Unconfirmed batches are never resent on their own.
 
-A receiver with no mailbox yet is not an error: the letter is delivered straight to the pane once its input box is empty, with questions turned into plain text that asks for the user's decision.
+The mailbox only manages letters sent to a mailbox owner. A letter to any other pane is signed and typed into it once, right away, with questions turned into plain text that asks for the user's decision. If that pane's input box has text, or a Claude input box cannot be read, nothing is sent: the receipt says `receiver_typing` or `input_unreadable`, no retry is scheduled, and the sender sends again later. After a send nothing is queued, nudged or followed; `--wait` waits for the receiver to start a turn and then finish it; if it does not start within 120 seconds the receipt says the outcome is unknown (exit 3, `queued:false`), because nothing is queued.
+
+A Codex sender's `HERDR_PANE_ID` can name the wrong pane, so a Codex agent must pass its own pane with `--from <pane id>` or the signature will be wrong.
 
 ## Limits
 
