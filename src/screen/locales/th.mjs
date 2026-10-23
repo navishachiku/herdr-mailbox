@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'แสดงคำใบ้ (วินาที)',
   languageLabel: 'ภาษา',
   settingsHint: 'ความกว้างมีผลเมื่อเปิดกล่องจดหมายครั้งถัดไป · Esc ปิด',
-  attachmentHint: (shown, total) => `↑↓ เลื่อน · Esc ปิด · ${shown}/${total}`,
-  truncated: 'ถูกตัด',
   processing: 'กำลังดำเนินการ…',
   delivering: 'กำลังส่ง…',
   delivered: 'ถึงแล้ว',

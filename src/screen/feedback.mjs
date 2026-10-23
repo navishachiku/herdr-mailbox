@@ -18,7 +18,7 @@ export function followedBatch(feedback, deliveryState) {
 }
 
 // Which on-screen element an action belongs to.
-export const feedbackKey = a => [a.type, a.uid ?? '', a.batch ?? '', a.action ?? '', a.choice ?? ''].join(':');
+export const feedbackKey = a => [a.type, a.uid ?? '', a.index ?? '', a.batch ?? '', a.action ?? '', a.choice ?? ''].join(':');
 
 // How the element of `action` should look at `now`, or null when it looks normal.
 // Returns { state: 'pending'|'delivering'|'waiting'|'delivered'|'done'|'failed', error?, reason? }.

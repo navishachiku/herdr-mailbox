@@ -4,6 +4,7 @@
 // Every write carries that generation, so the daemon refuses it if the mailbox changed hands since.
 
 import { feedbackKey } from './feedback.mjs';
+import { isWebUrl } from './launch.mjs';
 
 const ANSWERS = {
   choose: a => ({ choice: a.choice, text: a.text }),
@@ -14,7 +15,7 @@ const ANSWERS = {
   reset: () => ({ choice: null, text: '' }),
 };
 // These keep focus in the screen: typing, the in-screen settings and attachment layer, and the controls inside it.
-const KEEPS_FOCUS = new Set(['text-input', 'note-text', 'batch-note', 'attachment', 'settings', 'settings-set', 'overlay-input', 'overlay-close']);
+const KEEPS_FOCUS = new Set(['text-input', 'note-text', 'batch-note', 'attachment', 'open-url', 'settings', 'settings-set', 'overlay-input', 'overlay-close']);
 
 // The receiver is the pane to the left of the screen, so focus moves one pane left from the screen's own pane.
 async function handBack(env) {
@@ -60,30 +61,38 @@ async function write(action, env) {
   }
 }
 
-// Settings and attachments open as a layer inside the mailbox pane (herdr popups do not show in the web interface,
-// and one left open blocks the next). The layer is plain data, kept by the caller and passed back as env.overlay:
-// { kind: 'settings', prefs } or { kind: 'attachment', uid, name, text, truncated, top }.
+// Settings open as a layer inside the mailbox pane (herdr popups do not show in the web interface, and one left open
+// blocks the next). The layer is plain data, kept by the caller and passed back as env.overlay: { kind: 'settings', prefs, top }.
+// Attachments and web addresses are not a layer: they go to the system's default program (see openExternal).
 async function openOverlay(action, env) {
   if (action.type === 'settings') {
     const prefs = await env.call({ op: 'prefs-get' });
     return prefs.ok === false ? { ok: false, error: prefs.error } : { ok: true, overlay: { kind: 'settings', prefs: pickPrefs(prefs) } };
   }
-  if (action.type === 'settings-set') {
-    // Each change is saved at once; an open screen keeps its width until the next time it opens.
-    const prefs = await env.call({ op: 'prefs-set', ...action.change });
-    if (prefs.ok === false) return { ok: false, error: prefs.error, overlay: env.overlay ?? null };
-    return { ok: true, overlay: { ...(env.overlay ?? { kind: 'settings' }), prefs: pickPrefs(prefs) } };
-  }
-  const res = await env.call({ op: 'attachment', uid: action.uid, index: action.index });
-  if (res.ok === false) return { ok: false, error: res.error };
-  return { ok: true, overlay: { kind: 'attachment', uid: action.uid, name: res.name, text: res.text, truncated: Boolean(res.truncated), top: 0 } };
+  // settings-set: each change is saved at once; an open screen keeps its width until the next time it opens.
+  const prefs = await env.call({ op: 'prefs-set', ...action.change });
+  if (prefs.ok === false) return { ok: false, error: prefs.error, overlay: env.overlay ?? null };
+  return { ok: true, overlay: { ...(env.overlay ?? { kind: 'settings' }), prefs: pickPrefs(prefs) } };
+}
+
+// An attachment's snapshot or a web address goes to the system's default program: an image opens in the viewer,
+// a text file in whatever the system uses for it, a link in the default browser.
+async function openExternal(action, env) {
+  let target = action.url;
+  if (action.type === 'attachment') {
+    const res = await env.call({ op: 'attachment', uid: action.uid, index: action.index });
+    if (res.ok === false) return { ok: false, error: res.error };
+    target = res.path;
+  } else if (!isWebUrl(target ?? '')) return { ok: false, error: 'bad_url' };
+  if (!env.open) return { ok: false, error: 'cannot_open' };
+  await env.open(target);
+  return { ok: true };
 }
 
 const pickPrefs = p => ({ width: p.width, cardMode: p.cardMode, mergeSeconds: p.mergeSeconds, tooltipSeconds: p.tooltipSeconds, locale: p.locale });
 
 // Keys and the wheel while a layer is open: they belong to the layer. Esc or q closes it; the arrows, Page keys,
-// Home, End and the wheel scroll it (render keeps the position within the content, and only draws a scrollbar
-// when there is something to scroll).
+// Home, End and the wheel scroll it (render keeps the position within the content).
 function overlayInput(overlay, event) {
   if (!overlay) return null;
   if ((event.kind === 'key' && event.name === 'escape') || (event.kind === 'text' && event.text === 'q')) return null;
@@ -93,8 +102,7 @@ function overlayInput(overlay, event) {
   // No upper limit here: render knows how many rows the content takes and keeps the position within them (main
   // copies that back). End only needs a bound past the last row: the attachment never wraps to more rows than it
   // has characters, and the settings are a handful of rows.
-  const end = overlay.kind === 'attachment' ? overlay.text.length + 1 : 1000;
-  return { ...overlay, top: Math.min(Math.max(0, (overlay.top ?? 0) + by), end) };
+  return { ...overlay, top: Math.min(Math.max(0, (overlay.top ?? 0) + by), 1000) };
 }
 
 // Returns { ok, error?, model? }. When the daemon says what the screen showed is out of date, the fresh view
@@ -107,7 +115,7 @@ export async function perform(action, env) {
   const report = (state, extra = {}) => env.onFeedback?.({ key: feedbackKey(action), type: action.type, state, at: now(), ...extra });
   try {
     if (action.type === 'text-input') return { ok: true };
-    // Settings and attachments are a layer inside the screen itself (overlay); these move or close it locally.
+    // Settings are a layer inside the screen itself (overlay); these move or close it locally.
     if (action.type === 'overlay-input') return { ok: true, overlay: overlayInput(env.overlay ?? null, action.event) };
     if (action.type === 'overlay-close') return { ok: true, overlay: null };
     // The new-question hint only moves the view; it keeps focus in the screen.
@@ -117,7 +125,12 @@ export async function perform(action, env) {
     const asks = action.type === 'void-all' || (action.type === 'resolve-batch' && action.action === 'resend');
     if (asks && env.confirm && !(await env.confirm(action.confirm))) return { ok: true, cancelled: true };
     report('pending');
-    if (action.type === 'settings' || action.type === 'attachment' || action.type === 'settings-set') {
+    if (action.type === 'attachment' || action.type === 'open-url') {
+      const res = await openExternal(action, env);
+      report(res.ok ? 'done' : 'failed', res.ok ? {} : { error: res.error });
+      return res;
+    }
+    if (action.type === 'settings' || action.type === 'settings-set') {
       const res = await openOverlay(action, env);
       report(res.ok ? 'done' : 'failed', res.ok ? {} : { error: res.error });
       return res;
@@ -134,7 +147,9 @@ export async function perform(action, env) {
     if (!KEEPS_FOCUS.has(action.type)) await handBack(env);
     return out;
   } catch (e) {
-    report('failed', { error: String(e.message || e) });
-    return { ok: false, error: 'failed', message: String(e.message || e) };
+    const message = String(e.message || e);
+    report('failed', { error: message });
+    // The screen shows `error` in its notice line: for a link that is the only place the reason can appear.
+    return { ok: false, error: message, message };
   }
 }

@@ -5,6 +5,7 @@ import * as herdr from '../herdr.mjs';
 import { screenLocale, activeLocale } from './messages.mjs';
 import { render, BATCH } from './render.mjs';
 import { perform } from './actions.mjs';
+import { systemOpen } from './launch.mjs';
 import { parseInput, edit } from './input.mjs';
 import { enter, painter, size, forgetSize } from './term.mjs';
 import { createEventQueue } from './events.mjs';
@@ -50,7 +51,7 @@ let lastInteractionAt = null; // last mouse movement, click or key; new question
 let feedback = null; // the operation in flight and how it went (see feedback.mjs)
 let deliveryState = null; // while Deliver now is delivering: the daemon's delivery state for this mailbox
 let deliveryConfirmedAt = null; // when that delivery was seen landing
-let overlay = null; // settings or an attachment, open as a layer inside this pane (see actions.mjs)
+let overlay = null; // the settings, open as a layer inside this pane (see actions.mjs)
 let confirmPrompt = null; // { message, resolve } while the screen asks a yes / no question
 let seen = null; // questions already on screen, so a new one can be told apart
 const anim = new Animator(() => draw());
@@ -176,7 +177,7 @@ function onFeedback(next) {
   draw();
 }
 
-const env = () => ({ call, run: herdr.run, now: Date.now, onFeedback, overlay, model, scroll, drafts: buffers, selfPane: SELF, ownerPane: model.mailbox.pane, generation: model.mailbox.generation });
+const env = () => ({ call, run: herdr.run, open: systemOpen, now: Date.now, onFeedback, overlay, model, scroll, drafts: buffers, selfPane: SELF, ownerPane: model.mailbox.pane, generation: model.mailbox.generation });
 const question = uid => model.questions.find(q => q.uid === uid);
 
 async function act(action) {

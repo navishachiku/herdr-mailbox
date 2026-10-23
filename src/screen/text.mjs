@@ -68,3 +68,42 @@ export function wrap(s, n) {
   }
   return lines;
 }
+
+// Web addresses in a wrapped text. `lines` is wrap(text, n). Returns, per line, the parts [{ t, url? }] in order.
+// Addresses are found in the original text, so one the wrap broke (even inside "https://") keeps its full address
+// on every piece, and a line break the writer typed ends it. Trailing punctuation, and a closing bracket that has no
+// opening bracket in the address, stay out of it.
+const URL_AT = /https?:\/\/[^\s　-〿＀-￯<>"'`]+/gi;
+const OPENING = { ')': '(', ']': '[', '}': '{' };
+function trimAddress(u) {
+  for (;;) {
+    const last = u[u.length - 1];
+    if (/[.,;:!?]/.test(last) || (OPENING[last] && u.split(last).length > u.split(OPENING[last]).length)) u = u.slice(0, -1);
+    else return u;
+  }
+}
+export function linkParts(text, lines) {
+  const spans = []; // where each line sits in the text
+  let pos = 0;
+  for (const line of lines) {
+    const at = line ? text.indexOf(line, pos) : pos;
+    spans.push([at, at + line.length]);
+    pos = at + line.length;
+  }
+  const urls = [...text.matchAll(URL_AT)].map(m => ({ from: m.index, url: trimAddress(m[0]) })).map(u => ({ ...u, to: u.from + u.url.length }));
+  return lines.map((line, li) => {
+    const [from, to] = spans[li];
+    const parts = [];
+    let at = from;
+    for (const u of urls) {
+      const a = Math.max(u.from, from);
+      const b = Math.min(u.to, to);
+      if (b <= a) continue;
+      if (a > at) parts.push({ t: text.slice(at, a) });
+      parts.push({ t: text.slice(a, b), url: u.url });
+      at = b;
+    }
+    if (at < to) parts.push({ t: text.slice(at, to) });
+    return parts.length ? parts : [{ t: line }];
+  });
+}

@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'ヒント表示（秒）',
   languageLabel: '言語',
   settingsHint: '幅は次にメールボックスを開いたときに反映 · Esc で閉じる',
-  attachmentHint: (shown, total) => `↑↓ スクロール · Esc で閉じる · ${shown}/${total}`,
-  truncated: '省略あり',
   processing: '処理中…',
   delivering: '配信中…',
   delivered: '配信済み',

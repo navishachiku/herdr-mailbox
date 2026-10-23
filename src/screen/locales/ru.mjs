@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Подсказка (с)',
   languageLabel: 'Язык',
   settingsHint: 'Ширина применится при следующем открытии · Esc закрывает',
-  attachmentHint: (shown, total) => `↑↓ прокрутка · Esc закрывает · ${shown}/${total}`,
-  truncated: 'обрезано',
   processing: 'Обработка…',
   delivering: 'Доставка…',
   delivered: 'Доставлено',

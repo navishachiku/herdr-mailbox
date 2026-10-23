@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Hiện gợi ý (giây)',
   languageLabel: 'Ngôn ngữ',
   settingsHint: 'Độ rộng áp dụng ở lần mở hộp thư sau · Esc để đóng',
-  attachmentHint: (shown, total) => `↑↓ cuộn · Esc để đóng · ${shown}/${total}`,
-  truncated: 'đã cắt bớt',
   processing: 'Đang xử lý…',
   delivering: 'Đang gửi…',
   delivered: 'Đã gửi',

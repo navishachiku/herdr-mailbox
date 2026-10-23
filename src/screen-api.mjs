@@ -12,7 +12,6 @@ import { attachmentsOf } from './core.mjs';
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 const MAIN = fileURLToPath(new URL('./screen/main.mjs', import.meta.url));
 const PRIORITY = { high: 0, medium: 1, low: 2 };
-const ATTACHMENT_LIMIT = 1_000_000;
 const RECENT_MS = 60_000;
 
 let api;
@@ -107,8 +106,8 @@ async function attachment(req) {
   const att = l ? attachmentsOf(l.content)[req.index ?? 0] : null;
   if (!att?.path) return fail('no_attachment', 'that letter has no attachment');
   try {
-    const data = fs.readFileSync(att.path);
-    return { ok: true, name: att.name, text: data.subarray(0, ATTACHMENT_LIMIT).toString('utf8'), truncated: data.length > ATTACHMENT_LIMIT };
+    fs.accessSync(att.path, fs.constants.R_OK);
+    return { ok: true, name: att.name, path: att.path };
   } catch (e) { return fail('bad_attach', `cannot read the attachment: ${e.code || e.message}`); }
 }
 

@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Duración aviso (s)',
   languageLabel: 'Idioma',
   settingsHint: 'El ancho se aplica al abrir el buzón la próxima vez · Esc cierra',
-  attachmentHint: (shown, total) => `↑↓ desplazar · Esc cierra · ${shown}/${total}`,
-  truncated: 'recortado',
   processing: 'Procesando…',
   delivering: 'Entregando…',
   delivered: 'Entregado',

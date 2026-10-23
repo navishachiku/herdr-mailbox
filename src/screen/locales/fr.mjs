@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Durée infobulle (s)',
   languageLabel: 'Langue',
   settingsHint: 'La largeur s\'applique à la prochaine ouverture · Esc ferme',
-  attachmentHint: (shown, total) => `↑↓ défiler · Esc ferme · ${shown}/${total}`,
-  truncated: 'tronqué',
   processing: 'Traitement…',
   delivering: 'Livraison…',
   delivered: 'Livré',

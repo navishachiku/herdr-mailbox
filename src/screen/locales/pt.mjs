@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Duração da dica (s)',
   languageLabel: 'Idioma',
   settingsHint: 'A largura vale na próxima vez que abrir · Esc fecha',
-  attachmentHint: (shown, total) => `↑↓ rolar · Esc fecha · ${shown}/${total}`,
-  truncated: 'cortado',
   processing: 'Processando…',
   delivering: 'Entregando…',
   delivered: 'Entregue',

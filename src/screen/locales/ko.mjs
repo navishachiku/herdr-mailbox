@@ -52,8 +52,6 @@ export default {
   tooltipLabel: '툴팁 유지 (초)',
   languageLabel: '언어',
   settingsHint: '너비는 다음에 우편함을 열 때 적용 · Esc로 닫기',
-  attachmentHint: (shown, total) => `↑↓ 스크롤 · Esc로 닫기 · ${shown}/${total}`,
-  truncated: '잘림',
   processing: '처리 중…',
   delivering: '전달 중…',
   delivered: '전달됨',

@@ -52,8 +52,6 @@ export default {
   tooltipLabel: '提示框停留（秒）',
   languageLabel: '语言',
   settingsHint: '宽度在下次打开信箱时生效 · Esc 关闭',
-  attachmentHint: (shown, total) => `↑↓ 滚动 · Esc 关闭 · ${shown}/${total}`,
-  truncated: '已截断',
   processing: '处理中…',
   delivering: '投递中…',
   delivered: '已送达',

@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Durata suggerimento (s)',
   languageLabel: 'Lingua',
   settingsHint: 'La larghezza vale dalla prossima apertura · Esc chiude',
-  attachmentHint: (shown, total) => `↑↓ scorri · Esc chiude · ${shown}/${total}`,
-  truncated: 'troncato',
   processing: 'Elaborazione…',
   delivering: 'Consegna…',
   delivered: 'Consegnato',

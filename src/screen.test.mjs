@@ -3,11 +3,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
+import { render } from './screen/render.mjs';
+import { perform } from './screen/actions.mjs';
+import { feedbackKey } from './screen/feedback.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE = path.join(here, 'test-support', 'fake-herdr.mjs');
@@ -554,94 +558,92 @@ async function overlayScreen(model, options, call) {
   };
 }
 
-test('202/AC-37 attachments open and scroll inside the mailbox pane without a popup and close back to the unchanged mailbox', async () => {
-  const { parseInput } = await import('./screen/input.mjs');
+test('262/AC-1,2 clicking an image or a text attachment hands its snapshot to the system program, with no layer in the mailbox pane', async () => {
   const model = interactionModel();
   model.notes = [];
   model.batches = [];
-  const full = `${Array.from({ length: 45 }, (_, i) => `attachment-row-${String(i).padStart(3, '0')}`).join('\n')}\nTHE END\n`;
-  const drafts = { Q1: 'Unsaved reply' };
-  const savedDrafts = structuredClone(drafts);
-  const options = { cols: 80, rows: 32, locale: 'en', now: 0, scroll: 3, drafts };
-  const ui = await overlayScreen(model, options, async req => {
-    assert.equal(req.op, 'attachment');
-    assert.equal(req.uid, 'Q1');
-    return { ok: true, name: 'plan.md', text: full, truncated: false };
+  const opened = [];
+  const options = { cols: 80, rows: 32, locale: 'en', now: 0 };
+  const files = { png: '/state/att/Q1/v1-samples.png', md: '/state/att/Q1/v1-plan.md' };
+  for (const [kind, path] of Object.entries(files)) {
+    const requests = [];
+    const res = await perform(
+      { type: 'attachment', mailbox: model.mailbox.id, uid: 'Q1' },
+      { call: async req => { requests.push(req); return { ok: true, name: path.split('/').pop(), path }; }, open: async t => { opened.push(t); }, generation: 1 },
+    );
+    assert.equal(res.ok, true, kind);
+    assert.equal(Object.hasOwn(res, 'overlay'), false, 'nothing is drawn over the mailbox');
+    assert.deepEqual(requests.map(r => r.op), ['attachment']);
+  }
+  assert.deepEqual(opened, Object.values(files));
+  const failed = await perform({ type: 'attachment', mailbox: model.mailbox.id, uid: 'Q1' }, {
+    call: async () => ({ ok: true, name: 'x.png', path: '/gone/x.png' }), open: async () => { throw new Error('open is not available here'); }, generation: 1,
   });
-  const before = ui.frame();
-  const result = await ui.act(hit(before, 'attachment', a => a.uid === 'Q1'));
-  assert.equal(result.ok, true);
-  assert.equal(ui.commands.some(args => args.includes('popup')), false, 'attachment opening never asks herdr for a popup');
-  assert.equal(ui.overlay()?.kind, 'attachment');
-  assert.equal(ui.overlay().text, full, 'the in-pane reader keeps the complete attachment');
-  const opened = ui.frame();
-  assert.ok(opened.lines.some(line => line.includes('plan.md')));
-  assert.ok(opened.lines.some(line => line.includes('attachment-row-000')));
-  assert.equal(opened.lines.some(line => line.includes('THE END')), false, 'the attachment is longer than its viewport');
-  assert.equal(opened.hits.some(h => ['choose', 'submit', 'void', 'note-text'].includes(h.action.type)), false, 'attachment input cannot reach the background card');
-  const [down] = parseInput('\x1b[B');
-  assert.equal((await ui.input(down)).ok, true);
-  const afterKey = ui.frame();
-  assert.notDeepEqual(afterKey.lines, opened.lines, 'the down arrow scrolls the attachment');
-  const [wheel] = parseInput('\x1b[<65;10;10M');
-  assert.equal(wheel.kind, 'wheel');
-  assert.equal((await ui.input(wheel)).ok, true);
-  assert.notDeepEqual(ui.frame().lines, afterKey.lines, 'the wheel scrolls the attachment too');
-  for (let i = 0; i < 50 && !ui.frame().lines.some(line => line.includes('THE END')); i++) await ui.input(wheel);
-  assert.ok(ui.frame().lines.some(line => line.includes('THE END')), 'the reader can scroll all the way to the full text ending');
-  assert.equal((await ui.act(hit(ui.frame(), 'overlay-close'))).ok, true);
-  assert.equal(ui.overlay(), null);
-  const restored = ui.frame();
-  assert.equal(restored.scroll, before.scroll);
-  assert.deepEqual(restored.lines, before.lines);
-  assert.deepEqual(restored.hits, before.hits);
-  assert.deepEqual(drafts, savedDrafts, 'closing preserves the unsaved reply');
-  assert.equal(ui.requests.some(req => ['answer', 'submit'].includes(req.op)), false);
+  assert.equal(failed.ok, false);
+  assert.match(failed.message, /not available/, 'a program that cannot be started is reported, not swallowed');
+  assert.ok(render(model, options).hits.some(h => h.action.type === 'attachment'), 'the card still offers the attachment');
 });
 
-test('202/AC-37 a two-line attachment wrapping to one hundred rows scrolls to its final row with PageDown or the wheel', async () => {
-  const { render } = await import('./screen/render.mjs');
-  const { perform } = await import('./screen/actions.mjs');
-  const { parseInput } = await import('./screen/input.mjs');
+test('262/AC-3 a link that cannot be opened reports why, as an attachment does', async () => {
+  const res = await perform({ type: 'open-url', url: 'https://example.com/a' }, {
+    call: async () => assert.fail('no daemon call'), open: async () => { throw new Error('xdg-open is not available here'); }, generation: 1,
+  });
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'xdg-open is not available here', 'the notice line gets the reason, not a bare "failed"');
+});
+
+test('262/AC-4 while one attachment opens only that line shows it, and no other line moves', () => {
   const model = interactionModel();
-  model.notes = [];
-  model.batches = [];
-  model.questions = [model.questions[0]];
-  // At 50 columns the borders and scrollbar leave 47 text columns: 50 wrapped rows per raw line.
-  const ending = 'LAST WRAPPED ROW';
-  const full = `${'a'.repeat(47 * 50)}\n${'b'.repeat(47 * 49)}${ending}`;
-  assert.equal(full.split('\n').length, 2);
-  const options = { cols: 50, rows: 30, locale: 'en', now: 0 };
-  const action = hit(render(model, options), 'attachment');
-  for (const input of ['\x1b[6~', '\x1b[<65;10;10M']) {
-    const [event] = parseInput(input);
-    assert.ok(event.kind === 'wheel' || (event.kind === 'key' && event.name === 'pagedown'));
-    const env = {
-      call: async req => {
-        assert.equal(req.op, 'attachment');
-        return { ok: true, name: 'wrapped.md', text: full, truncated: false };
-      },
-      run: async () => assert.fail('the attachment reader must stay inside the mailbox pane'),
-      generation: model.mailbox.generation,
-    };
-    const opened = await perform(action, env);
-    assert.equal(opened.ok, true);
-    let overlay = opened.overlay;
-    assert.equal(overlay.kind, 'attachment');
-    let frame = render(model, { ...options, overlay });
-    assert.equal(frame.lines.some(line => line.includes(ending)), false, 'the final wrapped row starts offscreen');
-    assert.ok(frame.lines.some(line => /\b\d+\/100\b/.test(line)), 'the reader counts the wrapped rows, not just two raw lines');
-    for (let i = 0; i < 50 && !frame.lines.some(line => line.includes(ending)); i++) {
-      const next = await perform({ type: 'overlay-input', event }, { ...env, overlay });
-      assert.equal(next.ok, true);
-      overlay = next.overlay;
-      frame = render(model, { ...options, overlay });
-      // Mirror main's public render result: subsequent input starts at the clamped visible top.
-      overlay = { ...overlay, top: frame.overlayTop };
-    }
-    assert.ok(frame.lines.some(line => line.includes(ending)), `${event.name ?? event.kind} reaches the final row of the wrapped attachment`);
-    assert.ok(frame.lines.some(line => /\b100\/100\b/.test(line)), 'all one hundred display rows can be reached');
-  }
+  model.questions = [{ ...model.questions[0], content: { ...model.questions[0].content, attachments: [{ name: 'a.png' }, { name: 'b.md' }, { name: 'c.txt' }] } }];
+  const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
+  const before = render(model, options);
+  const second = before.hits.find(h => h.action.type === 'attachment' && h.action.index === 1).action;
+  const during = render(model, { ...options, feedback: { key: feedbackKey(second), type: 'attachment', state: 'pending', at: 0 } });
+  assert.equal(during.lines.length, before.lines.length, 'the card keeps its height');
+  const where = frame => ['a.png', 'b.md', 'c.txt'].map(n => frame.lines.findIndex(l => l.includes(n)));
+  assert.equal(where(during)[0], where(before)[0], 'the first line stays where it was');
+  assert.equal(where(during)[2], where(before)[2], 'the third line stays where it was');
+  const busy = during.lines.findIndex(l => l.includes('Processing'));
+  assert.equal(busy, where(before)[1], 'only the pressed line shows it is busy, in its own place');
+  assert.deepEqual(during.lines.map(l => l.trimEnd()).filter((_, i) => i !== busy).map(l => l.length > 0), before.lines.map(l => l.trimEnd()).filter((_, i) => i !== busy).map(l => l.length > 0), 'blank rows between lines are unchanged');
+});
+
+test('262/AC-3 a web address in a question is a link to the default browser, even when the wrap breaks it, and other schemes are not', async () => {
+  const url = 'https://example.com/reports/2026/very-long-path-that-the-wrap-must-break?id=42';
+  const model = interactionModel();
+  model.questions = [{ ...model.questions[0], content: { ...model.questions[0].content, question: `Read ${url}. Then see file:///etc/passwd and javascript:alert(1)` } }];
+  const options = { cols: 40, rows: 40, locale: 'en', now: 0 };
+  const frame = render(model, options);
+  const links = frame.hits.filter(h => h.action.type === 'open-url');
+  assert.ok(links.length >= 2, 'the broken address is linked on every row it covers');
+  assert.ok(links.every(h => h.action.url === url), 'every piece opens the whole address, without the full stop that ends the sentence');
+  assert.equal(frame.hits.some(h => h.action.type === 'open-url' && !/^https?:/.test(h.action.url)), false, 'file: and javascript: are plain text');
+  const opened = [];
+  assert.equal((await perform(links[1].action, { call: async () => assert.fail('no daemon call'), open: async t => { opened.push(t); }, generation: 1 })).ok, true);
+  assert.deepEqual(opened, [url]);
+  const refused = await perform({ type: 'open-url', url: 'file:///etc/passwd' }, { call: async () => ({}), open: async t => opened.push(t), generation: 1 });
+  assert.equal(refused.ok, false, 'the action itself also refuses anything but http(s)');
+  assert.equal(opened.length, 1);
+});
+
+test('262/AC-3 regression: addresses found in the original text keep their whole target when wrapped, cut or followed by a typed line break', async () => {
+  const { systemOpen } = await import('./screen/launch.mjs');
+  const targets = async (question, extra = {}) => {
+    const model = interactionModel();
+    model.questions = [{ ...model.questions[0], content: { ...model.questions[0].content, question } }];
+    const frame = render(model, { cols: 40, rows: 40, locale: 'en', now: 0, ...extra });
+    if (extra.cardMode === 'compact') assert.ok(frame.lines.some(l => l.includes('…')), 'the question was cut');
+    return [...new Set(frame.hits.filter(h => h.action.type === 'open-url').map(h => h.action.url))];
+  };
+  assert.deepEqual(await targets(`${'a'.repeat(30)} https://example.com/path`), ['https://example.com/path'], 'a wrap that falls inside https:// still links it');
+  assert.deepEqual(await targets(`https://example.com/${'a'.repeat(17)}\nother`), [`https://example.com/${'a'.repeat(17)}`], 'a typed line break ends the address');
+  assert.deepEqual(await targets('see https://en.wikipedia.org/wiki/Test_(assessment) and (https://a.b/c).'), ['https://en.wikipedia.org/wiki/Test_(assessment)', 'https://a.b/c'], 'brackets that belong to the address stay, the rest go');
+  const long = `https://example.com/${'a'.repeat(120)}`;
+  assert.deepEqual(await targets(long, { cardMode: 'compact' }), [long], 'compact mode never opens a cut address');
+  const calls = [];
+  const fake = (cmd, args) => { calls.push([cmd, args]); const e = new EventEmitter(); setImmediate(() => e.emit('exit', 0)); return e; };
+  await systemOpen('https://example.com/&calc.exe&', { platform: 'win32', spawnFn: fake });
+  assert.deepEqual(calls, [['rundll32', ['url.dll,FileProtocolHandler', 'https://example.com/&calc.exe&']]], 'on Windows the address is one argument, no command interpreter');
 });
 
 test('202/AC-10 when the receiver pane is gone the mailbox keeps its content and shows the disconnected state with the claim hint', async () => {
@@ -2025,10 +2027,10 @@ test('202/AC-42 Settings persists tooltip dwell seconds and newly opened tooltip
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('202/AC-38 settings and attachment layers have four borders and corners without covering their content', async () => {
+test('202/AC-38 the settings layer has four borders and corners without covering their content', async () => {
   const model = interactionModel();
   const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
-  for (const kind of ['settings', 'attachment']) {
+  for (const kind of ['settings']) {
     const ui = await overlayScreen(model, options, async req => req.op === 'prefs-get'
       ? { ok: true, width: 48, cardMode: 'detailed', mergeSeconds: 60 }
       : { ok: true, name: 'border.md', text: 'FIRST CONTENT LINE\nLAST CONTENT LINE', truncated: false });
@@ -2413,54 +2415,13 @@ test('202/AC-43 overflowing decisions retain the full-width card layout without 
   }
 });
 
-test('202/AC-43 wrapped attachment text has an interior scrollbar while fitting attachments and Settings have none', async () => {
-  const { render } = await import('./screen/render.mjs');
-  const { parseInput } = await import('./screen/input.mjs');
+test('202/AC-43 fitting Settings have no scrollbar', async () => {
   const model = interactionModel();
   model.notes = [];
   model.batches = [];
   model.questions = [model.questions[0]];
   const options = { cols: 50, rows: 30, locale: 'en', now: 0 };
-  const full = `${'a'.repeat(4000)}\n${'b'.repeat(4000)}LAST END`;
-  const ui = await overlayScreen(model, options, async req => req.op === 'prefs-get'
-    ? { ok: true, width: 48, cardMode: 'detailed', mergeSeconds: 60, tooltipSeconds: 15 }
-    : { ok: true, name: 'scroll.md', text: full, truncated: false });
-  assert.equal((await ui.act(hit(ui.frame(), 'attachment'))).ok, true);
-  const top = ui.frame();
-  const count = top.lines.join(' ').match(/\b(\d+)\/(\d+)\b/);
-  assert.ok(count && Number(count[2]) > 2, 'the attachment progress counts wrapped rows');
-  const total = Number(count[2]);
-  const frames = [top];
-  const [down] = parseInput('\x1b[B');
-  for (let i = 0; i < Math.floor((total - Number(count[1])) / 2); i++) await ui.input(down);
-  frames.push(ui.frame());
-  await ui.input(parseInput('\x1b[F')[0]);
-  frames.push(ui.frame());
-  const rail = await assertScrollThumb(frames, options.cols - 2, () => total);
-  const borderTop = top.lines.findIndex(line => line.startsWith('┌'));
-  const borderBottom = top.lines.findIndex(line => line.startsWith('└'));
-  assert.ok(rail.first > borderTop + 1 && rail.last < borderBottom, 'the track stays inside the attachment border and below its title');
-  for (const frame of frames) {
-    assert.equal(frame.lines[borderTop], top.lines[borderTop]);
-    assert.equal(frame.lines[borderBottom], top.lines[borderBottom]);
-    for (let row = rail.first; row <= rail.last; row++) {
-      assert.equal((await styledCells(frame.styled[row]))[options.cols - 1]?.text, '│', 'the scrollbar does not overwrite the right border');
-    }
-  }
-  assert.ok(frames[2].lines.join(' ').includes('LAST END'), 'the final wrapped text remains visible beside the bottom thumb');
-  const read = new Map();
-  const height = rail.last - rail.first + 1;
-  for (let offset = 0; offset < total; offset += height) {
-    const frame = render(model, { ...options, overlay: { ...ui.overlay(), top: offset } });
-    for (let row = rail.first; row <= rail.last; row++) {
-      const cells = await styledCells(frame.styled[row]);
-      read.set(frame.overlayTop + row - rail.first, cells.slice(1, options.cols - 2).map(cell => cell.text).join('').trimEnd());
-    }
-  }
-  assert.equal([...read].sort((a, b) => a[0] - b[0]).map(([, text]) => text).join(''), full.replace(/\n/g, ''), 'the scrollbar reserves its column instead of overwriting attachment text');
-  assert.equal((await ui.input(parseInput('\x1b')[0])).ok, true);
-  const short = render(model, { ...options, overlay: { kind: 'attachment', name: 'short.md', text: 'z'.repeat(options.cols - 2), top: 0 } });
-  assert.ok(short.lines.some(line => line.includes(`│${'z'.repeat(options.cols - 2)}│`)), 'a fitting attachment uses the full interior width without a scrollbar');
+  const ui = await overlayScreen(model, options, async () => ({ ok: true, width: 48, cardMode: 'detailed', mergeSeconds: 60, tooltipSeconds: 15 }));
   options.cols = 80;
   assert.equal((await ui.act(hit(ui.frame(), 'settings'))).ok, true);
   const settings = ui.frame();

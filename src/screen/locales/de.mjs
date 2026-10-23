@@ -52,8 +52,6 @@ export default {
   tooltipLabel: 'Tooltip-Dauer (s)',
   languageLabel: 'Sprache',
   settingsHint: 'Breite gilt beim nächsten Öffnen · Esc schließt',
-  attachmentHint: (shown, total) => `↑↓ scrollen · Esc schließt · ${shown}/${total}`,
-  truncated: 'gekürzt',
   processing: 'Wird verarbeitet…',
   delivering: 'Wird zugestellt…',
   delivered: 'Zugestellt',

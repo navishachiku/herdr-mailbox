@@ -2,7 +2,7 @@
 // Pure, so it can be tested without a terminal. `model` is the daemon's `view` answer.
 // Look: solid colour blocks. Buttons are one row of background colour with a column of padding on each side, never
 // bracketed text; adjacent clickable things keep a column apart; the hovered one gets a brighter background.
-import { width, cut, wrap, charWidth, pad } from './text.mjs';
+import { width, cut, wrap, charWidth, pad, linkParts } from './text.mjs';
 import { screenText, LOCALES, LANGUAGE_NAMES } from './messages.mjs';
 import { feedbackFor } from './feedback.mjs';
 
@@ -204,7 +204,22 @@ function card(q, ctx) {
     questionLines = [...questionLines.slice(0, 2), cut(third, w - 3) === third ? `${cut(third, w - 4)}…` : cut(third, w - 3)];
   }
   const shortened = questionLines.join('') !== wrap(q.content.question, w - 2).join('');
-  for (const l of questionLines) add([{ ...textItem(` ${l}`, S.bold), ...(shortened ? { tip: q.content.question } : {}) }]);
+  // Web addresses in the question are links to the default browser. Each is found in the whole question, so a cut
+  // or wrapped one still opens in full; the row compact mode cut has no link, since its text is no longer the original.
+  const parts = linkParts(q.content.question, wrap(q.content.question, w - 2));
+  questionLines.forEach((l, i) => {
+    const r = mkRow();
+    const tip = shortened ? { tip: q.content.question } : {};
+    place(r, { ...textItem(' ', S.bold), ...tip });
+    const edited = shortened && i === questionLines.length - 1 && l.endsWith('…');
+    for (const part of edited ? [{ t: l }] : parts[i]) {
+      place(r, part.url
+        ? item([seg(part.t, { ...S.bold, ...S.link }, S.linkHover)], { type: 'open-url', url: part.url })
+        : { ...textItem(part.t, S.bold), ...tip });
+    }
+    gap(r, 1 + w - r.col);
+    rows.push(r);
+  });
 
   if (q.type === 'decision') {
     const letters = 'ABCD';
@@ -241,7 +256,7 @@ function card(q, ctx) {
   (q.content.attachments ?? (q.content.attach ? [q.content.attach] : [])).forEach((a, index) => {
     const open = { type: 'attachment', mailbox: model.mailbox.id, uid: q.uid, ...(index ? { index } : {}) };
     const look = FB.look(open);
-    add([look ? textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off) : { ...item([seg(` 📎 ${cut(a.name, w - 6)} `, S.link, S.linkHover)], open), ...(cut(a.name, w - 6) !== a.name ? { tip: a.name } : {}) }]);
+    add([look ? { ...textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off), block: true } : { ...item([seg(` 📎 ${cut(a.name, w - 6)} `, S.link, S.linkHover)], open), ...(cut(a.name, w - 6) !== a.name ? { tip: a.name } : {}) }]);
   });
   if (q.draft?.reconfirm) {
     add([clipItem(` ${t.reconfirm}`, w - 1 + 1, S.hold)]);
@@ -476,7 +491,7 @@ function bottomRows(model, ctx) {
   return rows;
 }
 
-// ---------- in-pane layer (settings, attachment) ----------
+// ---------- in-pane layer (settings) ----------
 // A box drawn over the middle of the screen. While it is open only its own controls are clickable, and keys go to
 // it (main.mjs). Blue-grey, never red next to green.
 const BOX = { fg: P.text, bg: hex('#2b3245') };
@@ -516,42 +531,22 @@ function overlayRows(overlay, ctx, height) {
   const cols = ctx.cols - 2; // inside the border
   const rows = [];
   const add = (left, right) => rows.push(...flow(newRow, cols, left, right, BOX));
-  const title = overlay.kind === 'settings' ? t.settingsTitle : `📎 ${overlay.name}`;
+  const title = t.settingsTitle;
   add([clipItem(` ${title}`, cols - itemWidth(button(t.close, { type: 'overlay-close' })) - 1, BOX_TITLE)], [button(t.close, { type: 'overlay-close' })]);
   add([]);
   let top = 0;
-  if (overlay.kind === 'settings') {
-    // As tall as its content; on a pane too short for that, the settings scroll under the fixed title with the same
-    // scrollbar as the attachment reader, so the last one can still be reached.
-    const body = w => settingsRows(overlay.prefs ?? {}, t, w, ctx.locale);
-    let content = body(cols);
-    const room = height - 2 - rows.length; // inside the border, under the title
-    if (content.length > room && room > 0) {
-      content = body(cols - 1);
-      const max = Math.max(0, content.length - room);
-      top = Math.min(Math.max(0, overlay.top ?? 0), max);
-      const bar = scrollbar(room, content.length, top, max);
-      content.slice(top, top + room).forEach((r, i) => { gap(r, cols - 1 - r.col, BOX); r.segs.push(bar(i)); r.col = cols; rows.push(r); });
-    } else rows.push(...content);
-  } else {
-    // The text uses the full width inside the border; the border itself is the margin. Text longer than the box
-    // gives up the last column to a scrollbar and wraps one column narrower, so nothing is drawn over.
-    const source = overlay.text.replace(/\r/g, '').replace(/\t/g, '  ').split('\n');
-    const view = Math.max(1, height - 2 - rows.length - 1);
-    let body = source.flatMap(l => wrap(l, cols));
-    const scrolls = body.length > view;
-    if (scrolls) body = source.flatMap(l => wrap(l, cols - 1));
-    top = Math.min(Math.max(0, overlay.top ?? 0), Math.max(0, body.length - view));
-    const bar = scrolls ? scrollbar(view, body.length, top, Math.max(0, body.length - view)) : null;
-    body.slice(top, top + view).forEach((l, i) => {
-      const r = newRow();
-      place(r, textItem(l, BOX));
-      if (bar) { gap(r, cols - 1 - r.col, BOX); r.segs.push(bar(i)); r.col = cols; }
-      rows.push(...(bar ? [r] : flow(newRow, cols, [textItem(l, BOX)], [], BOX)));
-    });
-    while (rows.length < height - 3) add([]);
-    add([textItem(` ${t.attachmentHint(Math.min(body.length, top + view), body.length)}${overlay.truncated ? ` · ${t.truncated}` : ''}`, BOX_DIM)]);
-  }
+  // As tall as its content; on a pane too short for that, the settings scroll under the fixed title with the same
+  // scrollbar, so the last one can still be reached.
+  const body = w => settingsRows(overlay.prefs ?? {}, t, w, ctx.locale);
+  let content = body(cols);
+  const room = height - 2 - rows.length; // inside the border, under the title
+  if (content.length > room && room > 0) {
+    content = body(cols - 1);
+    const max = Math.max(0, content.length - room);
+    top = Math.min(Math.max(0, overlay.top ?? 0), max);
+    const bar = scrollbar(room, content.length, top, max);
+    content.slice(top, top + room).forEach((r, i) => { gap(r, cols - 1 - r.col, BOX); r.segs.push(bar(i)); r.col = cols; rows.push(r); });
+  } else rows.push(...content);
   return { rows: frame(rows, ctx.cols), top };
 }
 
@@ -724,11 +719,9 @@ export function render(model, {
   if (tooltip && !overlay) showTooltip(tooltip, { lines, styled, hits, tips, cols, rows });
   let overlayTop = null;
   if (overlay) {
-    // The attachment reader takes all but a row above and below; the settings box is as tall as its content, up to
-    // the whole screen.
+    // The settings box is as tall as its content, up to the whole screen.
     const screen = Math.min(rows, lines.length);
-    const height = overlay.kind === 'attachment' ? Math.max(5, screen - 2) : screen;
-    const box = overlayRows(overlay, ctx, height);
+    const box = overlayRows(overlay, ctx, screen);
     overlayTop = box.top;
     const start = Math.max(0, Math.floor((screen - box.rows.length) / 2));
     hits.length = 0;
