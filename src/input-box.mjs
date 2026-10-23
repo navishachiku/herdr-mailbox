@@ -89,7 +89,8 @@ export function pastedLines(screen) {
 export function classify(screen, agent = 'claude') {
   if (typeof screen !== 'string' || !screen.trim()) return 'unknown';
   const plain = screen.split(/\r?\n/).map((l) => l.replace(ANSI_RE, ''));
-  if (plain.some((l) => l.includes('↑/↓ to select') || l.includes('↑/↓ Navigate'))) return 'unknown';
+  const menu = agent === 'agy' ? '↑/↓ Navigate' : '↑/↓ to select';
+  if (plain.some((l) => l.includes(menu))) return 'unknown';
   if (findInputBox(plain, agent) < 0) return 'unknown';
   return typedText(screen, agent) ? 'typing' : 'empty';
 }

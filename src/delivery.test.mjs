@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
+import { classify } from './input-box.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -755,4 +756,11 @@ test('251/AC-2 an answer submitted on an agy mailbox screen reaches the working 
   const batch = await r.confirmed(q.uid);
   assert.equal(batch.kind, 'replies');
   assert.match(r.prompts()[0].argv[3], /^Answer:\s*B\s*["']?Wait until tomorrow["']?\s*$/m);
+});
+
+test('251/AC-1 only agy\'s arrow-key menu reads as unknown; the same words in a Claude conversation do not', () => {
+  const menu = `${agyScreen('empty')}\n  ↑/↓ Navigate\n  enter Confirm`;
+  assert.equal(classify(menu, 'agy'), 'unknown');
+  const talk = `● The guard treats "↑/↓ Navigate" as a menu.\n${emptyScreen}`;
+  assert.equal(classify(talk, 'claude'), 'empty');
 });
