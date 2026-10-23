@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Il materiale più lungo viaggia con la lettera come file (`--attach <file>`); la scheda mostra un link e, cliccandolo, il file si apre con il programma predefinito del sistema (un'immagine nel visualizzatore di immagini, un file di testo nella sua app predefinita). Gli indirizzi web in una domanda si aprono nel browser predefinito.
 
-`--to` accetta un id di pane, un nome di agent o un id di mailbox. Premi `prefix+shift+m` sul pane del leader per aprire la schermata della mailbox accanto a lui. Le domande di discussione, la modifica e il ritiro delle lettere, e ogni pulsante della schermata sono nella [guida completa](./guide.md).
+`--to` accetta un id di pane, un nome di agent o un id di mailbox. Premi `prefix+shift+m` sul pane del leader per aprire la schermata della mailbox accanto a lui. Le domande di discussione, la modifica e il ritiro delle lettere, e ogni pulsante della schermata sono nella [guida completa](./guide.md). Se la schermata non è aperta, una nuova domanda di decisione o di discussione mostra una notifica di Herdr con la domanda; con la schermata aperta non compare alcuna notifica.
 
 ## Limiti
 

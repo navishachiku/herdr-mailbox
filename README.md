@@ -82,7 +82,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Longer material goes with the letter as a file (`--attach <file>`); the card shows a link, and clicking it opens the file in your system's default program (an image in the image viewer, a text file in its default app). Web addresses in a question open in your default browser.
 
-`--to` takes a pane id, an agent name or a mailbox id. Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it. Discussion questions, editing and withdrawing letters, and every screen button are in [the full guide](docs/guide.md).
+`--to` takes a pane id, an agent name or a mailbox id. Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it. Discussion questions, editing and withdrawing letters, and every screen button are in [the full guide](docs/guide.md). When the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised.
 
 ## Limits
 

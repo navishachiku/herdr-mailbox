@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Material mais longo vai junto com a carta como arquivo (`--attach <file>`); o cartão mostra um link e, ao clicar, o arquivo abre no programa padrão do sistema (uma imagem no visualizador de imagens, um arquivo de texto no aplicativo padrão). Endereços web numa pergunta abrem no navegador padrão.
 
-`--to` aceita um id de pane, um nome de agente ou um id de caixa de correio. Pressione `prefix+shift+m` no pane do leader para abrir a tela da caixa de correio ao lado dele. Perguntas de discussão, como editar e retirar cartas, e cada botão da tela estão no [guia completo](./guide.md).
+`--to` aceita um id de pane, um nome de agente ou um id de caixa de correio. Pressione `prefix+shift+m` no pane do leader para abrir a tela da caixa de correio ao lado dele. Perguntas de discussão, como editar e retirar cartas, e cada botão da tela estão no [guia completo](./guide.md). Quando a tela não está aberta, uma nova pergunta de decisão ou de discussão mostra uma notificação do Herdr com a pergunta; com a tela aberta, nenhuma notificação aparece.
 
 ## Limites
 

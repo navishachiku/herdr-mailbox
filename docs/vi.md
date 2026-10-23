@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`); trên thẻ sẽ có một liên kết, bấm vào là tệp mở bằng chương trình mặc định của hệ thống (ảnh mở trong trình xem ảnh, tệp văn bản mở trong ứng dụng mặc định). Địa chỉ web trong câu hỏi mở bằng trình duyệt mặc định.
 
-`--to` nhận pane id, tên agent hoặc id hộp thư. Bấm `prefix+shift+m` trên pane của leader để mở màn hình hộp thư ngay bên cạnh. Câu hỏi thảo luận, cách sửa và thu hồi thư, cùng công dụng của từng nút trên màn hình đều có trong [hướng dẫn đầy đủ](./guide.md).
+`--to` nhận pane id, tên agent hoặc id hộp thư. Bấm `prefix+shift+m` trên pane của leader để mở màn hình hộp thư ngay bên cạnh. Câu hỏi thảo luận, cách sửa và thu hồi thư, cùng công dụng của từng nút trên màn hình đều có trong [hướng dẫn đầy đủ](./guide.md). Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi thảo luận mới sẽ hiện thông báo của Herdr kèm câu hỏi; khi màn hình đang mở thì không có thông báo.
 
 ## Giới hạn
 

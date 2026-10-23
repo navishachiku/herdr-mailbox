@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 El material más largo viaja con la carta como archivo (`--attach <file>`); la tarjeta muestra un enlace y, al hacer clic, el archivo se abre con el programa predeterminado del sistema (una imagen en el visor de imágenes, un archivo de texto en su aplicación predeterminada). Las direcciones web de una pregunta se abren en el navegador predeterminado.
 
-`--to` acepta un id de pane, un nombre de agente o un id de buzón. Pulsa `prefix+shift+m` en el pane del leader para abrir la pantalla del buzón a su lado. Las preguntas de debate, cómo editar y retirar cartas, y cada botón de la pantalla están en la [guía completa](./guide.md).
+`--to` acepta un id de pane, un nombre de agente o un id de buzón. Pulsa `prefix+shift+m` en el pane del leader para abrir la pantalla del buzón a su lado. Las preguntas de debate, cómo editar y retirar cartas, y cada botón de la pantalla están en la [guía completa](./guide.md). Si la pantalla no está abierta, una nueva pregunta de decisión o de debate muestra una notificación de Herdr con la pregunta; con la pantalla abierta no se muestra ninguna.
 
 ## Límites
 

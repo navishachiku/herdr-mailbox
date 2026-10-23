@@ -95,7 +95,7 @@ Messages are signed `[workspace/]position/role 💬 ` from the sender pane's lab
 
 ## The mailbox screen
 
-`prefix+shift+m` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `prefix+shift+m` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. The text follows the system language (English or Traditional Chinese).
+`prefix+shift+m` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `prefix+shift+m` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. While the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised. The text follows the system language (English or Traditional Chinese).
 
 - **Messages** — up to four queued notes, why delivery is paused (typing, unreadable input box, receiver working or unverified), and **Send now**. A batch whose arrival could not be confirmed shows **Mark delivered** and **Resend (may duplicate)**.
 - **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked, and a note field. Click an option, or use **Accept** or **Ask**. A note alone, with no option, is an answer too. **Void** sends a question back at once as "no answer needed".

@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <file>`) ; la carte affiche un lien, et un clic ouvre le fichier avec le programme par défaut du système (une image dans la visionneuse d'images, un fichier texte dans son application par défaut). Les adresses web d'une question s'ouvrent dans le navigateur par défaut.
 
-`--to` accepte un id de pane, un nom d'agent ou un id de boîte. Appuie sur `prefix+shift+m` dans le pane du leader pour ouvrir l'écran de la boîte à côté. Les questions de discussion, la modification et le retrait des lettres, ainsi que chaque bouton de l'écran, sont décrits dans le [guide complet](./guide.md).
+`--to` accepte un id de pane, un nom d'agent ou un id de boîte. Appuie sur `prefix+shift+m` dans le pane du leader pour ouvrir l'écran de la boîte à côté. Les questions de discussion, la modification et le retrait des lettres, ainsi que chaque bouton de l'écran, sont décrits dans le [guide complet](./guide.md). Quand l'écran n'est pas ouvert, une nouvelle question de décision ou de discussion déclenche une notification Herdr avec la question ; écran ouvert, aucune notification n'est envoyée.
 
 ## Limites
 

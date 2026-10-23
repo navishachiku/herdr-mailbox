@@ -60,7 +60,7 @@ mailbox send --to <address|MB-id> --type decision \
 較長的內容可以用檔案附在信上（`--attach <file>`）；卡片上會出現連結，點下去用系統預設的程式打開（圖片用看圖程式、文字檔用預設的程式）。問題裡的網址會用預設瀏覽器打開。
 
 
-`--to` 可以填 pane id、agent 名稱或信箱 id。在 leader 的 pane 上按 `prefix+shift+m`，信箱畫面就會開在它旁邊。討論題、修改與撤回信件，以及信箱畫面上每個按鈕的用法，見[完整說明](./guide.md)。
+`--to` 可以填 pane id、agent 名稱或信箱 id。在 leader 的 pane 上按 `prefix+shift+m`，信箱畫面就會開在它旁邊。討論題、修改與撤回信件，以及信箱畫面上每個按鈕的用法，見[完整說明](./guide.md)。信箱畫面沒開著時，新的決策題或討論題進來會跳一則帶題目的 Herdr 通知；畫面開著就不跳。
 
 ## 限制
 

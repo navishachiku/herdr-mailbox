@@ -59,7 +59,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 Längere Inhalte hängst du als Datei an den Brief an (`--attach <file>`); die Karte zeigt einen Link; ein Klick öffnet die Datei im Standardprogramm deines Systems (ein Bild im Bildbetrachter, eine Textdatei in ihrer Standard-App). Webadressen in einer Frage öffnen sich im Standardbrowser.
 
-`--to` akzeptiert eine Pane-ID, einen Agent-Namen oder eine Mailbox-ID. Drücke `prefix+shift+m` im Pane des leaders, um den Briefkasten-Bildschirm daneben zu öffnen. Diskussionsfragen, das Bearbeiten und Zurückziehen von Briefen und jede Schaltfläche des Bildschirms stehen in der [vollständigen Anleitung](./guide.md).
+`--to` akzeptiert eine Pane-ID, einen Agent-Namen oder eine Mailbox-ID. Drücke `prefix+shift+m` im Pane des leaders, um den Briefkasten-Bildschirm daneben zu öffnen. Diskussionsfragen, das Bearbeiten und Zurückziehen von Briefen und jede Schaltfläche des Bildschirms stehen in der [vollständigen Anleitung](./guide.md). Ist der Bildschirm nicht geöffnet, löst eine neue Entscheidungs- oder Diskussionsfrage eine Herdr-Benachrichtigung mit der Frage aus; bei geöffnetem Bildschirm gibt es keine.
 
 ## Grenzen
 
