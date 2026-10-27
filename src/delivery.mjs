@@ -9,7 +9,7 @@ import * as herdr from './herdr.mjs';
 import { signatureFor, withSignature } from './signature.mjs';
 import { classify, pastedLines, typedText } from './input-box.mjs';
 import { canDeliver } from './identity.mjs';
-import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, notesBatch, repliesBatch } from './format.mjs';
+import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, mailboxReminder, notesBatch, repliesBatch } from './format.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
 import { ATTACH_DIR, STATE_DIR } from './paths.mjs';
 import { timings, mergeMs } from './timings.mjs';
@@ -350,6 +350,17 @@ async function batchByMarker(req, ctx) {
   return { ok: true, context: hookContext({ batch, items }) };
 }
 
+// Every prompt typed into a pane goes through the hook: add the reminder when the pane owns a connected mailbox,
+// after the batch background when the prompt is a batch. A pane without a mailbox gets nothing.
+async function promptContext(req, ctx) {
+  const parts = [];
+  if (req.marker) { const batch = await batchByMarker(req, ctx); if (batch.ok) parts.push(batch.context); }
+  const pane = ctx.caller?.pane;
+  const mine = pane && Object.values(api.state.mailboxes).find(b => b.state === 'connected' && b.owner?.pane === pane);
+  if (mine) parts.push(mailboxReminder(mine.id));
+  return { ok: true, context: parts.join('\n\n') };
+}
+
 async function deliveryState(req) {
   const box = api.state.mailboxes[req.mailbox];
   if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
@@ -370,6 +381,7 @@ export default function registerDelivery(a) {
   api.op('resolve-batch', resolveBatch, { mutates: true });
   api.op('delivery-state', deliveryState);
   api.op('batch-by-marker', batchByMarker);
+  api.op('prompt-context', promptContext);
   // A restart in the middle of a send leaves the outcome unknown; it is never sent again by itself.
   api.on('start', () => {
     let changed = false;

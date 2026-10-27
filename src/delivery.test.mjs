@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
 import { classify } from './input-box.mjs';
@@ -573,11 +573,11 @@ test('201/AC-14 UserPromptSubmit reads a pasted header marker but ignores marker
     for (const value of [disclaimer, a.uid, b.uid, batch.id, 'w1:p2', sender]) assert.ok(context.includes(value), value);
     const embedded = hook(wrap(`An ordinary pasted report follows.\n\n${prompt}`));
     assert.equal(embedded.status, 0, embedded.stderr);
-    assert.equal(embedded.stdout, '', 'a marker after ordinary pasted content must not trigger the hook');
+    assert.ok(!embedded.stdout.includes(batch.id), 'a marker after ordinary pasted content must not bring the batch background');
   }
   const ordinary = hook(`An ordinary user message follows.\n\n${prompt}`);
   assert.equal(ordinary.status, 0, ordinary.stderr);
-  assert.equal(ordinary.stdout, '', 'a marker inside an ordinary message must not trigger the hook');
+  assert.ok(!ordinary.stdout.includes(batch.id), 'a marker inside an ordinary message must not bring the batch background');
 });
 
 test('201/AC-16 a working Claude receiver confirms an absorbed queued command but not enqueue alone', async t => {
@@ -818,4 +818,87 @@ test('263/AC-2 the background-agent list holding the arrow keys stays unknown al
   const rule = '─'.repeat(12);
   const focused = ['● done', rule, '❯ ', rule, '  Haiku (Medium) │ Context 6%', '  ↑/↓ to select', '❯ ⏺ main'].join('\n');
   assert.equal(classify(focused, 'claude'), 'unknown');
+});
+
+test('278.1/AC-2 a prompt typed into a pane that owns a connected mailbox gets the reminder with that mailbox id', async t => {
+  const r = rig(t);
+  const mb = await r.bind();
+  const hook = prompt => spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' },
+    input: JSON.stringify({ prompt, session_id: 'sid-w1:p1', transcript_path: r.transcript }),
+    encoding: 'utf8', timeout: 15000,
+  });
+  const result = hook('What should we do next?');
+  assert.equal(result.status, 0, result.stderr);
+  const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(context.includes(`This pane has the herdr-mailbox mailbox ${mb} open`));
+  assert.ok(context.includes(`\`mailbox send --to ${mb} --type decision\``));
+  assert.ok(context.includes('`--attach <file>`'));
+  // The pane of the other mailbox owner gets its own id, not this one.
+  const otherBox = await r.bind('w1:p2');
+  const other = spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p2', HERDR_MAILBOX_SID: 'sid-w1:p2' },
+    input: JSON.stringify({ prompt: 'hi' }), encoding: 'utf8', timeout: 15000,
+  });
+  const otherContext = JSON.parse(other.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(otherContext.includes(`mailbox ${otherBox} open`) && !otherContext.includes(`mailbox ${mb} open`));
+});
+
+test('278.1/AC-1 a prompt typed into a pane without a mailbox gets no reminder', async t => {
+  const r = rig(t);
+  await r.bind();
+  const result = spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p3', HERDR_MAILBOX_SID: 'sid-w1:p3' },
+    input: JSON.stringify({ prompt: 'What should we do next?' }), encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+});
+
+test('278.1/AC-3 a daemon that does not answer within two seconds adds no reminder and the prompt goes through', async t => {
+  const r = rig(t);
+  await r.bind();
+  r.stop();
+  fs.rmSync(path.join(r.dir, 'd.sock'), { force: true });
+  const silent = net.createServer(() => {});
+  await new Promise(resolve => silent.listen(path.join(r.dir, 'd.sock'), resolve));
+  t.after(() => silent.close());
+  const started = Date.now();
+  const result = await new Promise(resolve => {
+    const child = spawn(process.execPath, [path.join(here, 'prompt-submit.mjs')], { env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' } });
+    let stdout = '';
+    child.stdout.on('data', d => { stdout += d; });
+    child.on('close', status => resolve({ status, stdout }));
+    child.stdin.end(JSON.stringify({ prompt: 'hello' }));
+  });
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, '');
+  assert.ok(Date.now() - started < 4000, 'must give up after about two seconds');
+});
+
+test('278.1 a daemon that predates prompt-context still gives a batch its background through batch-by-marker', async t => {
+  const r = rig(t);
+  await r.bind();
+  r.stop();
+  fs.rmSync(path.join(r.dir, 'd.sock'), { force: true });
+  const old = net.createServer(sock => {
+    sock.on('data', d => {
+      const req = JSON.parse(String(d).split('\n')[0]);
+      sock.end(`${JSON.stringify(req.op === 'batch-by-marker' ? { ok: true, context: 'LEGACY-BATCH-BACKGROUND' } : { ok: false, error: 'bad_op', message: `unknown op ${req.op}` })}\n`);
+    });
+  });
+  await new Promise(resolve => old.listen(path.join(r.dir, 'd.sock'), resolve));
+  t.after(() => old.close());
+  // The fake daemon lives in this process, so the hook must run without blocking the event loop.
+  const run = prompt => new Promise(resolve => {
+    const child = spawn(process.execPath, [path.join(here, 'prompt-submit.mjs')], { env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' } });
+    let stdout = '';
+    child.stdout.on('data', d => { stdout += d; });
+    child.on('close', status => resolve({ status, stdout }));
+    child.stdin.end(JSON.stringify({ prompt }));
+  });
+  const batch = await run('📬 2 則訊息（BT-abc123）');
+  assert.equal(batch.status, 0);
+  assert.equal(JSON.parse(batch.stdout).hookSpecificOutput.additionalContext, 'LEGACY-BATCH-BACKGROUND');
+  assert.equal((await run('plain prompt')).stdout, '', 'an old daemon without a marker adds nothing and does not block');
 });

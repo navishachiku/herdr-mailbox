@@ -35,6 +35,7 @@ const t = table({
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
     options: 'Options',
+    reminder: id => `This pane has the herdr-mailbox mailbox ${id} open; the user answers questions on the mailbox screen. Send each question that asks the user to pick among options as a decision letter with \`mailbox send --to ${id} --type decision\`, one question per letter, not as a numbered list in the conversation; a question without fixed options goes as \`--type discussion\`. When the user needs to look at a file to answer, attach that file with \`--attach <file>\`. Do not mention letters waiting in the mailbox when you report; the mailbox tells the user about new ones.`,
   },
   'zh-TW': {
     colon: '：',
@@ -67,6 +68,7 @@ const t = table({
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
     options: '選項',
+    reminder: id => `這個視窗開著 herdr-mailbox 信箱 ${id}，使用者在信箱畫面作答。要使用者在幾個選項裡挑的題，用 \`mailbox send --to ${id} --type decision\` 寄成決策卡，一題一張，不在對話裡列題號；沒有固定選項的題用 \`--type discussion\`。使用者要看某個檔才答得出時，用 \`--attach <檔>\` 附上那個檔。回報時不提信箱裡的卡，新卡由信箱提醒使用者。`,
   },
 });
 
@@ -195,3 +197,6 @@ export function hookContext({ batch, items }) {
   for (const i of items) lines.push(t.ctxItem(i.uid, i.serial, oneLine(i.label || i.sender), oneLine(i.sender), i.mailbox));
   return lines.join('\n');
 }
+
+// The reminder the hook adds to every prompt typed into a pane that owns a connected mailbox.
+export const mailboxReminder = id => t.reminder(id);

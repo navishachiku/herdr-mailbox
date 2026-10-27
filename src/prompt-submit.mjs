@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Claude Code UserPromptSubmit hook. A mailbox batch typed into the conversation starts with "📬 N messages (marker)";
 // the marker is looked up in the daemon and what the short text left out is handed to the model as added context.
+// A pane that owns a connected mailbox also gets the mailbox reminder on every prompt; the daemon decides.
 // Anything else, or any failure, prints nothing and exits 0 so a normal prompt is never held up.
 import fs from 'node:fs';
 import { call } from './ipc.mjs';
@@ -14,12 +15,16 @@ const firstLine = prompt => String(prompt ?? '').replace(/^\s+/, '').replace(/^<
 try {
   const input = JSON.parse(fs.readFileSync(0, 'utf8'));
   const marker = MARKER.exec(firstLine(input.prompt))?.[1];
-  if (marker) {
-    // A daemon that answers slowly must not hold the prompt: give up after two seconds and add nothing.
-    const res = await Promise.race([call({ op: 'batch-by-marker', marker, caller: { pane: process.env.HERDR_PANE_ID, sid: process.env.HERDR_MAILBOX_SID } }), new Promise(resolve => setTimeout(resolve, 2000, { ok: false }))]);
-    if (res.ok && res.context) {
-      process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: res.context } }));
-    }
+  // A daemon that answers slowly must not hold the prompt: give up after two seconds and add nothing.
+  const caller = { pane: process.env.HERDR_PANE_ID, sid: process.env.HERDR_MAILBOX_SID };
+  const ask = async () => {
+    const res = await call({ op: 'prompt-context', marker, caller });
+    // A daemon started before an update does not know prompt-context: a batch still gets its background the old way.
+    return res.error === 'bad_op' && marker ? call({ op: 'batch-by-marker', marker, caller }) : res;
+  };
+  const res = await Promise.race([ask(), new Promise(resolve => setTimeout(resolve, 2000, { ok: false }))]);
+  if (res.ok && res.context) {
+    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: res.context } }));
   }
 } catch { /* never block the prompt */ }
 process.exit(0);
