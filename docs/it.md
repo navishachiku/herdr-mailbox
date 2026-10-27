@@ -8,12 +8,16 @@
 [English](../README.md) | [简体中文](./zh-sc.md) | [繁體中文](./zh-tc.md) | [Español](./es.md) | [Português](./pt.md) | [Русский](./ru.md) | [日本語](./jp.md) | [Français](./fr.md) | [Deutsch](./de.md) | [Tiếng Việt](./vi.md) | [한국어](./ko.md) | [ไทย](./th.md) | [Italiano](./it.md)
 
 <p align="center">
-  <a href="#installazione">installazione</a> · <a href="#inviare-una-lettera">inviare una lettera</a> · <a href="#limiti">limiti</a> · <a href="./guide.md">guida completa</a>
+  <a href="#installazione">installazione</a> · <a href="#utilizzo">utilizzo</a> · <a href="#inviare-una-lettera">inviare una lettera</a> · <a href="#limiti">limiti</a> · <a href="./guide.md">guida completa</a>
 </p>
 
-> Stai scrivendo, un worker si intromette, il leader si sveglia per la terza volta, e quella domanda di prima, dov'è finita?
+> In un multi-agent workflow, ciò che conta di più sono la tua attenzione e le tue decisioni.
 
-Usi un multi-agent workflow in Herdr: un leader con alcuni worker su Claude Code e Codex, ognuno col suo compito. Ogni volta che uno finisce qualcosa, lo butta nella conversazione del leader. Sei a metà di una frase e un report si infila e parte insieme a lei; la domanda di decisione che ti avevano appena fatto viene spazzata via dal messaggio successivo.
+Usi un multi-agent workflow in Herdr: un agent leader con diversi agent worker, ognuno col suo compito. I loro report e messaggi sommergono la conversazione del leader. Sei a metà di una frase e un report si infila e parte insieme a lei; la domanda di decisione che ti avevano appena fatto viene spazzata via un secondo dopo dal messaggio successivo.
+
+Questo plugin esiste proprio per risolvere questo: la tua attenzione resta ininterrotta, riservata alle decisioni di qualità che solo tu puoi prendere.
+
+Non è una riedizione delle domande a opzioni di Claude Code (AskUserQuestion). Sfrutta ciò che offre Herdr per raccogliere in un unico posto i report e le domande in sospeso di agent di produttori diversi, unirli e coordinarli; e dato che la conversazione non viene più sommersa, risparmia anche l'utilizzo che quelle ondate costerebbero.
 
 **Prima**
 
@@ -28,7 +32,7 @@ Mailbox dà una casella di posta al leader. Oltre ai messaggi normali, che sono 
 - **La tua casella di input resta tua** — niente viene digitato mentre scrivi tu, e niente arriva mentre il leader sta ancora rispondendo.
 - **I messaggi normali arrivano insieme** — aspettano fino a un minuto per entrare in un unico gruppo e svegliare il leader una volta sola; **Invia ora** salta l'attesa.
 - **Le domande in un solo posto** — le domande di decisione diventano schede accanto al leader; rispondi con il mouse e invia tutte le risposte in un colpo solo.
-- **Qualsiasi agent può scrivere** — chi invia esegue soltanto `mailbox send`, quindi Claude Code, Codex e qualsiasi agent capace di lanciare un comando di shell scrivono nella stessa casella.
+- **Qualsiasi agent può scrivere** — chi invia esegue soltanto `mailbox send`, quindi Claude Code, Codex, agy e qualsiasi agent capace di lanciare un comando di shell scrivono nella stessa casella.
 - **Una ricevuta per ogni invio** — ogni invio restituisce subito l'id della lettera e il suo stato.
 - **Segue il leader** — spostare il pane, riavviare Herdr o cancellare la conversazione lascia la casella con lo stesso destinatario.
 
@@ -37,16 +41,51 @@ Mailbox dà una casella di posta al leader. Oltre ai messaggi normali, che sono 
 Richiede Herdr 0.9.3 o successivo e Node 18 o successivo.
 
 ```sh
+# 1. Installa il plugin
 herdr plugin install navishachiku/herdr-mailbox
+
+# 2. Esegui la sua azione setup: il comando `mailbox`, gli hook di Claude Code e le regole di autorizzazione di Codex e agy
+herdr plugin action invoke setup --plugin herdr-mailbox
+
+# 3. Le integrazioni degli agent proprie di Herdr, una per ogni agent che usi
+herdr integration install claude
+herdr integration install codex
+herdr integration install antigravity-cli
+
+# 4. La skill che insegna agli agent a inviare lettere
+npx skills add navishachiku/herdr-mailbox
 ```
 
-Il resto della configurazione (il comando `mailbox`, gli hook di Claude Code, la scorciatoia e, se usi Codex, una regola) lascialo al tuo coding agent. Per il comando, gli hook e la regola di Codex esegue `node <plugin dir>/src/setup.mjs install`; `uninstall` li annulla. Incollagli questo:
+Un agent senza un sistema di skill può leggere le stesse istruzioni da `mailbox skill`; incolla il suo output nel file di istruzioni di quell'agent.
 
-```
-Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md
+L'azione setup fa un backup di ogni file prima di modificarlo (`<file>.bak-<date>`), non aggiunge nulla due volte se rieseguita e continua a funzionare dopo `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` la annulla. Riavvia le sessioni di Claude Code che devono ricevere posta.
+
+Aggiungi la scorciatoia al `config.toml` di Herdr (`~/.config/herdr/config.toml`; su Windows `%APPDATA%\herdr\config.toml`), poi ricarica con `prefix+shift+r` (`prefix` è `ctrl+b`, se non l'hai cambiato):
+
+```toml
+[[keys.command]]
+key = "prefix+shift+m"
+type = "plugin_action"
+command = "herdr-mailbox.open"
+description = "open the mailbox"
+
+[ui.toast]
+delivery = "herdr"
 ```
 
-Quando ha finito, ricarica Herdr con `prefix+shift+r` e premi `prefix+shift+m` sul pane del leader per aprire accanto la schermata della mailbox (`prefix` è `ctrl+b`, se non l'hai cambiato). I passi che l'agent segue sono in [AGENT-SETUP.md](../AGENT-SETUP.md).
+Se l'azione non funziona sulla tua macchina, [AGENT-SETUP.md](../AGENT-SETUP.md) riporta gli stessi passi da far seguire a un coding agent.
+
+## Utilizzo
+
+Apri la mailbox nella finestra del leader: seleziona il pane del leader e premi `prefix+shift+m`. La mailbox appartiene all'agent del pane su cui premi la scorciatoia, quindi premila su quello del leader, non su quello di un worker. La schermata della mailbox si apre accanto al leader; premere di nuovo la scorciatoia dall'interno della schermata, oppure `q`, la chiude, e le lettere restano.
+
+- **Messaggi** — i messaggi normali dei worker aspettano qui ed entrano nel leader in un unico gruppo; **Invia ora** li invia subito.
+- **Domande** — schede di decisione e di discussione. Clicca un'opzione o scrivi una nota, poi **Invia** restituisce tutte le risposte in un unico gruppo. **Accetta tutte**, **Chiedi tutte** e **Annulla tutte** agiscono su più schede insieme.
+- **Opzioni** — larghezza della schermata, modalità delle schede, quanto aspettano i messaggi normali prima di essere uniti e la lingua della schermata (13 lingue).
+
+Se la schermata non è aperta, una nuova domanda di decisione o di discussione mostra una notifica di Herdr con la domanda; con la schermata aperta non compare alcuna notifica. I worker scrivono al leader con `mailbox send`, descritto qui sotto.
+
+**Rivendicare una mailbox**: quando la conversazione del leader viene sostituita, la mailbox si disconnette e le sue lettere restano. Esegui nel pane del nuovo agent la riga `mailbox claim MB-xxxx` mostrata nella schermata, e la mailbox torna connessa.
 
 ## Inviare una lettera
 
@@ -57,14 +96,22 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Il materiale più lungo viaggia con la lettera come file (`--attach <file>`); la scheda mostra un link e, cliccandolo, il file si apre con il programma predefinito del sistema (un'immagine nel visualizzatore di immagini, un file di testo nella sua app predefinita). Gli indirizzi web in una domanda si aprono nel browser predefinito.
+`--to` accetta un id di pane, un nome di agent o un id di mailbox. `--recommend` è facoltativo; una scheda senza non mostra alcuna opzione consigliata.
 
-`--to` accetta un id di pane, un nome di agent o un id di mailbox. Premi `prefix+shift+m` sul pane del leader per aprire la schermata della mailbox accanto a lui. Le domande di discussione, la modifica e il ritiro delle lettere, e ogni pulsante della schermata sono nella [guida completa](./guide.md). Se la schermata non è aperta, una nuova domanda di decisione o di discussione mostra una notifica di Herdr con la domanda; con la schermata aperta non compare alcuna notifica.
+Il materiale più lungo viaggia con la lettera come file (`--attach <file>`, fino a 5 per lettera); la scheda mostra un link e, cliccandolo, il file si apre con il programma predefinito del sistema (un'immagine nel visualizzatore di immagini, un file di testo nella sua app predefinita). Gli indirizzi web in una domanda si aprono nel browser predefinito.
+
+`--wait [--timeout <ms>]` fa sì che l'invio ritorni solo dopo che il leader ha preso la lettera e finito il suo turno. Se smette di aspettare esce con 3 o 4; in entrambi i casi una lettera a una mailbox è già in coda o consegnata, quindi non inviarla di nuovo. Una lettera a un pane senza mailbox viene firmata e digitata direttamente al suo interno una sola volta, subito. Le domande di discussione, la consultazione, la modifica e il ritiro delle lettere, e ogni pulsante della schermata sono nella [guida completa](./guide.md).
 
 ## Limiti
 
 - Una domanda può avere al massimo 200 caratteri e un messaggio normale 500; i testi più lunghi vanno in un file con `--attach`.
-- L'agent che possiede la mailbox (il leader) deve essere Claude Code, perché la consegna aspetta che la sua casella di input sia vuota; chi invia può essere qualsiasi agent.
+- L'agent che possiede la mailbox (il leader) deve essere Claude Code o agy, perché la consegna aspetta che la sua casella di input sia vuota e solo quelle due caselle di input si possono leggere; chi invia può essere qualsiasi agent.
+
+## Problemi noti
+
+- **Codex: non può ancora possedere una mailbox.** Codex 0.163 esegue le sue conversazioni in un unico server in background condiviso, quindi l'integrazione Codex di Herdr attribuisce ogni conversazione al pane che ha avviato quel server, e il pane di Codex stesso non riceve mai un id di conversazione a cui collegare una mailbox. Codex può comunque inviare lettere, e un messaggio normale inviato a un pane di Codex senza mailbox viene firmato e digitato direttamente al suo interno una sola volta. L'id di pane di Codex in `HERDR_PANE_ID` può essere sbagliato, quindi un mittente Codex deve indicare il proprio pane con `--from <pane id>`.
+- **agy: la skill non viene installata dove agy la legge.** La CLI `skills` non riesce a installare nella cartella da cui agy carica le skill, quindi `npx skills add` non la raggiunge. È un limite di quella CLI; la mailbox non lo aggira.
+- **agy: vede la skill ma non usa la mailbox di sua iniziativa.** Se gli dici solo «fai rapporto ad agent-a», agy ricorre al suo strumento di messaggistica integrato invece di `mailbox send`. Nomina il comando nella richiesta («invialo con `mailbox send`»).
 
 <details>
 <summary>Avanzate: come funziona, stato, test</summary>

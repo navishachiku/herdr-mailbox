@@ -8,12 +8,16 @@
 [English](./README.md) | [简体中文](./docs/zh-sc.md) | [繁體中文](./docs/zh-tc.md) | [Español](./docs/es.md) | [Português](./docs/pt.md) | [Русский](./docs/ru.md) | [日本語](./docs/jp.md) | [Français](./docs/fr.md) | [Deutsch](./docs/de.md) | [Tiếng Việt](./docs/vi.md) | [한국어](./docs/ko.md) | [ไทย](./docs/th.md) | [Italiano](./docs/it.md)
 
 <p align="center">
-  <a href="#install">install</a> · <a href="#sending-a-letter">sending a letter</a> · <a href="#limits">limits</a> · <a href="docs/guide.md">full guide</a>
+  <a href="#install">install</a> · <a href="#usage">usage</a> · <a href="#sending-a-letter">sending a letter</a> · <a href="#limits">limits</a> · <a href="docs/guide.md">full guide</a>
 </p>
 
-> You're typing, a worker cuts in, the leader wakes up for the third time, and where did that question go?
+> In a multi-agent workflow, your attention and your decisions are what matter most.
 
-You run a multi-agent workflow in Herdr: one leader, a few workers on Claude Code and Codex, each on its own job. Every time one of them finishes something, it drops it into the leader's conversation. You're halfway through a sentence and a report cuts in and goes out with it; the decision question you were just asked is washed away by the next message.
+You run a multi-agent workflow in Herdr: one leader agent with several worker agents, each on its own job. Their reports and messages flood the leader's conversation. You're halfway through a sentence and a report cuts in and goes out with it; the decision question you were just asked is washed away by the next message a second later.
+
+This plugin exists to fix exactly that: your attention stays unbroken, saved for the high-quality decisions that only you can make.
+
+It is not Claude Code's option questions (AskUserQuestion) built again. It uses what Herdr offers to gather the reports and open questions of agents from different vendors in one place, merge them and coordinate them; and since the conversation is no longer flooded, it also saves the usage those floods would cost.
 
 **Before**
 
@@ -28,7 +32,7 @@ Mailbox gives the leader a mailbox. Workers can drop in plain notes, like postca
 - **Your input box stays yours** — nothing is typed while you are typing, and nothing lands while the leader is still answering.
 - **Notes arrive together** — notes wait up to a minute so they can go in as one batch and wake the leader once; **Send now** skips the wait.
 - **Questions in one place** — decision questions become cards beside the leader; answer with the mouse and send every answer in one batch.
-- **Any agent can write** — senders only run `mailbox send`, so Claude Code, Codex and any agent that can run a shell command can write to the same mailbox.
+- **Any agent can write** — senders only run `mailbox send`, so Claude Code, Codex, agy and any agent that can run a shell command can write to the same mailbox.
 - **A receipt for every send** — each send returns at once with the letter's id and status.
 - **It follows the leader** — moving the pane, restarting Herdr or clearing the conversation keeps the mailbox with the same receiver.
 
@@ -56,7 +60,7 @@ An agent with no skill system can read the same instructions from `mailbox skill
 
 The setup action backs up every file before it changes it (`<file>.bak-<date>`), adds nothing twice when run again, and keeps working after `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` reverts it. Restart the Claude Code sessions that should receive mail.
 
-Add the shortcut to Herdr's `config.toml` (`~/.config/herdr/config.toml`; on Windows `%APPDATA%\herdr\config.toml`), then reload with `prefix+shift+r`:
+Add the shortcut to Herdr's `config.toml` (`~/.config/herdr/config.toml`; on Windows `%APPDATA%\herdr\config.toml`), then reload with `prefix+shift+r` (`prefix` is `ctrl+b` unless you changed it):
 
 ```toml
 [[keys.command]]
@@ -69,7 +73,19 @@ description = "open the mailbox"
 delivery = "herdr"
 ```
 
-Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it (`prefix` is `ctrl+b` unless you changed it). If the action does not work on your machine, [AGENT-SETUP.md](AGENT-SETUP.md) has the same steps for a coding agent to follow.
+If the action does not work on your machine, [AGENT-SETUP.md](AGENT-SETUP.md) has the same steps for a coding agent to follow.
+
+## Usage
+
+Open the mailbox in the leader's window: focus the leader's pane and press `prefix+shift+m`. The mailbox belongs to the agent whose pane you press it on, so press it on the leader's, not on a worker's. The mailbox screen opens beside the leader; pressing the shortcut again from inside the screen, or `q`, closes it, and the letters stay.
+
+- **Messages** — notes from workers wait here and go in to the leader as one batch; **Send now** sends them at once.
+- **Questions** — decision and discussion cards. Click an option or write a note, then **Send** returns every answer in one batch. **Accept all**, **Ask all** and **Void all** act on many cards at once.
+- **Options** — screen width, card mode, how long notes wait to be merged, and the screen language (13 languages).
+
+When the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised. Workers write to the leader with `mailbox send`, below.
+
+**Claiming a mailbox**: when the leader's conversation is replaced, the mailbox disconnects and its letters stay. Run the `mailbox claim MB-xxxx` line shown on the screen in the new agent's pane, and the mailbox is connected again.
 
 ## Sending a letter
 
@@ -80,9 +96,11 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Longer material goes with the letter as a file (`--attach <file>`); the card shows a link, and clicking it opens the file in your system's default program (an image in the image viewer, a text file in its default app). Web addresses in a question open in your default browser.
+`--to` takes a pane id, an agent name or a mailbox id. `--recommend` is optional; a card without it shows no recommended option.
 
-`--to` takes a pane id, an agent name or a mailbox id. Press `prefix+shift+m` on the leader's pane to open the mailbox screen beside it. Discussion questions, editing and withdrawing letters, and every screen button are in [the full guide](docs/guide.md). When the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised.
+Longer material goes with the letter as a file (`--attach <file>`, up to 5 per letter); the card shows a link, and clicking it opens the file in your system's default program (an image in the image viewer, a text file in its default app). Web addresses in a question open in your default browser.
+
+`--wait [--timeout <ms>]` makes the send return only after the leader has taken the letter and finished its turn. If it gives up waiting it exits with 3 or 4; a letter to a mailbox is queued or already delivered either way, so do not send it again. A letter to a pane that has no mailbox is signed and typed straight into it once, right away. Discussion questions, checking, editing and withdrawing letters, and every screen button are in [the full guide](docs/guide.md).
 
 ## Limits
 

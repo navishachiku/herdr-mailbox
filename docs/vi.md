@@ -8,12 +8,16 @@
 [English](../README.md) | [简体中文](./zh-sc.md) | [繁體中文](./zh-tc.md) | [Español](./es.md) | [Português](./pt.md) | [Русский](./ru.md) | [日本語](./jp.md) | [Français](./fr.md) | [Deutsch](./de.md) | [Tiếng Việt](./vi.md) | [한국어](./ko.md) | [ไทย](./th.md) | [Italiano](./it.md)
 
 <p align="center">
-  <a href="#cài-đặt">cài đặt</a> · <a href="#gửi-thư">gửi thư</a> · <a href="#giới-hạn">giới hạn</a> · <a href="./guide.md">hướng dẫn đầy đủ</a>
+  <a href="#cài-đặt">cài đặt</a> · <a href="#cách-dùng">cách dùng</a> · <a href="#gửi-thư">gửi thư</a> · <a href="#giới-hạn">giới hạn</a> · <a href="./guide.md">hướng dẫn đầy đủ</a>
 </p>
 
-> Bạn đang gõ dở, worker chen ngang, leader bị đánh thức lần thứ ba, mà câu hỏi lúc nãy đâu mất rồi?
+> Trong một multi-agent workflow, sự tập trung và các quyết định của bạn mới là điều quan trọng nhất.
 
-Bạn chạy một multi-agent workflow trong Herdr: một leader cùng vài worker chạy Claude Code và Codex, mỗi con một việc. Hễ xong việc nào, chúng lại ném kết quả thẳng vào cuộc trò chuyện của leader. Bạn mới gõ nửa câu thì một báo cáo chen vào và bị gửi đi cùng; câu hỏi cần bạn quyết định vừa hiện ra đã bị tin nhắn kế tiếp cuốn trôi.
+Bạn chạy một multi-agent workflow trong Herdr: một agent leader cùng vài agent worker, mỗi con một việc. Báo cáo và tin nhắn của chúng tràn ngập cuộc trò chuyện của leader. Bạn mới gõ nửa câu thì một báo cáo chen vào và bị gửi đi cùng; câu hỏi cần bạn quyết định vừa hiện ra, một giây sau đã bị tin nhắn kế tiếp cuốn trôi.
+
+Plugin này ra đời chính là để giải quyết chuyện đó: sự tập trung của bạn không bị cắt ngang, được dành trọn cho những quyết định chất lượng mà chỉ bạn mới đưa ra được.
+
+Nó không phải là bản làm lại câu hỏi lựa chọn của Claude Code (AskUserQuestion). Nó tận dụng những gì Herdr cung cấp để gom báo cáo và các câu hỏi còn bỏ ngỏ của agent từ nhiều hãng khác nhau về một chỗ, gộp lại và điều phối chúng; và vì cuộc trò chuyện không còn bị tràn ngập, nó cũng tiết kiệm được lượng sử dụng mà những đợt tràn ngập đó tiêu tốn.
 
 **Trước khi dùng**
 
@@ -28,7 +32,7 @@ Mailbox cho leader một hộp thư. Ngoài tin nhắn thường (như tấm bư
 - **Ô nhập liệu luôn là của bạn** — không có gì bị gõ vào khi bạn đang gõ, và không có gì được đưa vào khi leader còn đang trả lời.
 - **Tin nhắn thường đến cùng lúc** — tin nhắn thường chờ tối đa một phút để vào thành một lô và chỉ đánh thức leader một lần; bấm **Gửi ngay** nếu không muốn chờ.
 - **Câu hỏi gom về một chỗ** — câu hỏi quyết định biến thành thẻ ngay cạnh leader; trả lời bằng chuột rồi gửi toàn bộ câu trả lời một lượt.
-- **Agent nào cũng gửi được** — bên gửi chỉ cần chạy `mailbox send`, nên Claude Code, Codex và bất kỳ agent nào chạy được lệnh shell đều gửi được vào cùng một hộp thư.
+- **Agent nào cũng gửi được** — bên gửi chỉ cần chạy `mailbox send`, nên Claude Code, Codex, agy và bất kỳ agent nào chạy được lệnh shell đều gửi được vào cùng một hộp thư.
 - **Mỗi lần gửi đều có biên nhận** — mỗi lần gửi trả về ngay id và trạng thái của lá thư.
 - **Đi theo leader** — di chuyển pane, khởi động lại Herdr hay xoá cuộc trò chuyện thì hộp thư vẫn thuộc về cùng một người nhận.
 
@@ -37,16 +41,51 @@ Mailbox cho leader một hộp thư. Ngoài tin nhắn thường (như tấm bư
 Cần Herdr 0.9.3 trở lên và Node 18 trở lên.
 
 ```sh
+# 1. Cài plugin
 herdr plugin install navishachiku/herdr-mailbox
+
+# 2. Chạy thao tác setup của nó: lệnh `mailbox`, hooks của Claude Code, và quy tắc cho phép của Codex và agy
+herdr plugin action invoke setup --plugin herdr-mailbox
+
+# 3. Các tích hợp agent của chính Herdr, dùng agent nào thì cài cái đó
+herdr integration install claude
+herdr integration install codex
+herdr integration install antigravity-cli
+
+# 4. Skill dạy agent cách gửi thư
+npx skills add navishachiku/herdr-mailbox
 ```
 
-Phần cài đặt còn lại (lệnh `mailbox`, hooks của Claude Code, phím tắt, và nếu bạn dùng Codex thì thêm một quy tắc) cứ giao cho coding agent của bạn. Với lệnh, hooks và quy tắc Codex, nó chạy `node <plugin dir>/src/setup.mjs install`; `uninstall` hoàn tác tất cả. Dán câu này cho nó:
+Agent không có hệ thống skill có thể đọc cùng hướng dẫn đó từ `mailbox skill`; dán đầu ra của nó vào tệp chỉ dẫn của agent.
 
-```
-Set up herdr-mailbox by following https://github.com/navishachiku/herdr-mailbox/blob/main/AGENT-SETUP.md
+Thao tác setup sao lưu mọi tệp trước khi sửa (`<file>.bak-<date>`), chạy lại cũng không thêm trùng, và vẫn hoạt động sau `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` sẽ hoàn tác. Hãy khởi động lại các session Claude Code cần nhận thư.
+
+Thêm phím tắt vào `config.toml` của Herdr (`~/.config/herdr/config.toml`; trên Windows là `%APPDATA%\herdr\config.toml`), rồi bấm `prefix+shift+r` để tải lại (`prefix` mặc định là `ctrl+b`):
+
+```toml
+[[keys.command]]
+key = "prefix+shift+m"
+type = "plugin_action"
+command = "herdr-mailbox.open"
+description = "open the mailbox"
+
+[ui.toast]
+delivery = "herdr"
 ```
 
-Xong rồi thì bấm `prefix+shift+r` để tải lại Herdr, rồi bấm `prefix+shift+m` trên pane của leader để mở màn hình hộp thư ngay bên cạnh (`prefix` mặc định là `ctrl+b`). Các bước agent làm theo nằm trong [AGENT-SETUP.md](../AGENT-SETUP.md).
+Nếu thao tác setup không chạy được trên máy bạn, [AGENT-SETUP.md](../AGENT-SETUP.md) có các bước tương tự để giao cho coding agent làm theo.
+
+## Cách dùng
+
+Mở hộp thư trong cửa sổ của leader: chọn pane của leader rồi bấm `prefix+shift+m`. Hộp thư thuộc về agent của pane nơi bạn bấm phím tắt, nên hãy bấm trên pane của leader, không phải của worker. Màn hình hộp thư mở ra ngay cạnh leader; bấm lại phím tắt ngay trong màn hình, hoặc bấm `q`, sẽ đóng nó, còn thư thì vẫn giữ nguyên.
+
+- **Tin nhắn** — tin nhắn thường từ worker chờ ở đây và được đưa vào leader thành một lô; **Gửi ngay** gửi chúng đi ngay.
+- **Câu hỏi** — thẻ quyết định và thẻ thảo luận. Bấm chọn một phương án hoặc viết ghi chú, rồi **Gửi** gửi lại toàn bộ câu trả lời một lượt. **Đồng ý tất cả**, **Hỏi lại tất cả** và **Huỷ tất cả** xử lý nhiều thẻ cùng lúc.
+- **Tuỳ chọn** — độ rộng màn hình, chế độ thẻ, thời gian tin nhắn thường chờ để gộp, và ngôn ngữ màn hình (13 ngôn ngữ).
+
+Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi thảo luận mới sẽ hiện thông báo của Herdr kèm câu hỏi; khi màn hình đang mở thì không có thông báo. Worker gửi thư cho leader bằng `mailbox send`, xem bên dưới.
+
+**Nhận lại hộp thư**: khi cuộc trò chuyện của leader bị thay thế, hộp thư mất kết nối nhưng thư vẫn còn. Chạy dòng `mailbox claim MB-xxxx` hiện trên màn hình trong pane của agent mới, hộp thư sẽ được kết nối lại.
 
 ## Gửi thư
 
@@ -57,14 +96,22 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" --recommend A
 ```
 
-Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`); trên thẻ sẽ có một liên kết, bấm vào là tệp mở bằng chương trình mặc định của hệ thống (ảnh mở trong trình xem ảnh, tệp văn bản mở trong ứng dụng mặc định). Địa chỉ web trong câu hỏi mở bằng trình duyệt mặc định.
+`--to` nhận pane id, tên agent hoặc id hộp thư. `--recommend` là tuỳ chọn; thẻ không có nó sẽ không đánh dấu phương án đề xuất.
 
-`--to` nhận pane id, tên agent hoặc id hộp thư. Bấm `prefix+shift+m` trên pane của leader để mở màn hình hộp thư ngay bên cạnh. Câu hỏi thảo luận, cách sửa và thu hồi thư, cùng công dụng của từng nút trên màn hình đều có trong [hướng dẫn đầy đủ](./guide.md). Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi thảo luận mới sẽ hiện thông báo của Herdr kèm câu hỏi; khi màn hình đang mở thì không có thông báo.
+Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`, tối đa 5 tệp mỗi thư); trên thẻ sẽ có một liên kết, bấm vào là tệp mở bằng chương trình mặc định của hệ thống (ảnh mở trong trình xem ảnh, tệp văn bản mở trong ứng dụng mặc định). Địa chỉ web trong câu hỏi mở bằng trình duyệt mặc định.
+
+Với `--wait [--timeout <ms>]`, lệnh gửi chỉ trả về sau khi leader đã nhận thư và làm xong lượt của mình. Nếu thôi chờ, lệnh kết thúc với mã 3 hoặc 4; thư gửi vào hộp thư dù thế nào cũng đã vào hàng đợi hoặc đã được chuyển, nên đừng gửi lại. Thư gửi tới một pane không có hộp thư sẽ được ký tên và gõ thẳng vào đó một lần, ngay lập tức. Câu hỏi thảo luận, cách kiểm tra, sửa và thu hồi thư, cùng công dụng của từng nút trên màn hình đều có trong [hướng dẫn đầy đủ](./guide.md).
 
 ## Giới hạn
 
 - Một câu hỏi dài tối đa 200 ký tự, một tin nhắn thường tối đa 500 ký tự; nội dung dài hơn thì để trong tệp và đính kèm bằng `--attach`.
-- Agent sở hữu hộp thư (leader) phải là Claude Code, vì việc chuyển thư phải chờ ô nhập liệu của nó trống; bên gửi thì agent nào cũng được.
+- Agent sở hữu hộp thư (leader) phải là Claude Code hoặc agy, vì việc chuyển thư phải chờ ô nhập liệu của nó trống, và chỉ đọc được ô nhập liệu của hai loại này; bên gửi thì agent nào cũng được.
+
+## Vấn đề đã biết
+
+- **Codex: chưa thể sở hữu hộp thư.** Codex 0.163 chạy mọi cuộc trò chuyện trong một máy chủ nền dùng chung, nên tích hợp Codex của Herdr báo mọi cuộc trò chuyện về pane đã khởi động máy chủ đó, còn chính pane Codex không bao giờ nhận được id cuộc trò chuyện để gắn hộp thư vào. Codex vẫn gửi thư được, và tin nhắn thường gửi tới một pane Codex không có hộp thư sẽ được ký tên và gõ thẳng vào đó một lần. Pane id của Codex trong `HERDR_PANE_ID` có thể sai, nên bên gửi là Codex phải tự chỉ rõ pane của mình bằng `--from <pane id>`.
+- **agy: skill không được cài vào chỗ agy đọc.** CLI `skills` không cài được vào thư mục mà agy nạp skill, nên `npx skills add` không tới được agy. Đây là giới hạn của CLI đó; hộp thư không tìm cách lách qua.
+- **agy: thấy skill nhưng không tự dùng hộp thư.** Nếu chỉ bảo nó "báo cáo cho agent-a", agy sẽ dùng công cụ nhắn tin có sẵn của nó thay vì `mailbox send`. Hãy nêu rõ lệnh trong yêu cầu ("gửi bằng `mailbox send`").
 
 <details>
 <summary>Nâng cao: cách hoạt động, trạng thái, kiểm thử</summary>
