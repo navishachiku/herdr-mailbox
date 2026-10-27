@@ -23,3 +23,11 @@ test('250/AC-3 the README has a Known issues section with both agy limits', () =
   assert.match(section, /skill is not installed where agy reads it/);
   assert.match(section, /does not use the mailbox on its own/);
 });
+
+test('278.1/AC-4 mailbox skill prints the fallback, daemon_unavailable and attachment text', () => {
+  const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), 'skill'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.includes('Send the text with `herdr agent prompt <receiver> "<role> 💬 <text>"` instead'));
+  assert.ok(r.stdout.includes('`daemon_unavailable` → the mailbox service did not start; send it the way Step 1 describes for a missing mailbox, and tell the user.'));
+  assert.ok(r.stdout.includes('attach it with `--attach <file>` (up to 5, repeat the flag) instead of pasting its path into the text'));
+});
