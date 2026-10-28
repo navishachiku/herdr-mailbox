@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. Skill dạy agent cách gửi thư
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+Với bản cài không tương tác, thêm `--yes` vào bước 1: `herdr plugin install navishachiku/herdr-mailbox --yes`.
+
+Các tích hợp của Herdr nhận diện cuộc trò chuyện trong từng pane để hộp thư gắn được với người nhận. Nếu chế độ tự động của một agent từ chối bước 3, hãy tự chạy các lệnh tương ứng trong terminal. Không có tích hợp, việc gửi vẫn có thể hoạt động, nhưng hộp thư có thể không gắn được với cuộc trò chuyện của người nhận.
 
 Agent không có hệ thống skill có thể đọc cùng hướng dẫn đó từ `mailbox skill`; dán đầu ra của nó vào tệp chỉ dẫn của agent.
 

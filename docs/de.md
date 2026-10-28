@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. Der Skill, der Agents das Senden von Briefen beibringt
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+Für eine nicht interaktive Plugin-Installation füge in Schritt 1 `--yes` hinzu: `herdr plugin install navishachiku/herdr-mailbox --yes`.
+
+Herdrs Integrationen erkennen die Unterhaltung in jedem Pane, damit sich der Briefkasten an seinen Empfänger binden kann. Lehnt der automatische Modus eines Agents Schritt 3 ab, führe die entsprechenden Befehle selbst in einem Terminal aus. Ohne die Integration funktioniert das Senden eventuell trotzdem, aber der Briefkasten kann sich womöglich nicht an die Unterhaltung des Empfängers binden.
 
 Ein Agent ohne Skill-System kann dieselbe Anleitung über `mailbox skill` lesen; füge die Ausgabe in die Anweisungsdatei des Agents ein.
 

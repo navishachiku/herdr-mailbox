@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. agent에게 편지 보내는 법을 알려 주는 skill
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+비대화형 플러그인 설치에는 1단계에 `--yes`를 붙이세요: `herdr plugin install navishachiku/herdr-mailbox --yes`.
+
+Herdr의 연동은 각 pane의 대화를 식별해 우편함이 수신자에 연결되도록 합니다. agent의 자동 모드가 3단계를 거부하면 해당 명령을 터미널에서 직접 실행하세요. 연동이 없어도 보내기는 될 수 있지만, 우편함이 수신자의 대화에 연결되지 못할 수 있습니다.
 
 skill 시스템이 없는 agent는 `mailbox skill`에서 같은 안내를 읽을 수 있습니다. 그 출력을 해당 agent의 지시 파일에 붙여 넣으세요.
 

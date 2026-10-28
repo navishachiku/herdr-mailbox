@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. A skill que ensina os agentes a enviar cartas
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+Para uma instalação não interativa do plugin, adicione `--yes` ao passo 1: `herdr plugin install navishachiku/herdr-mailbox --yes`.
+
+As integrações do Herdr identificam a conversa em cada pane para que a caixa de correio possa se vincular ao seu destinatário. Se o modo automático de um agente recusar o passo 3, execute você mesmo os comandos correspondentes num terminal. Sem a integração, o envio ainda pode funcionar, mas a caixa de correio pode não conseguir se vincular à conversa do destinatário.
 
 Um agente sem sistema de skills pode ler as mesmas instruções com `mailbox skill`; cole a saída no arquivo de instruções desse agente.
 

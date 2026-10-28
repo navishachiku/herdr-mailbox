@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. skill ที่สอน agent ให้ส่งจดหมาย
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+สำหรับการติดตั้งปลั๊กอินแบบไม่โต้ตอบ ให้เพิ่ม `--yes` ในขั้นตอนที่ 1: `herdr plugin install navishachiku/herdr-mailbox --yes`
+
+การเชื่อมต่อของ Herdr ใช้ระบุบทสนทนาในแต่ละ pane เพื่อให้กล่องจดหมายผูกกับผู้รับได้ ถ้าโหมดอัตโนมัติของ agent ปฏิเสธขั้นตอนที่ 3 ให้รันคำสั่งที่เกี่ยวข้องเองใน terminal ถ้าไม่มีการเชื่อมต่อนี้ การส่งอาจยังใช้ได้ แต่กล่องจดหมายอาจผูกกับบทสนทนาของผู้รับไม่ได้
 
 agent ที่ไม่มีระบบ skill อ่านคำแนะนำชุดเดียวกันได้จาก `mailbox skill` ให้วางผลลัพธ์ของคำสั่งนี้ลงในไฟล์คำสั่งของ agent นั้น
 

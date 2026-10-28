@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. agent に手紙の送り方を教える skill
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+非対話式でプラグインをインストールする場合は、手順 1 に `--yes` を付けます：`herdr plugin install navishachiku/herdr-mailbox --yes`。
+
+Herdr の連携は各 pane の会話を識別し、メールボックスを受け取り手に紐づけられるようにします。agent の自動モードが手順 3 を拒否する場合は、該当するコマンドをターミナルで自分で実行してください。連携がなくても送信は動くことがありますが、メールボックスを受け取り手の会話に紐づけられない場合があります。
 
 skill の仕組みがない agent は、`mailbox skill` から同じ説明を読めます。その出力を agent の指示ファイルに貼り付けてください。
 

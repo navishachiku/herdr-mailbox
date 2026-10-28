@@ -53,8 +53,12 @@ herdr integration install codex
 herdr integration install antigravity-cli
 
 # 4. 教 agent 寄信的 skill
-npx skills add navishachiku/herdr-mailbox
+npx skills add navishachiku/herdr-mailbox --global
 ```
+
+非交互式安装插件时，在第 1 步加上 `--yes`：`herdr plugin install navishachiku/herdr-mailbox --yes`。
+
+Herdr 的集成负责识别每个 pane 里的对话，信箱才能绑定到它的收件人。如果 agent 的自动模式拒绝执行第 3 步，请自己在终端里运行相关命令。没有这些集成时，寄信也许仍然可行，但信箱可能无法绑定到收件人的对话。
 
 没有 skill 机制的 agent，可以从 `mailbox skill` 读到同一份说明；把它的输出贴进该 agent 的指令文件。
 
