@@ -89,7 +89,7 @@ Open the mailbox in the leader's window: focus the leader's pane and press `pref
 
 When the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised. Workers write to the leader with `mailbox send`, below.
 
-**Claiming a mailbox**: when the leader's conversation is replaced, the mailbox disconnects and its letters stay. Run the `mailbox claim MB-xxxx` line shown on the screen in the new agent's pane, and the mailbox is connected again.
+**Claiming a mailbox**: when the leader's conversation is replaced, the mailbox disconnects and its letters stay. Run the `mailbox claim MB-xxxx` line shown on the screen in the new agent's pane, and the mailbox is connected again. When you are handing the mailbox to a successor on purpose, run `mailbox release` in the current receiver pane first: the mailbox disconnects at once, so the successor's claim does not wait for this pane to be judged gone (about 20 seconds).
 
 ## Sending a letter
 

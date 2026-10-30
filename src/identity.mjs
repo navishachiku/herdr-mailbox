@@ -21,9 +21,9 @@ const text = table({
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Writes that only the receiver (through the CLI) or the user (through the screen) may perform.
-const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver']);
+const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release']);
 // Of those, the receiver agent may run only these; answering and sending for the user is the screen's job.
-const AGENT_OPS = new Set(['close', 'deliver']);
+const AGENT_OPS = new Set(['close', 'deliver', 'release']);
 const KEEP_REGISTRATIONS = 5;
 
 let api;
@@ -193,6 +193,17 @@ async function claim(req, ctx) {
   return { ok: true, mailbox: box.id, owner: { pane: box.owner.pane, generation: box.owner.generation } };
 }
 
+// The receiver hands the mailbox over on purpose: it disconnects at once, so the next agent can claim it without
+// waiting for this pane to be judged gone. Letters and drafts stay, as with any disconnect.
+function release(req) {
+  const box = api.state.mailboxes[req.mailbox];
+  if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
+  if (box.state !== 'connected') return fail('not_connected', 'this mailbox is not connected, so there is nothing to release');
+  disconnect(box, 'released');
+  api.save();
+  return { ok: true, mailbox: box.id, claim: `mailbox claim ${box.id}` };
+}
+
 // Brings one connected mailbox in line with what herdr reports. Returns whether anything changed.
 function reconcileOne(box, panes) {
   const o = box.owner;
@@ -269,5 +280,6 @@ export default function registerIdentity(a) {
   api.op('bind', bind, { mutates: true });
   api.op('register', register, { mutates: true });
   api.op('claim', claim, { mutates: true });
+  api.op('release', release, { mutates: true });
   api.tick('reconcile', reconcile, timings.reconcileMs);
 }

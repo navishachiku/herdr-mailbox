@@ -442,3 +442,36 @@ test('206/AC-2 status --to a pane without a mailbox reports no mailbox', async (
     assert.equal(res.out.mailbox, undefined);
   } finally { R.cleanup(); }
 });
+
+test('309/AC-1 the receiver releases its mailbox and another agent claims it at once, while the old pane is still there', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    const note = sendNote(R, id, 'queued before the handover').out;
+    const gen = R.mb(id).owner.generation;
+    const released = R.cli(['release'], { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' });
+    assert.equal(released.out.ok, true, JSON.stringify(released));
+    assert.equal(R.mb(id).state, 'disconnected');
+    assert.ok(R.fake.panes.some(p => p.pane_id === 'w1:p1'), 'the old pane is still open');
+    const claim = R.cli(['claim', id], { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' });
+    assert.equal(claim.out.ok, true, JSON.stringify(claim));
+    assert.equal(R.mb(id).owner.pane, 'w4:p4');
+    assert.equal(R.mb(id).owner.generation, gen + 1);
+    assert.equal(R.state().letters[note.uid].mailbox, id);
+    assert.equal(Object.keys(R.state().mailboxes).length, 1);
+  } finally { R.cleanup(); }
+});
+
+test('309/AC-2 only the current receiver can release; anyone else is refused and the mailbox stays connected', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    const other = R.cli(['release', id], { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' });
+    assert.equal(other.out.error, 'not_owner');
+    assert.equal(R.mb(id).state, 'connected');
+    const twice = R.cli(['release'], { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' });
+    assert.equal(twice.out.ok, true);
+    const again = R.cli(['release', id], { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' });
+    assert.equal(again.out.ok, false);
+  } finally { R.cleanup(); }
+});
