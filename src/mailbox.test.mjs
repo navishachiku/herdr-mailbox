@@ -454,3 +454,74 @@ test('two herdr sessions with the same pane address keep separate mailboxes and 
     assert.notEqual(a.dir, b.dir);
   } finally { b.stop(); a.cleanup(); }
 });
+
+// 298: the sent query and the reply line after a delivered letter
+test('298/AC-2 sent lists the sender letters in that mailbox since the time, and an empty list when none match', () => {
+  const { core, clock } = fresh();
+  const old = core.handle(note('old report'));
+  clock.t += 60_000;
+  const since = clock.t;
+  core.handle(note('other sender', { from: 'w3:p3' }));
+  core.handle(note('other box', { to: 'w9:p9' }));
+  const mine = core.handle(note('new report'));
+  const r = core.handle({ op: 'sent', from: 'w2:p2', to: TO, since });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.letters.map(l => l.uid), [mine.uid]);
+  assert.notEqual(r.letters[0].uid, old.uid);
+  const none = core.handle({ op: 'sent', from: 'w2:p2', to: TO, since: clock.t + 1 });
+  assert.deepEqual([none.ok, none.letters], [true, []]);
+  assert.equal(core.handle({ op: 'status', from: 'w2:p2' }).mailboxes[0].pending.length, 2, 'the query changes no letter');
+});
+
+test('298/AC-2 sent is read-only: it saves nothing', () => {
+  let saves = 0;
+  const core = boundCore({ save: () => { saves += 1; }, now: () => 1_800_000_000_000, attachDir: tmp() });
+  core.handle(note('x'));
+  const before = saves;
+  core.handle({ op: 'sent', from: 'w2:p2', to: TO, since: 0 });
+  assert.equal(saves, before);
+});
+
+test('298/AC-3 sent through the CLI fails with a recognisable error when the daemon cannot start', () => {
+  const s = sandbox();
+  try {
+    s.env.HERDR_MAILBOX_DAEMON_ENTRY = path.join(s.dir, 'missing.mjs');
+    const r = s.cli('sent', '--from', 'w2:p2', '--to', TO, '--since', '2026-10-30T00:00:00Z');
+    assert.equal(r.code, 1);
+    assert.equal(r.out.ok, false);
+    assert.equal(r.out.error, 'daemon_unavailable');
+    assert.equal(r.out.letters, undefined);
+  } finally { s.cleanup(); }
+});
+
+test('298/AC-1 the reply line says to reply only when needed, in English and Traditional Chinese', () => {
+  const run = locale => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { replyLines } from ${JSON.stringify(new URL('./format.mjs', import.meta.url).href)};
+     console.log(replyLines(['p'], { p: { mailbox: 'MB-1' } }).join('\\n'));`],
+  { env: { ...process.env, LC_ALL: locale }, encoding: 'utf8' }).stdout.trim();
+  assert.equal(run('en_US.UTF-8'), 'Reply to MB-1 only if you need to answer; no reply is needed if this just confirms receipt');
+  assert.equal(run('zh_TW.UTF-8'), '要回覆時才寄 MB-1；只是確認收到就不必回');
+});
+
+test('298/AC-2 sent through the CLI and a running daemon returns the letter just sent, by pane address', async () => {
+  const s = sandbox();
+  try {
+    await s.bind(TO);
+    const sentAt = Date.now() - 1000;
+    const sendRes = s.cli('send', '--to', TO, '--from', 'w2:p2', '--type', 'note', 'report');
+    const hit = s.cli('sent', '--from', 'w2:p2', '--to', TO, '--since', String(sentAt));
+    assert.equal(hit.code, 0);
+    assert.deepEqual(hit.out.letters.map(l => l.uid), [sendRes.out.uid]);
+    const miss = s.cli('sent', '--from', 'w2:p2', '--to', TO, '--since', String(Date.now() + 60_000));
+    assert.deepEqual([miss.code, miss.out.letters], [0, []]);
+  } finally { s.cleanup(); }
+});
+
+test('298/AC-1 the line the hook adds for a Claude receiver says to reply only when needed, in English and Traditional Chinese', () => {
+  const run = locale => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { hookContext } from ${JSON.stringify(new URL('./format.mjs', import.meta.url).href)};
+     console.log(hookContext({ batch: { id: 'B1', kind: 'notes' }, items: [{ uid: 'U1', serial: 'N1', sender: 'w1:p2', label: 'Sender', mailbox: 'MB-1' }] }).split('\\n').at(-1));`],
+  { env: { ...process.env, LC_ALL: locale }, encoding: 'utf8' }).stdout.trim();
+  assert.ok(run('en_US.UTF-8').endsWith('; reply to MB-1 only if you need to answer, no reply to a plain acknowledgement'));
+  assert.ok(run('zh_TW.UTF-8').endsWith('；要回覆時才寄 MB-1，只是確認收到就不必回'));
+});

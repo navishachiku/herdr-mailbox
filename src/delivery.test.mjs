@@ -440,7 +440,7 @@ test('201/AC-10 connected senders have a mailbox reply address on mailbox and di
   await until(() => r.prompts('w1:p3').length === 1, 'direct note');
   for (const call of [r.prompts()[0], r.prompts('w1:p3')[0]]) {
     assert.ok(call.argv[3].includes(`${replyTo} ${sender}`));
-    assert.ok(call.argv[3].trimEnd().endsWith(sender));
+    assert.ok(call.argv[3].trimEnd().endsWith('no reply is needed if this just confirms receipt'));
   }
 });
 
@@ -622,7 +622,7 @@ test('201/AC-15 Codex receives the full batch metadata and reply mailbox in its 
     assert.ok(text.includes(value), value);
   }
   assert.ok(text.includes(`${replyTo} ${sender}`));
-  assert.ok(text.trimEnd().endsWith(sender));
+  assert.ok(text.trimEnd().endsWith('no reply is needed if this just confirms receipt'));
 });
 
 test('224/AC-1 a merge interval saved in the screen prefs sets when notes are delivered', async t => {

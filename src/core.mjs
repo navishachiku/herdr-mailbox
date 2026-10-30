@@ -16,7 +16,7 @@ const OPEN = ['queued', 'pending'];
 const LETTERS = 'ABCD';
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-const BUILTIN = { send: 'send', edit: 'edit', withdraw: 'withdraw', status: 'status', answer: 'answer', submit: 'submit' };
+const BUILTIN = { send: 'send', edit: 'edit', withdraw: 'withdraw', status: 'status', sent: 'sent', answer: 'answer', submit: 'submit' };
 const len = s => [...String(s)].length;
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Serial numbers (Q003, N012) are for people only; agents must name a letter by uid.
@@ -310,6 +310,24 @@ export class Mailboxes {
     return { ok: true, ...(ids.length === 1 ? { mailbox: ids[0] } : {}), mailboxes: mailboxes.filter(b => b.pending.length), ...(ids.length === 1 ? this.annotate('status', ids[0], from) : {}) };
   }
 
+  // Read-only: the letters one sender sent to one mailbox at or after `since` (epoch ms), oldest first.
+  // Withdrawn and superseded letters were taken back, so they do not count as sent.
+  sent(req) {
+    const from = req.from;
+    const since = Number(req.since);
+    if (!from) return fail('missing_from', '--from is required');
+    if (!req.to) return fail('missing_to', '--to is required');
+    if (!Number.isFinite(since)) return fail('bad_since', '--since must be a time (epoch milliseconds or an ISO date)');
+    const routed = this.hooks.route(req.to, req);
+    if (routed?.ok === false) return routed;
+    if (routed?.kind === 'direct') return fail('no_mailbox', `${req.to} has no mailbox, so there is nothing to look up`);
+    const letters = Object.values(this.state.letters)
+      .filter(l => l.sender === from && l.mailbox === routed.id && l.createdAt >= since && !['withdrawn', 'superseded'].includes(l.status))
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .map(l => ({ ...this.brief(l), createdAt: l.createdAt }));
+    return { ok: true, mailbox: routed.id, letters };
+  }
+
   // The write interface for the user's answers; the mailbox screen is a later task. Every answer carries the version
   // that was on screen, so an answer to a question that was edited in the meantime is refused.
   answer(req, ctx = {}) {
@@ -357,7 +375,7 @@ export class Mailboxes {
     if (denied) return denied;
     const registered = this.ops.get(req.op);
     if (!registered && !BUILTIN[req.op]) return fail('bad_op', `unknown op ${req.op}`);
-    const mutates = registered ? registered.mutates : req.op !== 'status';
+    const mutates = registered ? registered.mutates : !['status', 'sent'].includes(req.op);
     const run = () => (registered ? registered.handler(req, ctx) : this[BUILTIN[req.op]](req, ctx));
     if (!mutates) {
       try { return run(); } catch (e) { return fail('internal', String(e.message || e)); }

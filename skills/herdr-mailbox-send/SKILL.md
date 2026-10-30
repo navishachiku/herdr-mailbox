@@ -67,6 +67,7 @@ For a note, add `--wait [--timeout <ms>]` to block until the letter is delivered
 
 ## Gotchas
 
+- Do not send a reply that has nothing new in it, such as one that only says you received a letter. The line at the end of a delivered letter says the same: reply only when you need to answer.
 - Refer to a letter by its `uid` only. Short serials such as `Q003` that the receiver sees on screen are refused by every command.
 - A decision letter may go without a recommendation; do not fake one, and do not replace it with "up to you".
 - The sender defaults to your own pane (`HERDR_PANE_ID`); `--from` is rarely needed. Your signature is added by the program, so do not write one in the letter.

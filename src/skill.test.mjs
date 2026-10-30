@@ -31,3 +31,9 @@ test('278.1/AC-4 mailbox skill prints the fallback, daemon_unavailable and attac
   assert.ok(r.stdout.includes('`daemon_unavailable` → the mailbox service did not start; send it the way Step 1 describes for a missing mailbox, and tell the user.'));
   assert.ok(r.stdout.includes('attach it with `--attach <file>` (up to 5, repeat the flag) instead of pasting its path into the text'));
 });
+
+test('298/AC-4 the send skill tells agents not to send a reply with nothing new, such as a bare acknowledgement', () => {
+  const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), 'skill'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.includes('Do not send a reply that has nothing new in it, such as one that only says you received a letter.'));
+});

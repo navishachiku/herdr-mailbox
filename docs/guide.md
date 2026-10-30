@@ -99,13 +99,14 @@ Every send prints one JSON line and exits 0 only when it says `ok`:
 
 ```sh
 mailbox status [--to <address|MB-id>]        # your letters that are still open; with --to also that mailbox's id
+mailbox sent --from <agent|pane> --to <address|MB-id> --since <ISO time|epoch ms>   # that sender's letters in that mailbox since then; read-only, prints {ok, mailbox, letters}; fails with ok:false (for example daemon_unavailable) instead of an empty list
 mailbox edit <uid> --question "..."          # only while the user has not answered
 mailbox withdraw <uid> --reason "..."        # only while the user has not answered
 ```
 
 The sender is the pane in `HERDR_PANE_ID`, or `--from`. Letters are named by uid; the short serial shown on the screen (for example `Q003`) is refused by every command. When the same send may or may not have gone through, run `mailbox status` before sending again.
 
-Messages are signed `[workspace/]position/role 💬 ` from the sender pane's labels. When the sender owns a mailbox itself, the delivered text ends with the id to reply to.
+Messages are signed `[workspace/]position/role 💬 ` from the sender pane's labels. When the sender owns a mailbox itself, the delivered text ends with the id to reply to, and says to reply only when there is something to answer; a plain acknowledgement needs no reply.
 
 ## The mailbox screen
 
