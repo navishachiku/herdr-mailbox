@@ -902,3 +902,18 @@ test('278.1 a daemon that predates prompt-context still gives a batch its backgr
   assert.equal(JSON.parse(batch.stdout).hookSpecificOutput.additionalContext, 'LEGACY-BATCH-BACKGROUND');
   assert.equal((await run('plain prompt')).stdout, '', 'an old daemon without a marker adds nothing and does not block');
 });
+
+test('stop signal is refused while a batch is sending, and the refusal lists the batch', async t => {
+  const r = rig(t, { workingMs: 60000, confirmMs: 60000 });
+  r.world.panes[0].agent = 'codex';
+  r.write();
+  const mb = await r.bind();
+  const a = r.note(mb, 'in flight');
+  const sending = await until(() => r.batches().find(b => b.members.includes(a.uid) && b.status === 'sending'), 'sending batch');
+  const pid = Number(fs.readFileSync(path.join(r.dir, 'daemon.pid'), 'utf8'));
+  process.kill(pid, 'SIGTERM');
+  const refusal = path.join(r.dir, 'stop-refused.txt');
+  await until(() => fs.existsSync(refusal), 'refusal note');
+  assert.ok(fs.readFileSync(refusal, 'utf8').includes(sending.id));
+  assert.doesNotThrow(() => process.kill(pid, 0), 'daemon must still be alive');
+});

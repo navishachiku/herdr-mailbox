@@ -1,6 +1,7 @@
 // Mailbox daemon: the single writer of the state file. Requests are handled one at a time.
 import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SOCKET, STATE_FILE, STATE_DIR, PID_FILE, ATTACH_DIR, DAEMON_PROTO, SESSION } from './paths.mjs';
 import { loadState, saveState } from './store.mjs';
@@ -28,10 +29,23 @@ function takeLock() {
 takeLock();
 const release = () => { try { if (fs.readFileSync(PID_FILE, 'utf8').trim() === String(process.pid)) fs.unlinkSync(PID_FILE); } catch { /* already gone */ } };
 process.on('exit', release);
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => process.exit(0));
 if (process.platform !== 'win32') { try { fs.unlinkSync(SOCKET); } catch { /* no stale socket */ } }
 
-const core = new Mailboxes({ state: loadState(STATE_FILE, SESSION), save: s => saveState(STATE_FILE, s), attachDir: ATTACH_DIR });
+let core;
+// Stopping while a batch is being sent would leave its outcome unknown (it restarts as "unconfirmed"), so a stop
+// signal is refused until no batch is in flight; the refusal lists them. SIGKILL cannot be refused.
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    const inFlight = Object.values(core?.state.batches ?? {}).filter(b => b.status === 'sending');
+    if (!inFlight.length) process.exit(0);
+    // A signal has no reply channel, so the refusal is also left in a file beside the pid file for whoever sent it.
+    const msg = `refusing to stop: ${inFlight.length} batch(es) still sending: ${inFlight.map(b => `${b.id} -> ${b.pane}`).join(', ')}. Check again shortly, then stop.\n`;
+    process.stderr.write(msg);
+    try { fs.writeFileSync(path.join(STATE_DIR, 'stop-refused.txt'), msg, { mode: 0o600 }); } catch { /* the refusal still holds */ }
+  });
+}
+
+core = new Mailboxes({ state: loadState(STATE_FILE, SESSION), save: s => saveState(STATE_FILE, s), attachDir: ATTACH_DIR });
 
 // Feature modules, loaded in this order; a missing file is skipped so each can be developed and tested alone.
 for (const name of ['identity', 'delivery', 'screen-api']) {
