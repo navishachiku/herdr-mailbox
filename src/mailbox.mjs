@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { waitForReceiver, START_WINDOW_MS } from './wait.mjs';
 import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
+import { senderPane } from './sender.mjs';
 
 const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'open', 'close', 'deliver', 'skill'];
 const dir = new URL('./cli/', import.meta.url);
@@ -31,8 +32,16 @@ let parsed;
 try { parsed = parseArgs({ args: rest, options: command.options, allowPositionals: true }); } catch (e) { usage(e.message); }
 const { values, positionals } = parsed;
 
+const sender = values.from ?? await senderPane();
 const helpers = {
-  from: values.from ?? process.env.HERDR_PANE_ID ?? 'unknown',
+  // A Codex sender whose pane cannot be told is refused instead of signed with the inherited, probably wrong pane.
+  get from() {
+    if (sender === null) {
+      console.error('cannot tell which pane this Codex session runs in (the inherited HERDR_PANE_ID is the pane that started the shared Codex server); pass --from <your pane id>');
+      process.exit(1);
+    }
+    return sender ?? 'unknown';
+  },
   usage,
   // A pane id or MB- id passes through; an agent name is looked up.
   async target(to) {

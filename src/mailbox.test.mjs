@@ -525,3 +525,31 @@ test('298/AC-1 the line the hook adds for a Claude receiver says to reply only w
   assert.ok(run('en_US.UTF-8').endsWith('; reply to MB-1 only if you need to answer, no reply to a plain acknowledgement'));
   assert.ok(run('zh_TW.UTF-8').endsWith('；要回覆時才寄 MB-1，只是確認收到就不必回'));
 });
+
+test('a Codex command is signed with the Codex pane it runs in, not the pane that started the shared server', async () => {
+  const { senderPane } = await import('./sender.mjs');
+  const dir = fs.mkdtempSync(path.join('/tmp', 'mbsender-'));
+  const state = path.join(dir, 'fake.json');
+  fs.writeFileSync(state, JSON.stringify({ panes: [
+    { pane_id: 'w1:p1', agent: 'codex', cwd: '/work/server-start' },
+    { pane_id: 'w1:p9', agent: 'codex', cwd: '/work/here' },
+    { pane_id: 'w1:p2', agent: 'claude', cwd: '/work/here' },
+  ] }));
+  const saved = { bin: process.env.HERDR_BIN_PATH, st: process.env.FAKE_HERDR_STATE };
+  process.env.HERDR_BIN_PATH = path.join(here, 'test-support', 'fake-herdr.mjs');
+  process.env.FAKE_HERDR_STATE = state;
+  try {
+    const env = { HERDR_PANE_ID: 'w1:p1', CODEX_THREAD_ID: 'thread-1' };
+    assert.equal(await senderPane(env, '/work/here'), 'w1:p9');
+    assert.equal(await senderPane({ HERDR_PANE_ID: 'w1:p2' }, '/work/here'), 'w1:p2', 'not Codex: the inherited id stands');
+    assert.equal(await senderPane(env, '/work/nowhere'), null, 'no single match: the sender is unknown, never the inherited id');
+    const cli = (args, extra = {}) => spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], {
+      cwd: '/', env: { ...process.env, ...env, ...extra }, encoding: 'utf8', timeout: 15000 });
+    const refused = cli(['send', '--to', 'w1:p2', '--type', 'note', 'x']);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /--from/);
+  } finally {
+    for (const [k, v] of [['HERDR_BIN_PATH', saved.bin], ['FAKE_HERDR_STATE', saved.st]]) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
