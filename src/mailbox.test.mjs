@@ -553,3 +553,21 @@ test('a Codex command is signed with the Codex pane it runs in, not the pane tha
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('338/AC-6 withdrawing, editing or superseding a voided question says it was voided and not to wait', () => {
+  const { core } = fresh();
+  const a = core.handle(decision());
+  core.handle({ op: 'answer', uid: a.uid, version: 1, choice: 'X', text: '' });
+  // Between answering X and the submit, and after it, the answer is the same: voided.
+  for (const stage of ['answered', 'submitted']) {
+    if (stage === 'submitted') core.handle({ op: 'submit', items: [{ uid: a.uid, version: 1 }] });
+    const results = [
+      core.handle({ op: 'withdraw', uid: a.uid, from: 'w2:p2', reason: 'x' }),
+      core.handle({ op: 'edit', uid: a.uid, from: 'w2:p2', question: 'changed' }),
+      core.handle(decision({ question: 'newer', supersedes: a.uid })),
+    ];
+    for (const r of results) { assert.equal(r.error, 'voided', stage); assert.match(r.message, /voided/); assert.doesNotMatch(r.message, /wait/); }
+  }
+  assert.equal(core.state.letters[a.uid].status, 'voided');
+  assert.equal(Object.keys(core.state.letters).length, 1);
+});

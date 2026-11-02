@@ -1095,7 +1095,7 @@ async function performVoid(w, ui, action, confirm, requests = []) {
   });
 }
 
-test('202/AC-22 Void answers a decision or discussion with X, immediately sends Voided and removes only that card', async () => {
+test('202/AC-22 Void without a note answers with X, removes only that card at once and sends nothing to the receiver', async () => {
   const { render } = await import('./screen/render.mjs');
   const fixture = interactionModel();
   fixture.questions[2] = { ...fixture.questions[2], type: 'discussion', content: { question: 'Discuss this?', idea: 'An idea' } };
@@ -1116,20 +1116,16 @@ test('202/AC-22 Void answers a decision or discussion with X, immediately sends 
       assert.ok(answer >= 0, 'Void uses the normal answer channel with code X');
       assert.ok(requests.slice(answer + 1).some(req => req.op === 'submit' && req.items.some(item => item.uid === q.uid)), 'Void submits immediately after answering');
       const after = await screen(w, mb);
-      const sentQuestion = find(after.model, q.uid);
-      assert.ok(sentQuestion && ['submitted', 'delivered'].includes(sentQuestion.status), 'the question is sent');
-      assert.equal(sentQuestion.draft.choice, 'X');
-      assert.equal(after.hits.some(h => h.action.uid === q.uid), false, 'the sent card is no longer actionable');
-      assert.equal(after.lines.some(line => line.includes(sentQuestion.content.question)), false, 'the sent question leaves the decision area');
+      assert.equal(find(after.model, q.uid), undefined, 'the voided question leaves the screen');
+      assert.equal(after.hits.some(h => h.action.uid === q.uid), false, 'the voided card is no longer actionable');
       assert.equal(find(after.model, keep.uid).status, 'pending');
-      const prompt = await until(() => w.prompts().find(entry => JSON.stringify(entry).includes(sentQuestion.content.question)));
-      assert.ok(prompt, 'the receiver gets the voided answer without another Submit click');
-      assert.match(JSON.stringify(prompt), /Voided|作廢/);
     }
+    await sleep(300);
+    assert.equal(w.prompts().length, 0, 'a void with no note does not reach the receiver');
   } finally { w.cleanup(); }
 });
 
-test('202/AC-23 Void all confirms the count and sends X for every unsent question including existing drafts', async () => {
+test('202/AC-23 Void all confirms the count and voids every unsent question including existing drafts, sending nothing', async () => {
   const { render } = await import('./screen/render.mjs');
   hit(render(interactionModel(), { cols: 80, rows: 100 }), 'void-all');
   const w = world();
@@ -1157,15 +1153,11 @@ test('202/AC-23 Void all confirms the count and sends X for every unsent questio
     assert.equal(result.ok, true);
     const after = await screen(w, mb);
     for (const q of [open, drafted, talk]) {
-      const sent = find(after.model, q.uid);
-      assert.ok(sent && ['submitted', 'delivered'].includes(sent.status));
-      assert.equal(sent.draft.choice, 'X', 'X replaces existing answer drafts too');
+      assert.equal(find(after.model, q.uid), undefined, 'the voided question leaves the screen');
       assert.equal(after.hits.some(h => h.action.uid === q.uid), false);
-      assert.equal(after.lines.some(line => line.includes(sent.content.question)), false);
-      const prompt = await until(() => w.prompts().find(entry => JSON.stringify(entry).includes(sent.content.question)));
-      assert.ok(prompt, 'each voided question is delivered to the receiver');
-      assert.match(JSON.stringify(prompt), /Voided|作廢/);
     }
+    await sleep(300);
+    assert.equal(w.prompts().length, 0, 'voided questions without a note are not delivered');
     assert.deepEqual(after.model.notes, ui.model.notes, 'Void all leaves queued notes alone');
   } finally { w.cleanup(); }
 });

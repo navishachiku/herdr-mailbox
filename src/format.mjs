@@ -31,6 +31,8 @@ const t = table({
     accepted: (letter, text) => `P (took the recommendation: ${letter} "${text}")`,
     explain: 'E (asked for more explanation)',
     voided: 'X (Voided: no answer needed)',
+    voidHead: 'The user voided these questions; no answer is needed, so drop whatever was waiting on them:',
+    voidItem: (serial, uid, question) => `- ${serial} · uid ${uid}: ${question}`,
     noChoice: '(no option chosen)',
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
@@ -64,6 +66,8 @@ const t = table({
     accepted: (letter, text) => `P（按建議：${letter}「${text}」）`,
     explain: 'E（請再說明）',
     voided: 'X（作廢：不需要回答）',
+    voidHead: '使用者已作廢以下問題，不需要回答，原本等著它們的事可以放下：',
+    voidItem: (serial, uid, question) => `- ${serial} · uid ${uid}：${question}`,
     noChoice: '（未選選項）',
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
@@ -112,11 +116,17 @@ const bodyOf = l => {
   return lines.filter(Boolean).join('\n');
 };
 
+// Questions the user voided without a note, as lines for the next text the receiver gets. letters: voided questions.
+export function voidLines(letters) {
+  if (!letters?.length) return [];
+  return [t.voidHead, ...letters.map(l => t.voidItem(l.serial, l.uid, oneLine(l.content.question)))];
+}
+
 // people: { [senderPane]: { label, mailbox } } where mailbox is the sender's own connected mailbox, if any.
-export function notesBatch({ id, letters, people }) {
+export function notesBatch({ id, letters, people, voided }) {
   const lines = [t.head(letters.length, rangeOf(letters)), t.disclaimer, t.batch(id)];
   for (const l of letters) lines.push(t.from(nameOf(people, l.sender), oneLine(l.sender), l.uid), bodyOf(l));
-  lines.push(...replyLines(letters.map(l => l.sender), people));
+  lines.push(...voidLines(voided), ...replyLines(letters.map(l => l.sender), people));
   return lines.join('\n');
 }
 
@@ -140,7 +150,7 @@ function answerLine(l) {
 }
 
 // letters: submitted decision and discussion questions with their drafts.
-export function repliesBatch({ id, letters, people }) {
+export function repliesBatch({ id, letters, people, voided }) {
   const lines = [t.repliesHead(letters.length), t.batch(id)];
   for (const l of letters) {
     lines.push(t.replyItem(l.serial, l.uid, nameOf(people, l.sender), oneLine(l.sender)), `${t.question}${t.colon}${sanitize(l.content.question)}`);
@@ -149,6 +159,7 @@ export function repliesBatch({ id, letters, people }) {
     const extra = l.draft?.text;
     if (extra?.trim()) lines.push(`${t.note}${t.colon}${sanitize(extra)}`);
   }
+  lines.push(...voidLines(voided));
   return lines.join('\n');
 }
 
@@ -192,11 +203,15 @@ export function conciseReplies({ marker, letters, sigs }) {
 }
 
 // The background text the hook adds for a concise batch. items: [{ uid, serial, sender, label, mailbox }].
-export function hookContext({ batch, items }) {
+export function hookContext({ batch, items, voided }) {
   const lines = [batch.kind === 'replies' ? t.ctxReplies : t.disclaimer, t.ctxBatch(batch.id, batch.kind)];
   for (const i of items) lines.push(t.ctxItem(i.uid, i.serial, oneLine(i.label || i.sender), oneLine(i.sender), i.mailbox));
+  lines.push(...voidLines(voided));
   return lines.join('\n');
 }
 
 // The reminder the hook adds to every prompt typed into a pane that owns a connected mailbox.
 export const mailboxReminder = id => t.reminder(id);
+
+// Voided questions the hook adds to a prompt that is not a batch (or after a batch's own background).
+export const voidedContext = letters => voidLines(letters).join('\n');

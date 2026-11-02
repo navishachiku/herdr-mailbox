@@ -9,7 +9,7 @@ import * as herdr from './herdr.mjs';
 import { signatureFor, withSignature } from './signature.mjs';
 import { classify, pastedLines, typedText } from './input-box.mjs';
 import { canDeliver } from './identity.mjs';
-import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, mailboxReminder, notesBatch, repliesBatch } from './format.mjs';
+import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, mailboxReminder, voidedContext, notesBatch, repliesBatch } from './format.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
 import { ATTACH_DIR, STATE_DIR } from './paths.mjs';
 import { timings, mergeMs } from './timings.mjs';
@@ -25,6 +25,11 @@ const newBatchId = taken => {
 let api;
 // Since when each receiver pane has been working without a break; in memory, a restart just restarts the count.
 const workingSince = new Map();
+
+// Questions the user voided without a note that no text has told the receiver about yet, oldest first.
+const unannouncedVoids = mbId => Object.values(api.state.letters)
+  .filter(l => l.mailbox === mbId && l.status === 'voided' && !l.voidAnnounced)
+  .sort((a, b) => a.createdAt - b.createdAt);
 
 const batchesOf = mbId => Object.values(api.state.batches).filter(b => b.mailbox === mbId);
 const hasSending = list => list.some(b => b.status === 'sending');
@@ -117,12 +122,13 @@ function newBatch(box, kind, letters, pane, transcript, convo, make) {
 }
 
 async function sendMailboxBatch(box, kind, letters, owner) {
+  const voided = unannouncedVoids(box.id);
   const people = await peopleOf(letters.map(l => l.sender), owner.pane);
   const sigs = Object.fromEntries(Object.entries(people).map(([pane, who]) => [pane, who.sig]));
   // A sender writing to its own mailbox needs no reply address.
   for (const who of Object.values(people)) if (who.mailbox === box.id) who.mailbox = undefined;
   const batch = newBatch(box, kind, letters, owner.pane, owner.transcript, owner.convo, {
-    full: id => (kind === 'replies' ? repliesBatch({ id, letters, people }) : notesBatch({ id, letters, people })),
+    full: id => (kind === 'replies' ? repliesBatch({ id, letters, people, voided }) : notesBatch({ id, letters, people, voided })),
     notice: (id, file) => fileNotice({ id, letters, people, file, replies: kind === 'replies' }),
     // Claude gets only who wrote what; the rest is added back by the UserPromptSubmit hook.
     ...(owner.agent === 'claude' ? { concise: marker => (kind === 'replies' ? conciseReplies({ marker, letters, sigs }) : conciseNotes({ marker, letters, sigs })) } : {}),
@@ -132,10 +138,14 @@ async function sendMailboxBatch(box, kind, letters, owner) {
   delete batch.sendText;
   const was = letters.map(l => [l, l.status]);
   for (const l of letters) { l.status = 'delivered'; l.batch = batch.id; }
+  // The voids ride in this batch (in its text, or for Claude in the hook background), and only in this one.
+  if (voided.length) batch.voided = voided.map(l => l.uid);
+  for (const l of voided) l.voidAnnounced = true;
   box.paused = null;
   if (kind === 'notes') box.deliverNow = false;
   const sent = await send(batch, owner.pane, text, () => {
     for (const [l, status] of was) { l.status = status; delete l.batch; }
+    for (const l of voided) delete l.voidAnnounced;
     setPaused(box, 'blocked');
   });
   return sent;
@@ -330,6 +340,8 @@ function resolveBatch(req) {
       l.status = l.type === 'note' ? 'queued' : 'submitted';
       delete l.batch;
     }
+    // The resent batch is a new one: voids the lost batch carried have not reached the receiver.
+    for (const uid of batch.voided ?? []) if (api.state.letters[uid]) delete api.state.letters[uid].voidAnnounced;
     const box = api.state.mailboxes[batch.mailbox];
     if (box) { box.deliverNow = true; if (box.paused?.nextAt) box.paused.nextAt = 0; }
   } else {
@@ -347,7 +359,8 @@ async function batchByMarker(req, ctx) {
   const letters = batch.members.map(uid => api.state.letters[uid]).filter(Boolean);
   const people = await peopleOf(letters.map(l => l.sender), batch.pane);
   const items = letters.map(l => ({ uid: l.uid, serial: l.serial, sender: l.sender, label: people[l.sender].sig, mailbox: people[l.sender].mailbox }));
-  return { ok: true, context: hookContext({ batch, items }) };
+  const voided = (batch.voided ?? []).map(uid => api.state.letters[uid]).filter(Boolean);
+  return { ok: true, context: hookContext({ batch, items, voided }) };
 }
 
 // Every prompt typed into a pane goes through the hook: add the reminder when the pane owns a connected mailbox,
@@ -357,7 +370,12 @@ async function promptContext(req, ctx) {
   if (req.marker) { const batch = await batchByMarker(req, ctx); if (batch.ok) parts.push(batch.context); }
   const pane = ctx.caller?.pane;
   const mine = pane && Object.values(api.state.mailboxes).find(b => b.state === 'connected' && b.owner?.pane === pane);
-  if (mine) parts.push(mailboxReminder(mine.id));
+  if (mine) {
+    // Voids no batch has carried yet ride on this prompt; marked at once so no other channel repeats them.
+    const voids = unannouncedVoids(mine.id);
+    if (voids.length) { parts.push(voidedContext(voids)); for (const l of voids) l.voidAnnounced = true; api.save(); }
+    parts.push(mailboxReminder(mine.id));
+  }
   return { ok: true, context: parts.join('\n\n') };
 }
 

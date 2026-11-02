@@ -182,6 +182,14 @@ export class Mailboxes {
 
   answered(l) { return Boolean(l.draft && (l.draft.choice || l.draft.text.trim())); }
 
+  // A void with no note is not delivered: the receiver is told along with its next prompt or batch instead.
+  isBareVoid(l) { return l.draft?.choice === 'X' && !l.draft.text.trim(); }
+
+  // What a sender hears when it tries to take back a question the user already voided.
+  voidedFailure() {
+    return fail('voided', 'The user voided this question (no answer needed), so no answer will come; send a new question without --supersedes if you still need one');
+  }
+
   // A uid argument: serial numbers get a specific hint, anything else unknown is just unknown.
   find(uid) {
     if (SERIAL.test(String(uid))) return fail('serial_not_accepted', `${uid} is a serial number shown to people; name the letter by its uid`);
@@ -230,6 +238,7 @@ export class Mailboxes {
       const o = old.letter;
       if (o.mailbox !== dest.id) return fail('bad_supersedes', 'the superseded letter is in another mailbox');
       if (o.sender !== from) return fail('not_sender', 'only the sender of a letter can supersede it');
+      if (o.status === 'voided' || (o.status === 'pending' && this.isBareVoid(o))) return this.voidedFailure();
       if (this.answered(o) && o.status === 'pending') return fail('user_answered', 'The user has already answered this question; it cannot be superseded until the answer is sent');
       if (!['pending', 'submitted'].includes(o.status)) return fail('not_active', `the letter is ${o.status}`);
     }
@@ -258,6 +267,7 @@ export class Mailboxes {
     const l = found.letter;
     if (l.sender !== from) return fail('not_sender', 'only the sender of a letter can change it');
     if (l.type === 'note') return fail('not_editable', 'notes cannot be edited or withdrawn');
+    if (l.status === 'voided' || this.isBareVoid(l)) return this.voidedFailure();
     if (l.status !== 'pending') return fail('not_pending', `the letter is ${l.status}; send a new question with --supersedes <uid> instead`);
     if (this.answered(l)) return fail('user_answered', 'The user has already answered this question; wait for the answer to be sent, then send a new question with --supersedes <uid>');
     return { ok: true, letter: l };
@@ -356,8 +366,10 @@ export class Mailboxes {
       const l = found.letter;
       if (l.status !== 'pending' || !this.answered(l)) return { uid, ok: false, error: 'not_answered' };
       if (l.version !== version) return { uid, ok: false, error: 'stale_version', version: l.version };
-      l.status = 'submitted';
       l.updatedAt = this.now();
+      // A bare void leaves the screen at once but is never delivered; delivery attaches it to the next thing it sends.
+      if (this.isBareVoid(l)) { l.status = 'voided'; return { uid, ok: true }; }
+      l.status = 'submitted';
       (submitted[l.mailbox] ??= []).push(uid);
       return { uid, ok: true };
     });

@@ -917,3 +917,83 @@ test('stop signal is refused while a batch is sending, and the refusal lists the
   assert.ok(fs.readFileSync(refusal, 'utf8').includes(sending.id));
   assert.doesNotThrow(() => process.kill(pid, 0), 'daemon must still be alive');
 });
+
+// A void is the user's answer X; the screen sends it as answer then submit.
+async function voidQuestion(r, mb, q, text = '') {
+  const generation = r.state().mailboxes[mb].owner.generation;
+  const caller = { viaPlugin: true };
+  const answer = await r.raw({ op: 'answer', mailbox: mb, generation, caller, uid: q.uid, version: 1, choice: 'X', text });
+  assert.equal(answer.ok, true, JSON.stringify(answer));
+  const sent = await r.raw({ op: 'submit', mailbox: mb, generation, caller, items: [{ uid: q.uid, version: 1 }] });
+  assert.equal(sent.results[0].ok, true, JSON.stringify(sent));
+}
+const askQuestion = (r, mb, question) => r.cli(['send', '--to', mb, '--type', 'decision', '--question', question, '--option', 'yes', '--option', 'no']);
+
+test('338/AC-1 AC-2 a void with no note is not delivered and leaves the pending list; one with a note is sent at once', async t => {
+  const r = rig(t, { mergeMs: 60000 });
+  r.world.panes[0].agent = 'codex';
+  r.write();
+  const mb = await r.bind();
+  const bare = askQuestion(r, mb, 'Bare void question?');
+  const noted = askQuestion(r, mb, 'Noted void question?');
+  await voidQuestion(r, mb, bare);
+  await sleep(500);
+  assert.equal(r.prompts().length, 0, 'no prompt for a bare void');
+  assert.equal(r.batches().length, 0);
+  assert.equal(r.state().letters[bare.uid].status, 'voided');
+  assert.deepEqual(r.cli(['status', '--to', mb]).mailboxes[0].pending.map(p => p.uid), [noted.uid], 'the voided question is no longer pending');
+  await voidQuestion(r, mb, noted, 'not needed any more');
+  await r.confirmed(noted.uid);
+  const text = r.prompts()[0].argv[3];
+  assert.ok(text.includes('not needed any more') && text.includes('Noted void question?'));
+  assert.equal(r.prompts().length, 1);
+});
+
+test('338/AC-3 AC-5 a Codex receiver gets the bare voids in its next batch, once', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  r.world.panes[0].agent = 'codex';
+  r.write();
+  const mb = await r.bind();
+  const a = askQuestion(r, mb, 'First void question?');
+  const b = askQuestion(r, mb, 'Second void question?');
+  await voidQuestion(r, mb, a);
+  await voidQuestion(r, mb, b);
+  await sleep(400);
+  assert.equal(r.prompts().length, 0);
+  const n1 = r.note(mb, 'first later note');
+  await r.confirmed(n1.uid);
+  const first = r.prompts()[0].argv[3];
+  for (const v of [a.uid, b.uid, 'First void question?', 'Second void question?', 'voided']) assert.ok(first.includes(v), v);
+  const n2 = r.note(mb, 'second later note');
+  await until(() => r.prompts().length === 2, 'second batch');
+  const second = r.prompts()[1].argv[3];
+  assert.ok(second.includes('second later note'));
+  assert.equal(second.includes('Void question'), false, 'a void is announced once');
+});
+
+test('338/AC-4 a Claude receiver sees a bare void in the next prompt hook, once, and not again in a later batch', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  const mb = await r.bind();
+  const hook = prompt => spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' },
+    input: JSON.stringify({ prompt, session_id: 'sid-w1:p1', transcript_path: r.transcript }),
+    encoding: 'utf8', timeout: 15000,
+  });
+  const contextOf = result => JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+  const q = askQuestion(r, mb, 'Void for Claude?');
+  await voidQuestion(r, mb, q);
+  await sleep(400);
+  assert.equal(r.prompts().length, 0, 'the receiver is not woken');
+  const first = contextOf(hook('What now?'));
+  assert.ok(first.includes('Void for Claude?') && first.includes(q.uid));
+  assert.equal(contextOf(hook('And now?')).includes('Void for Claude?'), false, 'announced once');
+  const q2 = askQuestion(r, mb, 'Second void for Claude?');
+  await voidQuestion(r, mb, q2);
+  const n = r.note(mb, 'a later note');
+  const batch = await r.confirmed(n.uid);
+  const prompt = r.prompts()[0].argv[3];
+  assert.equal(prompt.includes('Second void for Claude?'), false, 'the concise text stays short');
+  const viaBatch = contextOf(hook(prompt));
+  assert.ok(viaBatch.includes('Second void for Claude?') && viaBatch.includes(batch.id));
+  assert.equal(viaBatch.split('Second void for Claude?').length - 1, 1, 'the batch channel and the reminder channel do not both carry it');
+});
