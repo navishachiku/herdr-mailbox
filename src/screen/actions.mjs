@@ -23,6 +23,15 @@ async function handBack(env) {
   await env.run(['pane', 'focus', '--pane', env.selfPane, '--direction', 'left']).catch(() => {});
 }
 
+// What is typed in a question's field travels with these actions; they carry it in `text`.
+const CARRIES_TYPED = ['choose', 'recommend', 'explain', 'reconfirm', 'void'];
+
+// Returns the action with the text typed in its question's field attached, when the action carries it.
+export function withTyped(action, typed) {
+  if (typed === undefined || !action.uid || !CARRIES_TYPED.includes(action.type)) return action;
+  return { ...action, text: typed };
+}
+
 async function write(action, env) {
   const base = { mailbox: action.mailbox, generation: env.generation };
   const { call } = env;

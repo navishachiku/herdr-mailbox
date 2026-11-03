@@ -4,7 +4,7 @@ import { call as daemon } from '../ipc.mjs';
 import * as herdr from '../herdr.mjs';
 import { screenLocale, activeLocale } from './messages.mjs';
 import { render, BATCH } from './render.mjs';
-import { perform } from './actions.mjs';
+import { perform, withTyped } from './actions.mjs';
 import { systemOpen } from './launch.mjs';
 import { parseInput, edit } from './input.mjs';
 import { enter, painter, size, forgetSize } from './term.mjs';
@@ -263,12 +263,10 @@ async function click(captured) {
   focus = null;
   if (!action) { draw(); return; }
   if (action.type === 'choose') anim.start(`pick:${action.uid}:${action.choice}`, 250, { ease: 'linear' });
-  // What is typed in a question's field travels with its option buttons.
-  const typed = action.uid && buffers[action.uid];
-  if (typed !== undefined && ['choose', 'recommend', 'explain', 'reconfirm'].includes(action.type)) action.text = typed;
   if (action.type === 'reset') delete buffers[action.uid];
   if (action.type.startsWith('bulk-')) delete buffers[BATCH];
-  await act(action);
+  // What is typed in a question's field travels with its option buttons and with Void.
+  await act(withTyped(action, action.uid ? buffers[action.uid] : undefined));
 }
 
 function answerConfirm(yes) {

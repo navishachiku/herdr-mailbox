@@ -1125,6 +1125,38 @@ test('202/AC-22 Void without a note answers with X, removes only that card at on
   } finally { w.cleanup(); }
 });
 
+test('343 Void with text typed in the note field sends the text at once; Void with an empty field still sends nothing', async () => {
+  const { withTyped } = await import('./screen/actions.mjs');
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const typed = await decision(w, { question: 'Void with a reason?' });
+    const bare = await decision(w, { question: 'Void without a reason?' });
+    // The click flow: the typed text is saved as the draft, then Void is performed from the frame drawn before that,
+    // whose Void button still holds the old (empty) draft text.
+    const click = async (q, buffer) => {
+      const ui = await screen(w, mb);
+      const action = hit(ui, 'void', a => a.uid === q.uid);
+      if (buffer) await w.op('answer', { uid: q.uid, version: q.version, choice: null, text: buffer });
+      const requests = [];
+      const res = await performVoid(w, ui, withTyped(action, buffer), undefined, requests);
+      return { res, requests };
+    };
+    const withText = await click(typed, 'not needed, the API is gone');
+    assert.equal(withText.res.ok, true);
+    const answer = withText.requests.find(req => req.op === 'answer' && req.uid === typed.uid);
+    assert.deepEqual([answer.choice, answer.text], ['X', 'not needed, the API is gone'], 'the typed text is answered together with the void');
+    assert.ok(withText.requests.some(req => req.op === 'submit'), 'a void with text is sent at once');
+    const sent = await until(() => w.prompts().length >= 1 && w.prompts());
+    assert.match(JSON.stringify(sent), /not needed, the API is gone/, 'the agent receives the typed text');
+    const before = w.prompts().length;
+    const empty = await click(bare, undefined);
+    assert.equal(empty.res.ok, true);
+    await sleep(300);
+    assert.equal(w.prompts().length, before, 'a void with an empty field does not reach the receiver');
+  } finally { w.cleanup(); }
+});
+
 test('202/AC-23 Void all confirms the count and voids every unsent question including existing drafts, sending nothing', async () => {
   const { render } = await import('./screen/render.mjs');
   hit(render(interactionModel(), { cols: 80, rows: 100 }), 'void-all');
