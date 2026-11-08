@@ -64,6 +64,8 @@ Agent không có hệ thống skill có thể đọc cùng hướng dẫn đó t
 
 Thao tác setup sao lưu mọi tệp trước khi sửa (`<file>.bak-<date>`), chạy lại cũng không thêm trùng, và vẫn hoạt động sau `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` sẽ hoàn tác. Hãy khởi động lại các session Claude Code cần nhận thư.
 
+Sau `herdr plugin update`, hãy chạy lại thao tác setup một lần: hook của Claude Code chỉ được setup ghi lại, và bản phát hành thêm nguồn sự kiện (ví dụ `fork`, giúp hộp thư tiếp tục xác nhận khi người nhận chuyển cuộc trò chuyện sang nền) chỉ đến được máy đã cài theo cách này.
+
 Thêm phím tắt vào `config.toml` của Herdr (`~/.config/herdr/config.toml`; trên Windows là `%APPDATA%\herdr\config.toml`), rồi bấm `prefix+shift+r` để tải lại (`prefix` mặc định là `ctrl+b`):
 
 ```toml

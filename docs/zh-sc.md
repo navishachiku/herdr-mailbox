@@ -64,6 +64,8 @@ Herdr 的集成负责识别每个 pane 里的对话，信箱才能绑定到它�
 
 setup 动作改任何文件前都会先备份（`<file>.bak-<date>`），重复运行不会重复添加，`herdr plugin update` 之后也照常工作。`node <plugin dir>/src/setup.mjs uninstall` 可以还原。要收信的 Claude Code session 请重新启动。
 
+`herdr plugin update` 之后请再运行一次 setup 动作：Claude Code 的钩子只有 setup 会改写，新版若增加事件来源（例如 `fork`，让收件方把对话移到后台后信箱仍能确认），已安装的机器只能这样才拿得到。
+
 把快捷键加进 Herdr 的 `config.toml`（`~/.config/herdr/config.toml`；Windows 是 `%APPDATA%\herdr\config.toml`），再按 `prefix+shift+r` 重新加载（`prefix` 默认是 `ctrl+b`）：
 
 ```toml

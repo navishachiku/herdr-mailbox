@@ -194,7 +194,9 @@ test('249/AC-3 regression: a home set up by the old install is switched to the s
     PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: olds[2], timeout: 10 }] }] } }));
   fs.writeFileSync(path.join(home, '.herdr-mailbox-setup.json'), JSON.stringify({ createdFiles: [], createdDirs: [], added: { hooks: olds } }));
   assert.equal(run(home, 'install').status, 0);
-  const cmds = commands(JSON.parse(fs.readFileSync(file, 'utf8')));
+  const after = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(after.hooks.SessionStart[0].matcher, 'startup|resume|clear|compact|fork', 'the opening-event matcher gains the fork source');
+  const cmds = commands(after);
   assert.equal(cmds.length, 3);
   assert.ok(cmds.every(c => c.includes('.herdr-mailbox') && c.includes('--hook')));
 });

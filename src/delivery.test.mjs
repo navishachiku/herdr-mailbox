@@ -997,3 +997,32 @@ test('338/AC-4 a Claude receiver sees a bare void in the next prompt hook, once,
   assert.ok(viaBatch.includes('Second void for Claude?') && viaBatch.includes(batch.id));
   assert.equal(viaBatch.split('Second void for Claude?').length - 1, 1, 'the batch channel and the reminder channel do not both carry it');
 });
+
+test('a receiver moved to the background is confirmed in the fork file the marker landed in, and the mailbox follows it', async t => {
+  const r = rig(t, { mergeMs: 100 });
+  const mb = await r.bind();
+  const fork = path.join(r.root, 'fork.jsonl');
+  fs.writeFileSync(fork, '');
+  assert.equal((await r.raw({ op: 'register', pane: 'w1:p1', sid: 'sid-fork', source: 'fork', transcript: fork })).ok, true);
+  // The marker lands in the bound file: it stays bound to it.
+  const first = r.note(mb, 'lands in the bound file');
+  await r.confirmed(first.uid);
+  assert.equal(r.state().mailboxes[mb].owner.convo, 'sid-w1:p1');
+  assert.equal(r.state().mailboxes[mb].owner.transcript, r.transcript);
+  // The bound file stops growing and the marker lands in the fork file: confirmed there, and the mailbox follows.
+  r.world.transcripts['w1:p1'] = fork;
+  r.write();
+  const second = r.note(mb, 'lands in the fork file');
+  await r.confirmed(second.uid);
+  const owner = r.state().mailboxes[mb].owner;
+  assert.equal(owner.convo, 'sid-fork');
+  assert.equal(owner.transcript, fork);
+  assert.equal(r.state().mailboxes[mb].state, 'connected');
+  // herdr still names the old conversation: no disconnect, and the next batch is confirmed in the new file.
+  const third = r.note(mb, 'after the follow');
+  await r.confirmed(third.uid);
+  await sleep(600);
+  assert.equal(r.state().mailboxes[mb].state, 'connected');
+  const last = r.batches().find(b => b.members.includes(third.uid));
+  assert.ok(fs.readFileSync(fork, 'utf8').includes(last.marker ?? last.id));
+});

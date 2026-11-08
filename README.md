@@ -64,6 +64,8 @@ An agent with no skill system can read the same instructions from `mailbox skill
 
 The setup action backs up every file before it changes it (`<file>.bak-<date>`), adds nothing twice when run again, and keeps working after `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` reverts it. Restart the Claude Code sessions that should receive mail.
 
+After `herdr plugin update`, run the setup action again once: the Claude Code hooks are rewritten only by setup, and a release that adds an event source (for example `fork`, which lets the mailbox keep confirming after a receiver moves its conversation to the background) reaches an installed machine only that way.
+
 Add the shortcut to Herdr's `config.toml` (`~/.config/herdr/config.toml`; on Windows `%APPDATA%\herdr\config.toml`), then reload with `prefix+shift+r` (`prefix` is `ctrl+b` unless you changed it):
 
 ```toml

@@ -64,6 +64,8 @@ Un agent sans système de skills peut lire les mêmes instructions avec `mailbox
 
 L'action setup sauvegarde chaque fichier avant de le modifier (`<file>.bak-<date>`), n'ajoute rien deux fois quand on la relance et continue de fonctionner après `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` l'annule. Redémarre les sessions Claude Code qui doivent recevoir du courrier.
 
+Après `herdr plugin update`, relance une fois l'action setup : les hooks de Claude Code ne sont réécrits que par setup, et une version qui ajoute une source d'événement (par exemple `fork`, qui permet à la boîte de continuer à confirmer quand un destinataire passe sa conversation en arrière-plan) n'atteint une machine déjà installée que de cette façon.
+
 Ajoute le raccourci au `config.toml` de Herdr (`~/.config/herdr/config.toml` ; sous Windows `%APPDATA%\herdr\config.toml`), puis recharge avec `prefix+shift+r` (`prefix` vaut `ctrl+b`, sauf si tu l'as changé) :
 
 ```toml

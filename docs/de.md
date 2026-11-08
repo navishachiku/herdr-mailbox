@@ -64,6 +64,8 @@ Ein Agent ohne Skill-System kann dieselbe Anleitung über `mailbox skill` lesen;
 
 Die setup-Aktion sichert jede Datei, bevor sie sie ändert (`<file>.bak-<date>`), fügt bei erneutem Ausführen nichts doppelt hinzu und funktioniert auch nach `herdr plugin update` weiter. `node <plugin dir>/src/setup.mjs uninstall` macht sie rückgängig. Starte die Claude-Code-Sessions neu, die Post empfangen sollen.
 
+Führe die setup-Aktion nach `herdr plugin update` einmal erneut aus: Die Claude-Code-Hooks werden nur von setup neu geschrieben, und eine Version, die eine Ereignisquelle hinzufügt (etwa `fork`, damit das Postfach weiter bestätigt, wenn ein Empfänger seine Unterhaltung in den Hintergrund verschiebt), erreicht eine bereits eingerichtete Maschine nur auf diesem Weg.
+
 Trage das Tastenkürzel in Herdrs `config.toml` ein (`~/.config/herdr/config.toml`; unter Windows `%APPDATA%\herdr\config.toml`) und lade dann mit `prefix+shift+r` neu (`prefix` ist `ctrl+b`, sofern du es nicht geändert hast):
 
 ```toml

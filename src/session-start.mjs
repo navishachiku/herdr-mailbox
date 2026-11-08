@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Claude Code SessionStart hook (matcher startup|resume|clear|compact). Tells the daemon which conversation just
+// Claude Code SessionStart hook (matcher startup|resume|clear|compact|fork). Tells the daemon which conversation just
 // started in this pane, and exports its id to the conversation's own shell commands through CLAUDE_ENV_FILE.
 // It only records; whether the mailbox binding changes is decided by the daemon's reconcile. Any failure is
 // silent and exits 0, so a broken mailbox never blocks a session from starting.

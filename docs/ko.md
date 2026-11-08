@@ -64,6 +64,8 @@ skill 시스템이 없는 agent는 `mailbox skill`에서 같은 안내를 읽을
 
 setup 동작은 파일을 바꾸기 전에 항상 백업하고(`<file>.bak-<date>`), 다시 실행해도 중복으로 추가하지 않으며, `herdr plugin update` 후에도 그대로 동작합니다. `node <plugin dir>/src/setup.mjs uninstall`로 되돌릴 수 있습니다. 편지를 받을 Claude Code session은 다시 시작하세요.
 
+`herdr plugin update` 후에는 setup 동작을 한 번 더 실행하세요. Claude Code hook은 setup만 다시 쓰며, 이벤트 소스를 추가하는 릴리스(예: `fork`, 수신자가 대화를 백그라운드로 옮겨도 메일함이 계속 확인할 수 있게 해 줍니다)는 이미 설치된 기기에 이 방법으로만 반영됩니다.
+
 Herdr의 `config.toml`(`~/.config/herdr/config.toml`, Windows에서는 `%APPDATA%\herdr\config.toml`)에 단축키를 추가한 뒤 `prefix+shift+r`로 다시 불러옵니다(`prefix`는 바꾸지 않았다면 `ctrl+b`):
 
 ```toml

@@ -64,6 +64,8 @@ agent ที่ไม่มีระบบ skill อ่านคำแนะน�
 
 การกระทำ setup จะสำรองทุกไฟล์ก่อนแก้ไข (`<file>.bak-<date>`) รันซ้ำก็ไม่เพิ่มอะไรซ้ำ และยังทำงานได้ตามปกติหลัง `herdr plugin update` ย้อนกลับได้ด้วย `node <plugin dir>/src/setup.mjs uninstall` จากนั้นรีสตาร์ท session ของ Claude Code ที่จะรับจดหมาย
 
+หลัง `herdr plugin update` ให้รันการกระทำ setup อีกครั้งหนึ่ง: hook ของ Claude Code ถูกเขียนใหม่โดย setup เท่านั้น และรุ่นที่เพิ่มแหล่งเหตุการณ์ (เช่น `fork` ที่ทำให้กล่องจดหมายยืนยันต่อได้เมื่อผู้รับย้ายบทสนทนาไปทำงานเบื้องหลัง) จะถึงเครื่องที่ติดตั้งไว้แล้วด้วยวิธีนี้เท่านั้น
+
 เพิ่มปุ่มลัดลงใน `config.toml` ของ Herdr (`~/.config/herdr/config.toml` บน Windows คือ `%APPDATA%\herdr\config.toml`) แล้วโหลดใหม่ด้วย `prefix+shift+r` (`prefix` คือ `ctrl+b` ถ้าคุณไม่ได้เปลี่ยน):
 
 ```toml

@@ -195,6 +195,28 @@ function findTranscript(b) {
   if (file) Object.assign(b, { transcript: file, transcriptOffset: 0 });
 }
 
+// The receiver may have been moved to the background: Claude Code then writes the conversation to a new file and
+// registers it as a "fork" in the same pane, while the bound file stops growing. When the marker is in such a
+// candidate file and not in the bound one, that file is where the receiver now lives, so the mailbox follows it.
+function adoptLanding(b) {
+  const box = api.state.mailboxes[b.mailbox];
+  if (!box?.owner || box.owner.pane !== b.pane) return false;
+  // Only a batch of the current binding may move it: after a hand-over, an old batch landing in a fork file means nothing.
+  if (b.convo !== box.owner.convo && !box.owner.aliases?.includes(b.convo)) return false;
+  const seen = new Set();
+  for (const r of (api.state.registrations[b.pane] ?? []).filter(r => r.source === 'fork' && r.transcript).reverse()) {
+    if (r.transcript === b.transcript || seen.has(r.sid)) continue;
+    seen.add(r.sid);
+    if (!landed(r.transcript, 0, b.marker ?? b.id)) continue;
+    const from = box.owner.convo;
+    box.owner.aliases = [...new Set([...(box.owner.aliases ?? []), from])].filter(a => a !== r.sid);
+    Object.assign(box.owner, { convo: r.sid, transcript: r.transcript });
+    Object.assign(b, { convo: r.sid, transcript: r.transcript });
+    return true;
+  }
+  return false;
+}
+
 // The paste sometimes lands without the Enter taking effect. Once, a little after sending, press Enter again, but
 // only when the input box still holds this batch (its marker or id): anything else in the box is a person typing.
 async function nudge(b) {
@@ -221,7 +243,7 @@ async function settle() {
     if (b.status !== 'sending' || !b.sentAt) continue;
     findTranscript(b);
     await nudge(b);
-    if (landed(b.transcript, b.transcriptOffset, b.marker ?? b.id)) b.status = 'confirmed';
+    if (landed(b.transcript, b.transcriptOffset, b.marker ?? b.id) || adoptLanding(b)) b.status = 'confirmed';
     else if (api.now() - b.sentAt >= timings.confirmMs) b.status = 'unconfirmed';
     else continue;
     changed = true;

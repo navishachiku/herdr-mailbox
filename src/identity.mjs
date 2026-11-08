@@ -42,6 +42,12 @@ function latestRegistration(pane, match) {
   return registrationsOf(pane).filter(match).at(-1);
 }
 
+// Moving a conversation to the background makes Claude Code start a forked conversation in the same pane (a
+// SessionStart with source "fork"); the receiver keeps working there, so the pane's fork conversations are
+// candidates for the receiver's own, and a mailbox command run from one still comes from the receiver.
+const isForkOf = (pane, sid) => Boolean(sid) && registrationsOf(pane).some(r => r.sid === sid && r.source === 'fork');
+const isReceiverSid = (box, pane, sid) => Boolean(sid) && (sid === box.owner.convo || isForkOf(pane, sid));
+
 function disconnect(box, reason) {
   box.state = 'disconnected';
   box.disconnect = { reason, at: api.now() };
@@ -90,7 +96,7 @@ export function checkOwner(mbId, req, ctx) {
     if (req.generation !== (box.owner?.generation ?? 0)) return fail('stale_owner', 'the mailbox changed hands; reload it');
     return null;
   }
-  if (AGENT_OPS.has(req.op) && box.state === 'connected' && caller.pane === box.owner.pane && caller.sid && caller.sid === box.owner.convo) return null;
+  if (AGENT_OPS.has(req.op) && box.state === 'connected' && caller.pane === box.owner.pane && isReceiverSid(box, caller.pane, caller.sid)) return null;
   return fail('not_owner', 'only the current receiver of this mailbox can do that');
 }
 
@@ -145,7 +151,7 @@ async function bind(req, ctx) {
   // An agent that herdr detects but has no conversation id for yet (a start-up prompt is still open) is not a non-agent.
   if (!convo) return fail(pane.agent ? 'agent_not_ready' : 'not_agent', `pane ${req.pane} has no agent conversation`);
   const caller = ctx.caller ?? {};
-  const allowed = caller.viaPlugin || (caller.pane === req.pane && caller.sid && caller.sid === convo);
+  const allowed = caller.viaPlugin || (caller.pane === req.pane && caller.sid && (caller.sid === convo || isForkOf(req.pane, caller.sid)));
   if (!allowed) return fail('not_owner', 'only the user or the main conversation of this pane can bind its mailbox');
   const owner = {
     pane: req.pane, terminalId: pane.terminal_id, convo,
@@ -159,7 +165,8 @@ async function bind(req, ctx) {
     api.save();
     return { ok: true, mailbox: id, created: true };
   }
-  if (box.state === 'connected' && box.owner.convo === convo) Object.assign(box.owner, { ...owner, transcript: owner.transcript ?? box.owner.transcript });
+  if (box.state === 'connected' && box.owner.aliases?.includes(convo)) { /* herdr still names the conversation the receiver was moved out of */ }
+  else if (box.state === 'connected' && box.owner.convo === convo) Object.assign(box.owner, { ...owner, transcript: owner.transcript ?? box.owner.transcript });
   else takeOver(box, owner);
   api.save();
   return { ok: true, mailbox: box.id, created: false };
@@ -184,7 +191,7 @@ async function claim(req, ctx) {
   try { pane = await herdr.paneGet(caller.pane); } catch { return fail('pane_not_found', `no pane ${caller.pane}`); }
   const convo = pane.agent_session?.value;
   if (!convo) return fail('not_agent', `pane ${caller.pane} has no agent conversation`);
-  if (caller.sid && caller.sid !== convo) return fail('not_owner', 'a nested conversation cannot claim for this pane');
+  if (caller.sid && caller.sid !== convo && !isForkOf(caller.pane, caller.sid)) return fail('not_owner', 'a nested conversation cannot claim for this pane');
   takeOver(box, {
     pane: caller.pane, terminalId: pane.terminal_id, convo,
     transcript: latestRegistration(caller.pane, r => r.sid === convo)?.transcript ?? null,
@@ -241,14 +248,19 @@ function reconcileConversation(box, pane, changed) {
   const o = box.owner;
   const current = pane.agent_session?.value;
   if (current) noConversation.delete(box.id);
-  if (current === o.convo) { unverified.delete(box.id); return changed; }
+  // A conversation the mailbox followed away from (see adoptConversation in delivery) still counts: herdr keeps
+  // reporting the id it first saw for a conversation that was moved to the background.
+  if (current === o.convo || o.aliases?.includes(current)) { unverified.delete(box.id); return changed; }
   // No conversation reported (the agent has not resumed yet): nothing to compare, so no clock runs, but no delivery either.
   if (!current) { noConversation.add(box.id); return changed; }
   const seen = latestRegistration(o.pane, r => r.sid === current);
-  if (seen?.source === 'clear') {
-    // Clearing the conversation keeps the same receiver (decision in the task notes).
+  if (seen?.source === 'clear' || seen?.source === 'fork') {
+    // Clearing the conversation keeps the same receiver (decision in the task notes); so does herdr starting to
+    // report the conversation the receiver was moved into.
+    // A fork is only a candidate until a marker lands in its file (see adoptLanding in delivery), so the bound file stays.
+    if (seen.source === 'fork') o.aliases = [...new Set([...(o.aliases ?? []), o.convo])].filter(a => a !== current);
     o.convo = current;
-    o.transcript = seen.transcript ?? o.transcript;
+    if (seen.source !== 'fork') o.transcript = seen.transcript ?? o.transcript;
     unverified.delete(box.id);
     return true;
   }

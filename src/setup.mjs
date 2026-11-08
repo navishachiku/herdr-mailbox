@@ -25,7 +25,7 @@ const RULE = 'prefix_rule(pattern=["mailbox"], decision="allow")';
 const RC_BEGIN = '# >>> herdr-mailbox >>>';
 const RC_END = '# <<< herdr-mailbox <<<';
 const HOOKS = [
-  ['SessionStart', 'session-start.mjs', 'startup|resume|clear|compact'],
+  ['SessionStart', 'session-start.mjs', 'startup|resume|clear|compact|fork'],
   ['UserPromptSubmit', 'prompt-submit.mjs'],
   ['PreToolUse', 'send-guard.mjs', 'Bash'],
 ];
@@ -201,7 +201,13 @@ const installHooks = () => {
       manifest.added.hooks = manifest.added.hooks.filter(c => !old.includes(c));
       if (!manifest.added.hooks.includes(command)) manifest.added.hooks.push(command);
     }
-    if (hasCommand(settings.hooks[event], command)) continue;
+    if (hasCommand(settings.hooks[event], command)) {
+      // An earlier install wrote an older matcher; bring the entries this install added up to date.
+      if (matcher && manifest.added.hooks.includes(command)) {
+        for (const g of settings.hooks[event]) if ((g.hooks ?? []).some(h => h.command === command)) g.matcher = matcher;
+      }
+      continue;
+    }
     manifest.added.hooks.push(command);
     (settings.hooks[event] ??= []).push({ ...(matcher && { matcher }), hooks: [{ type: 'command', command, timeout: 10 }] });
   }

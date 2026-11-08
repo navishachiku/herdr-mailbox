@@ -64,6 +64,8 @@ npx skills add navishachiku/herdr-mailbox --global
 
 Действие setup делает резервную копию каждого файла перед изменением (`<file>.bak-<date>`), при повторном запуске ничего не добавляет дважды и продолжает работать после `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` откатывает его. Перезапусти сессии Claude Code, которые должны получать почту.
 
+После `herdr plugin update` запусти действие setup ещё раз: хуки Claude Code переписывает только setup, и выпуск, добавляющий источник события (например, `fork`, благодаря которому ящик продолжает подтверждать доставку, когда получатель переносит разговор в фон), доходит до уже настроенной машины только так.
+
 Добавь сочетание клавиш в `config.toml` Herdr (`~/.config/herdr/config.toml`; в Windows `%APPDATA%\herdr\config.toml`), затем перезагрузи через `prefix+shift+r` (`prefix` по умолчанию — `ctrl+b`):
 
 ```toml
