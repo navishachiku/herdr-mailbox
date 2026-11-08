@@ -494,13 +494,13 @@ test('298/AC-3 sent through the CLI fails with a recognisable error when the dae
   } finally { s.cleanup(); }
 });
 
-test('298/AC-1 the reply line says to reply only when needed, in English and Traditional Chinese', () => {
+test('298/AC-1 the reply line says a reply is required when the body asks for one, and not otherwise, in English and Traditional Chinese', () => {
   const run = locale => spawnSync(process.execPath, ['--input-type=module', '-e',
     `import { replyLines } from ${JSON.stringify(new URL('./format.mjs', import.meta.url).href)};
      console.log(replyLines(['p'], { p: { mailbox: 'MB-1' } }).join('\\n'));`],
   { env: { ...process.env, LC_ALL: locale }, encoding: 'utf8' }).stdout.trim();
-  assert.equal(run('en_US.UTF-8'), 'Reply to MB-1 only if you need to answer; no reply is needed if this just confirms receipt');
-  assert.equal(run('zh_TW.UTF-8'), '要回覆時才寄 MB-1；只是確認收到就不必回');
+  assert.equal(run('en_US.UTF-8'), 'Reply to MB-1 whenever the message asks you to report or answer, even if the work is done; skip the reply only if the message asks for nothing and you would just confirm receipt');
+  assert.equal(run('zh_TW.UTF-8'), '內文要求回報或回覆時，一定要寄 MB-1，做完了也要回；內文沒有任何要求、只是確認收到才不必回');
 });
 
 test('298/AC-2 sent through the CLI and a running daemon returns the letter just sent, by pane address', async () => {
@@ -517,13 +517,13 @@ test('298/AC-2 sent through the CLI and a running daemon returns the letter just
   } finally { s.cleanup(); }
 });
 
-test('298/AC-1 the line the hook adds for a Claude receiver says to reply only when needed, in English and Traditional Chinese', () => {
+test('298/AC-1 the line the hook adds for a Claude receiver says a reply is required when the body asks for one, and not otherwise, in English and Traditional Chinese', () => {
   const run = locale => spawnSync(process.execPath, ['--input-type=module', '-e',
     `import { hookContext } from ${JSON.stringify(new URL('./format.mjs', import.meta.url).href)};
      console.log(hookContext({ batch: { id: 'B1', kind: 'notes' }, items: [{ uid: 'U1', serial: 'N1', sender: 'w1:p2', label: 'Sender', mailbox: 'MB-1' }] }).split('\\n').at(-1));`],
   { env: { ...process.env, LC_ALL: locale }, encoding: 'utf8' }).stdout.trim();
-  assert.ok(run('en_US.UTF-8').endsWith('; reply to MB-1 only if you need to answer, no reply to a plain acknowledgement'));
-  assert.ok(run('zh_TW.UTF-8').endsWith('；要回覆時才寄 MB-1，只是確認收到就不必回'));
+  assert.ok(run('en_US.UTF-8').endsWith('; reply to MB-1 whenever the message asks you to report or answer, even if the work is done; skip the reply only if the message asks for nothing and you would just confirm receipt'));
+  assert.ok(run('zh_TW.UTF-8').endsWith('；內文要求回報或回覆時，一定要寄 MB-1，做完了也要回；內文沒有任何要求、只是確認收到才不必回'));
 });
 
 test('a Codex command is signed with the Codex pane it runs in, not the pane that started the shared server', async () => {

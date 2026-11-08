@@ -106,7 +106,7 @@ mailbox withdraw <uid> --reason "..."        # only while the user has not answe
 
 The sender is the pane in `HERDR_PANE_ID`, or `--from`. Letters are named by uid; the short serial shown on the screen (for example `Q003`) is refused by every command. When the same send may or may not have gone through, run `mailbox status` before sending again.
 
-Messages are signed `[workspace/]position/role 💬 ` from the sender pane's labels. When the sender owns a mailbox itself, the delivered text ends with the id to reply to, and says to reply only when there is something to answer; a plain acknowledgement needs no reply.
+Messages are signed `[workspace/]position/role 💬 ` from the sender pane's labels. When the sender owns a mailbox itself, the delivered text ends with the id to reply to, and says to reply whenever the message asks for a report or an answer, even if the work is done; only a message that asks for nothing and is just confirmed as received needs no reply.
 
 ## The mailbox screen
 
