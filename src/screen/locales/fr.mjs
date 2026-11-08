@@ -63,6 +63,8 @@ export default {
   voidAll: 'Tout annuler',
   voidAllConfirm: n => `Annuler ${n} question${n === 1 ? '' : 's'} ? Chacune est envoyée comme « pas de réponse nécessaire ».`,
   resendConfirm: (id, n) => `Renvoyer ${id} (${n} message${n === 1 ? '' : 's'}) ? Le destinataire peut les recevoir deux fois.`,
+  renew: 'Renouveler',
+  renewConfirm: id => `Remplacer ${id} par une nouvelle boîte ? Les messages non envoyés et les brouillons sont déplacés ; les lettres adressées à ${id} arrivent toujours.`,
   yes: 'Oui',
   no: 'Non',
   newQuestions: n => `↓ ${n} nouvelle${n === 1 ? '' : 's'} question${n === 1 ? '' : 's'}`,

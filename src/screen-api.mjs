@@ -7,7 +7,7 @@ import * as herdr from './herdr.mjs';
 import { classify } from './input-box.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { timings, mergeMs } from './timings.mjs';
-import { attachmentsOf } from './core.mjs';
+import { attachmentsOf, latestMailbox } from './core.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 const MAIN = fileURLToPath(new URL('./screen/main.mjs', import.meta.url));
@@ -17,8 +17,9 @@ const RECENT_MS = 60_000;
 let api;
 
 const answered = l => Boolean(l.draft && (l.draft.choice || l.draft.text?.trim()));
+// A screen opened on a mailbox that was renewed since asks for its old id; it is answered with the new mailbox.
 const boxOf = req => {
-  if (req.mailbox) return api.state.mailboxes[req.mailbox];
+  if (req.mailbox) return latestMailbox(api.state, req.mailbox);
   const boxes = Object.values(api.state.mailboxes);
   return boxes.find(b => b.screen?.pane === req.pane) ?? boxes.find(b => b.owner?.pane === req.pane);
 };

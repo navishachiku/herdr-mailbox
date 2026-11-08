@@ -63,6 +63,8 @@ export default {
   voidAll: 'Alle verwerfen',
   voidAllConfirm: n => `${n} Frage${n === 1 ? '' : 'n'} verwerfen? Jede wird als „keine Antwort nötig“ gesendet.`,
   resendConfirm: (id, n) => `${id} erneut senden (${n} Nachricht${n === 1 ? '' : 'en'})? Der Empfänger bekommt sie evtl. doppelt.`,
+  renew: 'Erneuern',
+  renewConfirm: id => `${id} durch einen neuen Briefkasten ersetzen? Ungesendete Nachrichten und Entwürfe ziehen um; Briefe an ${id} kommen weiter an.`,
   yes: 'Ja',
   no: 'Nein',
   newQuestions: n => `↓ ${n} neue Frage${n === 1 ? '' : 'n'}`,

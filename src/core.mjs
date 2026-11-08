@@ -51,6 +51,14 @@ export function newMailboxId(taken) {
   }
 }
 
+// Follows the pointers a renewed mailbox leaves behind to the mailbox that replaced it, however many times it was
+// renewed. An id nobody ever had gives undefined.
+export function latestMailbox(state, id) {
+  let box = state.mailboxes[id];
+  while (box?.renewedTo) box = state.mailboxes[box.renewedTo];
+  return box;
+}
+
 export class Mailboxes {
   constructor({ state, save, now = Date.now, attachDir }) {
     Object.assign(this, { state, persist: save, now, attachDir });
@@ -212,6 +220,8 @@ export class Mailboxes {
     const norm = this.normalize(type, req, att.attaches, { direct: dest.kind === 'direct' });
     if (!norm.ok) return norm;
     const content = norm.content;
+    // A letter to a renewed mailbox goes to the one that replaced it, and the sender is told every time.
+    const forwarded = dest.renewed ? { renewed: dest.renewed } : {};
     if (supersedes) {
       if (type === 'note') return fail('bad_supersedes', '--supersedes applies to decision and discussion questions');
       content.supersedes = supersedes;
@@ -225,11 +235,11 @@ export class Mailboxes {
     const live = l => l.mailbox === dest.id && !['withdrawn', 'superseded'].includes(l.status);
     const sameSender = this.keyOf(content, from);
     const dup = Object.values(this.state.letters).find(l => live(l) && l.sender === from && now - l.createdAt < DEDUP_MS && this.keyOf(l.content, from) === sameSender);
-    if (dup) return this.receipt(dup, from, { duplicate: true, reason: 'duplicate', ...this.annotate('send', box.id, from) });
+    if (dup) return this.receipt(dup, from, { duplicate: true, reason: 'duplicate', ...forwarded, ...this.annotate('send', box.id, from) });
     if (type === 'decision') {
       const anyone = this.keyOf(content, '');
       const open = Object.values(this.state.letters).find(l => live(l) && l.sender === from && l.type === 'decision' && l.status === 'pending' && !this.answered(l) && this.keyOf(l.content, '') === anyone);
-      if (open) return this.receipt(open, from, { duplicate: true, reason: 'duplicate_open_question', ...this.annotate('send', box.id, from) });
+      if (open) return this.receipt(open, from, { duplicate: true, reason: 'duplicate_open_question', ...forwarded, ...this.annotate('send', box.id, from) });
     }
     // Checked after the duplicate lookups: a resend of a letter that already superseded its target gets the
     // original receipt back instead of a "not active" error.
@@ -255,7 +265,7 @@ export class Mailboxes {
     } catch (e) { box.counter -= 1; return fail('bad_attach', `cannot store the attachment: ${e.code || e.message}`); }
     this.state.letters[uid] = letter;
     if (supersedes) { const o = this.state.letters[supersedes]; o.status = 'superseded'; o.supersededBy = uid; o.updatedAt = now; }
-    const extra = this.annotate('send', box.id, from);
+    const extra = { ...forwarded, ...this.annotate('send', box.id, from) };
     this.save();
     this.emit('letter', { letter });
     return this.receipt(letter, from, extra);

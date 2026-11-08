@@ -141,6 +141,8 @@ function adopt(next) {
   failure = null;
   animateChanges(model, next);
   model = next;
+  // A mailbox that was renewed answers with the one that replaced it; from here on this screen speaks for that one.
+  mailbox = model.mailbox.id;
   const pending = new Map(model.questions.filter(q => q.status === 'pending').map(q => [q.uid, q]));
   for (const uid of Object.keys(buffers)) {
     if (uid !== BATCH && (!pending.has(uid) || focus?.uid !== uid)) delete buffers[uid];
@@ -239,8 +241,8 @@ async function click(captured) {
     answerConfirm(action.type === 'confirm-yes');
     return;
   }
-  if (action?.type === 'void-all' || (action?.type === 'resolve-batch' && action.action === 'resend')) {
-    // Void all and Resend ask first. They run outside the event queue: they wait for the Yes / No click, which the
+  if (action?.type === 'void-all' || action?.type === 'renew' || (action?.type === 'resolve-batch' && action.action === 'resend')) {
+    // Void all, Renew and Resend ask first. They run outside the event queue: they wait for the Yes / No click, which the
     // queue has to deliver.
     // While the question is open the screen keeps refreshing; only the writes after Yes count as busy.
     if (busy || confirmPrompt) return;

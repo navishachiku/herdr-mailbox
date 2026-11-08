@@ -63,6 +63,8 @@ export default {
   voidAll: 'すべて取り消し',
   voidAllConfirm: n => `${n} 件の質問を取り消しますか？それぞれ「回答不要」として送信されます。`,
   resendConfirm: (id, n) => `${id}（${n} 件）を再送しますか？受け取り手に二重に届く可能性があります。`,
+  renew: '新しくする',
+  renewConfirm: id => `${id} を新しいメールボックスに替えますか？未送信のメッセージと下書きは移り、${id} 宛ての手紙も引き続き届きます。`,
   yes: 'はい',
   no: 'いいえ',
   newQuestions: n => `↓ 新しい質問 ${n} 件`,

@@ -346,7 +346,10 @@ function topRows(model, ctx) {
   const mk = () => newRow();
   const add = (left, right, fill) => rows.push(...flow(mk, cols, left, right, fill));
   const { mailbox } = model;
-  add([clipItem(` 📬 ${mailbox.id} · ${mailbox.label}`, cols - 1, S.title)], [], S.title);
+  // Renew sits at the right of the title; only a connected mailbox can be renewed, and the screen asks first (see main.mjs).
+  const renew = mailbox.state === 'connected' ? [button(t.renew, { type: 'renew', mailbox: mailbox.id, confirm: t.renewConfirm(mailbox.id) })] : [];
+  const renewRoom = renew.length ? itemWidth(renew[0]) + 1 : 0;
+  add([clipItem(` 📬 ${mailbox.id} · ${mailbox.label}`, Math.max(4, cols - 1 - renewRoom), S.title)], renew, S.title);
   if (ctx.notice) add([clipItem(` ${`! ${ctx.notice}`}`, cols - 1 + 1, S.warn)]);
 
   if (mailbox.state === 'disconnected') {

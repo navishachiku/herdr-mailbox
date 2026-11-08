@@ -93,6 +93,8 @@ Se la schermata non è aperta, una nuova domanda di decisione o di discussione m
 
 **Rivendicare una mailbox**: quando la conversazione del leader viene sostituita, la mailbox si disconnette e le sue lettere restano. Esegui nel pane del nuovo agent la riga `mailbox claim MB-xxxx` mostrata nella schermata, e la mailbox torna connessa.
 
+**Rinnovare una mailbox**: per ripartire da zero con un nuovo id invece di portarsi dietro una lunga cronologia, esegui `mailbox renew` nel pane del destinatario o fai clic su **Rinnova** in alto nella schermata. Il pane riceve un nuovo id di mailbox e la schermata passa a quella. I messaggi e le domande non ancora inviati, bozze comprese, si spostano; la cronologia dei lotti resta con il vecchio id. Le lettere inviate a un vecchio id vengono inoltrate per sempre alla mailbox più recente, e la ricevuta del mittente segnala che l'id è cambiato.
+
 ## Inviare una lettera
 
 ```sh

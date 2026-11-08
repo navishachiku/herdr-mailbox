@@ -63,6 +63,8 @@ export default {
   voidAll: 'Anular todas',
   voidAllConfirm: n => `¿Anular ${n} pregunta${n === 1 ? '' : 's'}? Cada una se envía como «no hace falta respuesta».`,
   resendConfirm: (id, n) => `¿Reenviar ${id} (${n} mensaje${n === 1 ? '' : 's'})? El destinatario podría recibirlos dos veces.`,
+  renew: 'Renovar',
+  renewConfirm: id => `¿Sustituir ${id} por un buzón nuevo? Los mensajes sin enviar y los borradores pasan al nuevo; las cartas enviadas a ${id} siguen llegando.`,
   yes: 'Sí',
   no: 'No',
   newQuestions: n => `↓ ${n} pregunta${n === 1 ? '' : 's'} nueva${n === 1 ? '' : 's'}`,

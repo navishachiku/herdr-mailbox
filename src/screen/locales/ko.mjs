@@ -63,6 +63,8 @@ export default {
   voidAll: '모두 무효',
   voidAllConfirm: n => `질문 ${n}개를 무효로 할까요? 각각 "답할 필요 없음"으로 보내집니다.`,
   resendConfirm: (id, n) => `${id}(${n}개)를 다시 보낼까요? 수신자가 두 번 받을 수 있습니다.`,
+  renew: '새로 만들기',
+  renewConfirm: id => `${id}을(를) 새 우편함으로 바꿀까요? 보내지 않은 메시지와 초안은 옮겨지고, ${id}(으)로 보낸 편지도 계속 도착합니다.`,
   yes: '예',
   no: '아니요',
   newQuestions: n => `↓ 새 질문 ${n}개`,

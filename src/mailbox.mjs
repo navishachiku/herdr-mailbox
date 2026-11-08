@@ -10,7 +10,7 @@ import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
 import { senderPane } from './sender.mjs';
 
-const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'open', 'close', 'deliver', 'skill'];
+const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'renew', 'open', 'close', 'deliver', 'skill'];
 const dir = new URL('./cli/', import.meta.url);
 
 const commands = Object.create(null);

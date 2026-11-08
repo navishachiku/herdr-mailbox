@@ -93,6 +93,8 @@ Quando a tela não está aberta, uma nova pergunta de decisão ou de discussão 
 
 **Reivindicar uma caixa de correio**: quando a conversa do leader é substituída, a caixa de correio se desconecta e as cartas continuam lá. Execute no pane do novo agente a linha `mailbox claim MB-xxxx` mostrada na tela, e a caixa de correio volta a se conectar.
 
+**Renovar uma caixa de correio**: para recomeçar com um id novo em vez de arrastar um histórico longo, execute `mailbox renew` no pane do receptor ou clique em **Renovar** no topo da tela. O pane recebe um id de caixa novo e a tela passa a mostrá-la. As mensagens e perguntas ainda não enviadas, rascunhos incluídos, são levadas; o histórico de lotes fica com o id antigo. As cartas enviadas a um id antigo são reencaminhadas para sempre à caixa mais recente, e o recibo do remetente avisa que o id mudou.
+
 ## Enviar uma carta
 
 ```sh

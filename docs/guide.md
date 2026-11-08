@@ -143,6 +143,14 @@ mailbox claim MB-xxxx
 
 Any other receiver can claim a disconnected mailbox. A mailbox that is still connected refuses with `already_claimed`. After a claim, the answers you had given on the screen ask for one more confirmation (**Confirm answer**) before they can be sent, and senders get a notice on their next receipt that the receiver changed.
 
+### Renewing a mailbox
+
+A mailbox id is tied to its pane, and a mailbox only grows: every batch stays in its record. To start over with a fresh id, the receiver runs `mailbox renew` in its pane, or you click **Renew** at the top of the screen and answer Yes. The pane gets a new mailbox id and the open screen switches to it.
+
+- Notes not yet sent, and questions not yet sent (answered or not, drafts included), move to the new mailbox. Batches and everything already delivered stay with the old id and are no longer shown.
+- The old id stays as a record that points to the new mailbox, for good. A letter sent to it is delivered to the newest mailbox, however many times the pane was renewed, and the sender's receipt carries a `renewed` line naming the new id, every time.
+- While a batch is being sent, `renew` is refused and says which batch; run it again once that batch is confirmed or marked unconfirmed.
+
 ## Delivery
 
 Notes are not typed into the agent one by one. A batch is built when all of these hold:

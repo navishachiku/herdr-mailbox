@@ -63,6 +63,7 @@ async function write(action, env) {
     case 'bulk-recommend': return call({ op: 'bulk', action: 'recommend', uids: action.uids, text: action.text, ...base });
     case 'bulk-explain': return call({ op: 'bulk', action: 'explain', uids: action.uids, text: action.text, ...base });
     case 'deliver-now': return call({ op: 'deliver-now', ...base });
+    case 'renew': return call({ op: 'renew', ...base });
     case 'resolve-batch': return call({ op: 'resolve-batch', batch: action.batch, action: action.action, ...base });
     case 'batch-note': return { ok: true };
     case 'card-mode': return call({ op: 'prefs-set', cardMode: action.mode });
@@ -131,9 +132,9 @@ export async function perform(action, env) {
     if (action.type === 'overlay-close') return { ok: true, overlay: null };
     // The new-question hint only moves the view; it keeps focus in the screen.
     if (action.type === 'reveal') return { ok: true, scroll: action.scroll };
-    // Void all and Resend ask first; the caller supplies the question (main draws it as a Yes / No row). A caller
+    // Void all, Renew and Resend ask first; the caller supplies the question (main draws it as a Yes / No row). A caller
     // without a confirm step has already decided.
-    const asks = action.type === 'void-all' || (action.type === 'resolve-batch' && action.action === 'resend');
+    const asks = action.type === 'void-all' || action.type === 'renew' || (action.type === 'resolve-batch' && action.action === 'resend');
     if (asks && env.confirm && !(await env.confirm(action.confirm))) return { ok: true, cancelled: true };
     report('pending');
     if (action.type === 'attachment' || action.type === 'open-url') {

@@ -93,6 +93,8 @@ Ist der Bildschirm nicht geöffnet, löst eine neue Entscheidungs- oder Diskussi
 
 **Einen Briefkasten übernehmen**: Wird die Unterhaltung des leaders ersetzt, trennt sich der Briefkasten, und seine Briefe bleiben erhalten. Führe die auf dem Bildschirm angezeigte Zeile `mailbox claim MB-xxxx` im Pane des neuen Agents aus, und der Briefkasten ist wieder verbunden.
 
+**Einen Briefkasten erneuern**: Wer mit einer frischen Kennung neu anfangen will, statt eine lange Historie mitzuschleppen, führt im Empfänger-Pane `mailbox renew` aus oder klickt oben im Bildschirm auf **Erneuern**. Das Pane bekommt eine neue Briefkasten-Kennung, und der Bildschirm wechselt darauf. Noch nicht gesendete Nachrichten und Fragen samt Entwürfen ziehen mit um; der Verlauf der Sendungen bleibt bei der alten Kennung. Briefe an eine alte Kennung werden dauerhaft an den neuesten Briefkasten weitergeleitet, und die Quittung des Absenders sagt, dass sich die Kennung geändert hat.
+
 ## Einen Brief senden
 
 ```sh

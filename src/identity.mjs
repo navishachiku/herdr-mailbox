@@ -2,7 +2,7 @@
 // true as herdr moves panes, restarts or changes the conversation, and anything that no longer matches is
 // disconnected until another agent claims it. Delivery asks canDeliver() before sending anything.
 import * as herdr from './herdr.mjs';
-import { newMailboxId } from './core.mjs';
+import { newMailboxId, latestMailbox } from './core.mjs';
 import { table } from './messages.mjs';
 import { timings } from './timings.mjs';
 
@@ -11,19 +11,23 @@ const text = table({
     claimed: 'This mailbox has already been claimed.',
     ownerChanged: id => `The receiver of ${id} changed since your last message; replies now go to the new receiver.`,
     needsReconfirm: 'The receiver changed; the user must confirm this answer again before it is sent.',
+    renewed: (from, to) => `${from} was replaced by ${to}; your letter went to ${to}. Send to ${to} from now on.`,
+    sending: list => `a batch is still being sent (${list}), so renewing now would leave it with no way to be confirmed; try again once it is confirmed or marked unconfirmed (about a minute)`,
   },
   'zh-TW': {
     claimed: '這個信箱已被認領。',
     ownerChanged: id => `${id} 的接收者在你上次寄信後已變更；之後的回覆會送給新接收者。`,
     needsReconfirm: '接收者已變更，這個答案需要使用者再確認一次才會送出。',
+    renewed: (from, to) => `${from} 已改為 ${to}；你的信已送到 ${to}，之後請寄給 ${to}。`,
+    sending: list => `有批次正在傳送（${list}），現在換新會讓它無從確認；等它確認或標為未確認後（約一分鐘）再試`,
   },
 });
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Writes that only the receiver (through the CLI) or the user (through the screen) may perform.
-const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release']);
+const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release', 'renew']);
 // Of those, the receiver agent may run only these; answering and sending for the user is the screen's job.
-const AGENT_OPS = new Set(['close', 'deliver', 'release']);
+const AGENT_OPS = new Set(['close', 'deliver', 'release', 'renew']);
 const KEEP_REGISTRATIONS = 5;
 
 let api;
@@ -119,7 +123,10 @@ function guard(op, req, ctx) {
 
 function route(to) {
   if (String(to).startsWith('MB-')) {
-    return api.state.mailboxes[to] ? { kind: 'mailbox', id: to } : fail('unknown_mailbox', `no mailbox ${to}`);
+    const box = latestMailbox(api.state, to);
+    if (!box) return fail('unknown_mailbox', `no mailbox ${to}`);
+    // A renewed mailbox keeps forwarding for good: its letters go to the mailbox that replaced it, and the sender is told.
+    return { kind: 'mailbox', id: box.id, ...(box.id !== to ? { renewed: { from: to, to: box.id, message: text.renewed(to, box.id) } } : {}) };
   }
   const boxes = boxesOf(to);
   const box = boxes.find(b => b.state === 'connected') ?? boxes.at(-1);
@@ -211,6 +218,35 @@ function release(req) {
   return { ok: true, mailbox: box.id, claim: `mailbox claim ${box.id}` };
 }
 
+// The receiver, or the user from the screen, starts over: the pane gets a new mailbox, and the old id stays behind as
+// a record that points to it (see route). What is still unsent moves to the new mailbox with its drafts; batches and
+// everything already delivered stay with the old one, so the new mailbox starts without that history.
+// A batch that is being sent is still waiting to be confirmed against the old mailbox, so renewing waits for it.
+const UNSENT = l => ['queued', 'pending', 'submitted'].includes(l.status) || (l.status === 'voided' && !l.voidAnnounced);
+
+function renew(req) {
+  const box = api.state.mailboxes[req.mailbox];
+  if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
+  if (box.state !== 'connected') return fail('not_connected', 'only a connected mailbox can be renewed; claim it first');
+  const sending = Object.values(api.state.batches).filter(b => b.mailbox === box.id && b.status === 'sending');
+  if (sending.length) return fail('batch_sending', text.sending(sending.map(b => `${b.id} -> ${b.pane}`).join(', ')), { batches: sending.map(b => b.id) });
+  const id = newMailboxId(api.state.mailboxes);
+  api.state.mailboxes[id] = {
+    id, counter: box.counter, owner: { ...box.owner }, state: 'connected', disconnect: null, paused: null, screen: box.screen ?? { open: false },
+    ...(box.deliverNow ? { deliverNow: true } : {}),
+  };
+  let moved = 0;
+  for (const l of Object.values(api.state.letters)) {
+    if (l.mailbox === box.id && UNSENT(l)) { l.mailbox = id; moved += 1; }
+  }
+  Object.assign(box, { state: 'renewed', renewedTo: id, renewedAt: api.now(), owner: null, paused: null, deliverNow: false, screen: { open: false, pane: null, terminalId: null, paneTerminal: null } });
+  unverified.delete(box.id);
+  missing.delete(box.id);
+  if (noConversation.delete(box.id)) noConversation.add(id);
+  api.save();
+  return { ok: true, mailbox: id, from: box.id, moved };
+}
+
 // Brings one connected mailbox in line with what herdr reports. Returns whether anything changed.
 function reconcileOne(box, panes) {
   const o = box.owner;
@@ -293,5 +329,6 @@ export default function registerIdentity(a) {
   api.op('register', register, { mutates: true });
   api.op('claim', claim, { mutates: true });
   api.op('release', release, { mutates: true });
+  api.op('renew', renew, { mutates: true });
   api.tick('reconcile', reconcile, timings.reconcileMs);
 }

@@ -2774,3 +2774,42 @@ test('259/AC-4 Recommend-all skips a decision question without a recommendation 
     assert.equal(find(v, rec.uid).draft.choice, 'P');
   } finally { w.cleanup(); }
 });
+
+test('441/AC-4 the screen offers Renew on a connected mailbox and asks before it renews; the next view shows the new mailbox with its letters', async () => {
+  const { render } = await import('./screen/render.mjs');
+  const fixture = interactionModel();
+  const offered = hit(render(fixture, { cols: 80, rows: 100, locale: 'en' }), 'renew');
+  assert.equal(offered.mailbox, 'MB-test');
+  assert.match(offered.confirm, /MB-test/, 'the question names the mailbox it replaces');
+  const gone = { ...fixture, mailbox: { ...fixture.mailbox, state: 'disconnected', disconnect: { reason: 'pane_closed' }, claim: 'mailbox claim MB-test' } };
+  assert.equal(render(gone, { cols: 80, rows: 100, locale: 'en' }).hits.some(h => h.action.type === 'renew'), false, 'a disconnected mailbox has nothing to renew');
+
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const queued = await note(w, 'Still waiting');
+    const q = await decision(w, { question: 'Keep my draft?' });
+    await w.op('answer', { uid: q.uid, version: q.version, choice: 'B', text: 'yes please' });
+    const ui = await screen(w, mb);
+    const action = hit(ui, 'renew');
+    const requests = [];
+    const cancelled = await performVoid(w, ui, action, async () => false, requests);
+    assert.deepEqual([cancelled.ok, cancelled.cancelled], [true, true]);
+    assert.equal(requests.length, 0, 'saying No sends nothing');
+    assert.equal((await w.op('view', { mailbox: mb })).mailbox.id, mb);
+
+    const done = await performVoid(w, ui, action, async () => true, requests);
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.deepEqual(requests.map(r => [r.op, r.mailbox, r.generation]), [['renew', mb, ui.model.mailbox.generation]]);
+    // The screen keeps asking for the id it was opened with; the answer names the mailbox it now shows.
+    const after = await w.op('view', { mailbox: mb });
+    assert.notEqual(after.mailbox.id, mb);
+    assert.equal(after.mailbox.state, 'connected');
+    assert.deepEqual(after.notes.map(n => n.uid), [queued.uid]);
+    assert.equal(find(after, q.uid).draft.choice, 'B');
+    const next = render(after, { cols: 80, rows: 100, locale: 'en' });
+    assert.equal(hit(next, 'renew').mailbox, after.mailbox.id, 'its Renew button names the new mailbox');
+    const old = await performVoid(w, ui, action, async () => true, []);
+    assert.equal(old.ok, false, 'a click drawn for the old id is refused as stale');
+  } finally { w.cleanup(); }
+});

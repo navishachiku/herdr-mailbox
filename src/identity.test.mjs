@@ -28,7 +28,7 @@ const pane = (id, terminal, sid, extra = {}) => ({
 
 // Real CLI and daemon against the fake herdr. The receiver is w1:p1 in conversation sid-1; w2:p2 sends;
 // w4:p4 and w5:p5 are agents that may claim.
-function rig() {
+function rig(timings = {}) {
   const root = fs.mkdtempSync(path.join('/tmp', 'mbid-'));
   const socket = path.join(root, 'herdr.sock');
   const stateFile = path.join(root, 'herdr-state.json');
@@ -36,7 +36,7 @@ function rig() {
   const env = {
     ...process.env, HERDR_MAILBOX_STATE_DIR: root, HERDR_SOCKET_PATH: socket, HERDR_BIN_PATH: FAKE,
     FAKE_HERDR_STATE: stateFile, FAKE_HERDR_LOG: path.join(root, 'herdr.log'), HERDR_PANE_ID: 'w2:p2',
-    HERDR_MAILBOX_TIMINGS: JSON.stringify({ reconcileMs: 100, registerGraceMs: 600, tickMs: 100 }),
+    HERDR_MAILBOX_TIMINGS: JSON.stringify({ reconcileMs: 100, registerGraceMs: 600, tickMs: 100, ...timings }),
   };
   delete env.HERDR_PLUGIN_STATE_DIR;
   delete env.HERDR_PLUGIN_ID;
@@ -473,5 +473,92 @@ test('309/AC-2 only the current receiver can release; anyone else is refused and
     assert.equal(twice.out.ok, true);
     const again = R.cli(['release', id], { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' });
     assert.equal(again.out.ok, false);
+  } finally { R.cleanup(); }
+});
+
+// The receiver pane runs `mailbox renew`; the sender is w2:p2.
+const RECEIVER = { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' };
+const EMPTY_BOX = '────────────\n❯ \n────────────';
+
+test('441/AC-1,2 renew gives the pane a new mailbox: unsent letters and drafts move, old batches stay behind, and letters to the old id arrive in the new one with a notice', async () => {
+  const R = rig({ confirmMs: 300 });
+  try {
+    const id = await R.bindReceiver();
+    R.fake.screens['w1:p1'] = EMPTY_BOX;
+    R.write();
+    // A batch that ends unconfirmed stays with the old mailbox.
+    const first = sendNote(R, id, 'delivered long ago').out;
+    assert.equal((await R.screen(id, { op: 'deliver-now' })).ok, true);
+    await until(() => Object.values(R.state().batches).some(b => b.status === 'unconfirmed'), 'an unconfirmed batch');
+    // Still unsent: a queued note and a question whose draft the user already filled in.
+    const queued = sendNote(R, id, 'still waiting').out;
+    const q = sendDecision(R, id).out;
+    await R.screen(id, { op: 'answer', uid: q.uid, version: 1, choice: 'B', text: 'because' });
+    assert.equal(R.cli(['renew', id]).out.error, 'not_owner', 'a sender that is not the receiver cannot renew');
+    assert.equal(R.mb(id).state, 'connected');
+
+    const renewed = R.cli(['renew'], RECEIVER);
+    assert.equal(renewed.out.ok, true, JSON.stringify(renewed));
+    const fresh = renewed.out.mailbox;
+    assert.match(fresh, /^MB-[0-9a-f]{4}$/);
+    assert.notEqual(fresh, id);
+    assert.equal(R.mb(fresh).state, 'connected');
+    assert.equal(R.mb(fresh).owner.pane, 'w1:p1');
+    assert.equal(R.mb(id).renewedTo, fresh, 'the old id keeps a pointer to the new one');
+    const letters = R.state().letters;
+    assert.deepEqual([queued.uid, q.uid].map(uid => letters[uid].mailbox), [fresh, fresh], 'unsent letters moved');
+    assert.deepEqual(letters[q.uid].draft, { choice: 'B', text: 'because' }, 'the draft came along');
+    assert.equal(letters[first.uid].mailbox, id, 'a delivered letter stays with its batch');
+    const view = await R.raw({ op: 'view', mailbox: fresh });
+    assert.deepEqual(view.notes.map(n => n.uid), [queued.uid]);
+    assert.deepEqual(view.questions.map(x => x.uid), [q.uid]);
+    assert.deepEqual(view.batches, [], 'old batches are not shown');
+    assert.equal((await R.raw({ op: 'view', mailbox: id })).mailbox.id, fresh, 'asking for the old id shows the new mailbox');
+    assert.equal(Object.values(R.state().batches).filter(b => b.mailbox === id && b.status === 'unconfirmed').length, 1, 'the old batch record is kept');
+
+    const late = sendNote(R, id, 'to the old id');
+    assert.equal(late.out.ok, true, JSON.stringify(late));
+    assert.equal(R.state().letters[late.out.uid].mailbox, fresh);
+    assert.equal(late.out.renewed.to, fresh);
+    assert.match(late.out.renewed.message, new RegExp(fresh));
+    const byPane = R.cli(['send', '--to', 'w1:p1', '--type', 'note', 'to the pane']);
+    assert.equal(R.state().letters[byPane.out.uid].mailbox, fresh, 'a pane address finds the new mailbox, not the archived one');
+    assert.equal(byPane.out.renewed, undefined);
+  } finally { R.cleanup(); }
+});
+
+test('441/AC-3 after two renewals a letter to the oldest id arrives in the newest mailbox, and each send says so', async () => {
+  const R = rig();
+  try {
+    const oldest = await R.bindReceiver();
+    const second = R.cli(['renew'], RECEIVER).out.mailbox;
+    const third = R.cli(['renew'], RECEIVER).out.mailbox;
+    assert.equal(new Set([oldest, second, third]).size, 3);
+    const sent = sendNote(R, oldest, 'sent to the oldest id');
+    assert.equal(sent.out.ok, true, JSON.stringify(sent));
+    assert.equal(R.state().letters[sent.out.uid].mailbox, third);
+    assert.equal(sent.out.renewed.to, third);
+    assert.equal(sendNote(R, second, 'sent to the middle id').out.renewed.to, third);
+    assert.equal(R.cli(['status', '--to', oldest]).out.mailbox, third);
+  } finally { R.cleanup(); }
+});
+
+test('441/AC-5 renew is refused while a batch is being sent, with the reason, and nothing changes', async () => {
+  const R = rig({ confirmMs: 60_000 });
+  try {
+    const id = await R.bindReceiver();
+    R.fake.screens['w1:p1'] = EMPTY_BOX;
+    R.write();
+    const note = sendNote(R, id, 'on its way').out;
+    assert.equal((await R.screen(id, { op: 'deliver-now' })).ok, true);
+    const batch = await until(() => Object.values(R.state().batches).find(b => b.status === 'sending'), 'a batch in flight');
+    const before = JSON.stringify(R.state().mailboxes);
+    const refused = R.cli(['renew'], RECEIVER);
+    assert.equal(refused.out.ok, false);
+    assert.equal(refused.out.error, 'batch_sending');
+    assert.ok(refused.out.message.includes(batch.id), refused.out.message);
+    assert.equal(JSON.stringify(R.state().mailboxes), before, 'the number and the state of the mailboxes did not change');
+    assert.equal(R.state().letters[note.uid].mailbox, id);
+    assert.equal((await R.screen(id, { op: 'renew' })).error, 'batch_sending', 'the screen is refused the same way');
   } finally { R.cleanup(); }
 });

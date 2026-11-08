@@ -93,6 +93,8 @@ Si la pantalla no está abierta, una nueva pregunta de decisión o de debate mue
 
 **Reclamar un buzón**: cuando se sustituye la conversación del leader, el buzón se desconecta y sus cartas se conservan. Ejecuta en el pane del nuevo agente la línea `mailbox claim MB-xxxx` que aparece en la pantalla, y el buzón vuelve a conectarse.
 
+**Renovar un buzón**: para empezar de cero con un id nuevo en lugar de arrastrar un historial largo, ejecuta `mailbox renew` en el pane del receptor o pulsa **Renovar** en la parte superior de la pantalla. El pane recibe un id de buzón nuevo y la pantalla pasa a mostrarlo. Los mensajes y preguntas aún sin enviar, borradores incluidos, se trasladan; el historial de lotes se queda con el id anterior. Las cartas enviadas a un id antiguo se reenvían para siempre al buzón más reciente, y el recibo del remitente avisa de que el id cambió.
+
 ## Enviar una carta
 
 ```sh

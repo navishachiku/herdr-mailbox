@@ -63,6 +63,8 @@ export default {
   voidAll: 'Huỷ tất cả',
   voidAllConfirm: n => `Huỷ ${n} câu hỏi? Mỗi câu sẽ được gửi là "không cần trả lời".`,
   resendConfirm: (id, n) => `Gửi lại ${id} (${n} tin nhắn)? Người nhận có thể nhận hai lần.`,
+  renew: 'Làm mới',
+  renewConfirm: id => `Thay ${id} bằng hộp thư mới? Tin nhắn chưa gửi và bản nháp sẽ chuyển sang; thư gửi tới ${id} vẫn đến nơi.`,
   yes: 'Có',
   no: 'Không',
   newQuestions: n => `↓ ${n} câu hỏi mới`,

@@ -93,6 +93,8 @@ Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi th
 
 **Nhận lại hộp thư**: khi cuộc trò chuyện của leader bị thay thế, hộp thư mất kết nối nhưng thư vẫn còn. Chạy dòng `mailbox claim MB-xxxx` hiện trên màn hình trong pane của agent mới, hộp thư sẽ được kết nối lại.
 
+**Làm mới hộp thư**: muốn bắt đầu lại với id mới thay vì mang theo lịch sử dài, hãy chạy `mailbox renew` trong pane của người nhận, hoặc bấm **Làm mới** ở đầu màn hình. Pane nhận một id hộp thư mới và màn hình chuyển sang hộp đó. Tin nhắn và câu hỏi chưa gửi, kể cả bản nháp, được chuyển sang; lịch sử các lô ở lại với id cũ. Thư gửi tới id cũ được chuyển tiếp vĩnh viễn tới hộp thư mới nhất, và biên nhận của người gửi cho biết id đã đổi.
+
 ## Gửi thư
 
 ```sh

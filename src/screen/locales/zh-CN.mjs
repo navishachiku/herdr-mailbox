@@ -63,6 +63,8 @@ export default {
   voidAll: '全部作废',
   voidAllConfirm: n => `作废 ${n} 题？每题都会以“不需回答”送出。`,
   resendConfirm: (id, n) => `重发 ${id}（${n} 条）？收件人可能收到两次。`,
+  renew: '换新',
+  renewConfirm: id => `换新 ${id}？未发送的消息和草稿会移到新信箱，发到 ${id} 的信照样送达。`,
   yes: '是',
   no: '否',
   newQuestions: n => `↓ ${n} 道新题`,

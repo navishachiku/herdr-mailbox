@@ -93,6 +93,8 @@ Quand l'écran n'est pas ouvert, une nouvelle question de décision ou de discus
 
 **Reprendre une boîte** : quand la conversation du leader est remplacée, la boîte se déconnecte et ses lettres restent. Lance dans le pane du nouvel agent la ligne `mailbox claim MB-xxxx` affichée à l'écran, et la boîte est de nouveau connectée.
 
+**Renouveler une boîte** : pour repartir de zéro avec un nouvel identifiant plutôt que de traîner un long historique, lance `mailbox renew` dans le pane du destinataire, ou clique sur **Renouveler** en haut de l'écran. Le pane reçoit un nouvel identifiant de boîte et l'écran passe dessus. Les messages et questions pas encore envoyés, brouillons compris, suivent ; l'historique des lots reste avec l'ancien identifiant. Les lettres adressées à un ancien identifiant sont redirigées pour toujours vers la boîte la plus récente, et l'accusé de l'expéditeur indique que l'identifiant a changé.
+
 ## Envoyer un courrier
 
 ```sh
