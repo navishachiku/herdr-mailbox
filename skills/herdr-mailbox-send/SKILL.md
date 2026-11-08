@@ -36,7 +36,7 @@ When the receiver needs to look at a file to answer or follow the letter (a repo
 
 ### Step 3 — Length limits
 
-A question is up to 200 characters, one option 80, a discussion idea 300, a note 500. Longer is rejected with `too_long`. Write the full text to a file, send it with `--attach <file>`, and keep one summary sentence in the letter. Do not cut the content yourself.
+A question is up to 200 characters, one option 80, a discussion idea 300, a note 500. Longer is rejected with `too_long`. Write the full text to a `.md` file (a `.txt` attachment is refused), send it with `--attach <file>`, and keep one summary sentence in the letter. Do not cut the content yourself.
 
 ### Step 4 — Read the receipt
 

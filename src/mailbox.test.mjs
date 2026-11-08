@@ -124,6 +124,21 @@ test('the attachment is a snapshot taken at send time', () => {
   assert.equal(fs.readFileSync(attachmentsOf(core.state.letters[r.uid].content)[0].path, 'utf8'), 'version one');
 });
 
+test('363 a .txt attachment refuses the whole letter and says to use .md; a .md attachment goes out', () => {
+  const { core, dir } = fresh();
+  const txt = path.join(dir, 'notes.TXT');
+  const md = path.join(dir, 'notes.md');
+  fs.writeFileSync(txt, 'x');
+  fs.writeFileSync(md, 'x');
+  for (const r of [core.handle(note('see', { attach: txt })), core.handle(note('see', { attach: [md, txt] }))]) {
+    assert.equal(r.ok, false);
+    assert.equal(r.error, 'bad_attach');
+    assert.match(r.message, /\.md/);
+  }
+  assert.equal(Object.keys(core.state.letters).length, 0);
+  assert.equal(core.handle(note('see', { attach: md })).ok, true);
+});
+
 test('207/AC-1 every attachment of one letter is kept and shown to the receiver, and a single-attachment letter from before still reads', () => {
   const { core, dir } = fresh();
   const files = ['a.md', 'b.md', 'c.md'].map(n => { const f = path.join(dir, n); fs.writeFileSync(f, `body of ${n}`); return f; });

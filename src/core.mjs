@@ -143,6 +143,7 @@ export class Mailboxes {
     if (list.length > LIMITS.attach) return fail('too_many_attach', `at most ${LIMITS.attach} attachments per letter, got ${list.length}`);
     const attaches = [];
     for (const file of list) {
+      if (path.extname(file).toLowerCase() === '.txt') return fail('bad_attach', `cannot attach ${file}: .txt attachments are not accepted, write the text as a .md file instead`);
       try {
         const data = fs.readFileSync(file);
         attaches.push({ name: path.basename(file), sha256: crypto.createHash('sha256').update(data).digest('hex'), data });
