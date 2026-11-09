@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const LIMITS = { question: 200, option: 80, idea: 300, note: 500, attach: 5 };
+export const LIMITS = { question: 200, option: 80, tradeoff: 80, whyOpen: 150, idea: 300, note: 500, attach: 5 };
 
 // Letters stored before several attachments existed keep a single `attach`; both shapes read as one list.
 export const attachmentsOf = c => c.attachments ?? (c.attach ? [c.attach] : []);
@@ -135,7 +135,20 @@ export class Mailboxes {
       const recommend = String(f.recommend ?? '').toUpperCase();
       // The recommendation is optional; a card without one has no `recommend` key at all.
       if (recommend && (!LETTERS.slice(0, options.length).includes(recommend) || recommend.length !== 1)) return fail('bad_recommend', `--recommend must be one of ${LETTERS.slice(0, options.length).split('').join(', ')}`);
-      Object.assign(content, recommend ? { options, recommend } : { options });
+      // A decision card says what each option costs and why nothing already decided settles the choice; a card
+      // without both is a question the sender has not thought through, so it is refused here instead of reaching the user.
+      const tradeoffs = (f.tradeoffs ?? []).map(x => String(x).trim());
+      const whyOpen = String(f.whyOpen ?? '').trim();
+      const missing = [];
+      if (tradeoffs.length !== options.length || tradeoffs.some(x => !x)) missing.push(['missing_tradeoff', `one --tradeoff per option, in option order, saying what choosing that option gives up or risks (got ${tradeoffs.filter(Boolean).length} for ${options.length} options)`]);
+      if (!whyOpen) missing.push(['missing_why_open', '--why-open: why no existing rule, earlier decision or answer already settles it (if one does, apply it instead of asking)']);
+      if (missing.length) return fail(missing[0][0], `a decision question needs ${missing.map(m => m[1]).join(', and ')}`);
+      const sameAsOption = tradeoffs.findIndex((x, i) => x === options[i].trim());
+      if (sameAsOption >= 0) return fail('missing_tradeoff', `the --tradeoff for option ${LETTERS[sameAsOption]} only repeats the option; say what choosing it gives up or risks`);
+      const longTradeoff = tradeoffs.findIndex(x => len(x) > LIMITS.tradeoff);
+      if (longTradeoff >= 0) return tooLong(`the tradeoff for option ${LETTERS[longTradeoff]}`, LIMITS.tradeoff);
+      if (len(whyOpen) > LIMITS.whyOpen) return tooLong('--why-open', LIMITS.whyOpen);
+      Object.assign(content, recommend ? { options, recommend } : { options }, { tradeoffs, whyOpen });
     }
     if (type === 'discussion' && f.idea) {
       if (len(f.idea) > LIMITS.idea) return tooLong('idea', LIMITS.idea);
@@ -170,7 +183,7 @@ export class Mailboxes {
   }
 
   keyOf(c, withSender) {
-    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.recommend ?? null, c.idea ?? null, attachmentsOf(c).map(a => a.sha256).join() || null, c.supersedes ?? null]);
+    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.tradeoffs ?? null, c.whyOpen ?? null, c.recommend ?? null, c.idea ?? null, attachmentsOf(c).map(a => a.sha256).join() || null, c.supersedes ?? null]);
   }
 
   // The letters this sender still has open in one mailbox: queued notes and pending questions.
@@ -291,8 +304,11 @@ export class Mailboxes {
     const att = this.readAttach(req.attach);
     if (!att.ok) return att;
     const old = l.content;
+    // New option texts with the old trade-offs would put a cost under an option it was not written for.
+    if (l.type === 'decision' && req.options && !req.tradeoffs) return fail('missing_tradeoff', 'when you change the options, send --tradeoff again, one per option in the new order');
     const merged = {
       question: req.question ?? old.question, options: req.options ?? old.options, recommend: req.recommend ?? old.recommend,
+      tradeoffs: req.tradeoffs ?? old.tradeoffs, whyOpen: req.whyOpen ?? old.whyOpen,
       idea: req.idea ?? old.idea, priority: req.priority ?? l.priority,
     };
     const norm = this.normalize(l.type, merged, att.attaches.length ? att.attaches : attachmentsOf(old));

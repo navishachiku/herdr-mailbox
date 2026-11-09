@@ -102,7 +102,7 @@ function rig(timings = {}) {
   return R;
 }
 
-const sendDecision = (R, id) => R.cli(['send', '--to', id, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--recommend', 'a']);
+const sendDecision = (R, id) => R.cli(['send', '--to', id, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it', '--recommend', 'a']);
 const sendNote = (R, id, text, extra) => R.cli(['send', '--to', id, '--type', 'note', text], extra);
 
 test('200/AC-1 moving the receiver pane to another space keeps the mailbox, its letters and its draft', async () => {

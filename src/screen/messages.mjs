@@ -40,6 +40,7 @@ const en = {
   reply: 'Reply',
   reset: 'Reset',
   idea: 'Sender\'s idea',
+  whyOpen: 'Why no rule settles it',
   discussion: 'discussion',
   edited: 'edited',
   sent: serial => `✓ ${serial} sent`,
@@ -115,6 +116,7 @@ const zh = {
   reply: '回覆',
   reset: '重置',
   idea: '寄件者想法',
+  whyOpen: '規則為何決定不了',
   discussion: '討論題',
   edited: '已修改',
   sent: serial => `✓ ${serial} 已送出`,
@@ -168,7 +170,9 @@ const tables = { en, 'zh-TW': zh, 'zh-CN': zhCN, ja, ko, de, fr, es, it, pt, ru,
 export const LOCALES = Object.keys(tables);
 
 // The default is English so a render is the same wherever it runs; the screen process passes the system language.
-export const screenText = locale => tables[locale] ?? en;
+// A language that has no line for a newer label shows the English one.
+const merged = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, { ...en, ...v }]));
+export const screenText = locale => merged[locale] ?? en;
 export const screenLocale = tag => pickLocale(tag, LOCALES);
 // The language picked in Settings wins; 'auto' (nothing picked) follows the system language.
 export const activeLocale = (chosen, system) => (LOCALES.includes(chosen) ? chosen : system);

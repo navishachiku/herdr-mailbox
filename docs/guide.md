@@ -75,7 +75,7 @@ The `herdr-mailbox-send` skill tells an agent when to send a letter, which kind 
 
 ## Sending a letter
 
-- **Three kinds of letter** — a note, a decision question (2 to 4 options, a recommended one is optional) and a discussion question.
+- **Three kinds of letter** — a note, a decision question (2 to 4 options, each with a `--tradeoff` saying what choosing it gives up, plus a `--why-open` saying why no existing rule settles it; a recommended one is optional) and a discussion question.
 - **No double sends** — an identical letter within 30 seconds is not created again, and neither is an identical unanswered decision question from the same sender.
 - **Change your mind, until you answer** — edit, withdraw or supersede a question; once you have answered, the answer is locked in.
 
@@ -83,7 +83,10 @@ The `herdr-mailbox-send` skill tells an agent when to send a letter, which kind 
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 
 mailbox send --to <address|MB-id> --type discussion \
   --question "Split the README?" --idea "One file is enough"
@@ -113,7 +116,7 @@ Messages are signed `[workspace/]position/role 💬 ` from the sender pane's lab
 `prefix+shift+m` on a receiving agent's pane opens the screen in a split to its right, 48 columns wide by default, without taking focus. If it is already open, `prefix+shift+m` focuses it, and pressed from inside the screen it closes it. `q` in the screen and `mailbox close` also close it. Closing hides the screen only; letters and drafts stay. While the screen is not open, a new decision or discussion question raises a Herdr notification with the question; while it is open, no notification is raised. The text follows the system language, in one of 13 languages; **Language** under **Options** picks one yourself.
 
 - **Messages** — up to four queued notes, why delivery is paused (typing, unreadable input box, receiver working or unverified), and **Send now**. A batch whose arrival could not be confirmed shows **Mark delivered** and **Resend (may duplicate)**.
-- **Questions** — cards sorted by priority, then arrival. A card shows the question, its options with the recommended one marked (a card without a recommendation has no mark and no **Accept**), and a note field. Click an option, or use **Accept** or **Ask**. A note alone, with no option, is an answer too. **Void** marks a question as "no answer needed" and the card leaves at once. With nothing written in the note field, the asking agent is not woken for it: it is told along with its next prompt or next batch of answers, once. A void with a note is sent at once like any answer.
+- **Questions** — cards sorted by priority, then arrival. A card shows the question, why no rule settles it, its options with the trade-off under each (compact mode moves it into the option's tooltip) and the recommended one marked (a card without a recommendation has no mark and no **Accept**), and a note field. Click an option, or use **Accept** or **Ask**. A note alone, with no option, is an answer too. **Void** marks a question as "no answer needed" and the card leaves at once. With nothing written in the note field, the asking agent is not woken for it: it is told along with its next prompt or next batch of answers, once. A void with a note is sent at once like any answer.
 - **Batch answers** — **Accept all** applies to the unanswered decision questions that have a recommendation, **Ask all** to the unanswered decision questions, and **Reset all** clears the drafts. **Void all** voids every unsent question, drafts included, after you confirm how many.
 - **Send** — sends your answers back to the agent as a single batch. It is greyed out, with the reason, while the agent's input box has text or cannot be read, so an answer never lands on top of a draft.
 - **Attachments** — a letter with an attachment shows a link; clicking it opens the file in the system's default program (an image in the image viewer, a text file in its default app). A web address in a question opens in the default browser. These open on the machine where herdr runs.

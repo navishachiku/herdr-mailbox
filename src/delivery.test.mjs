@@ -83,7 +83,8 @@ function rig(t, timings = {}) {
   };
   const note = (to, text) => cli(['send', '--to', to, '--type', 'note', '--text', text]);
   const decision = to => cli(['send', '--to', to, '--type', 'decision', '--question', 'Install package?',
-    '--option', 'Install now', '--option', 'Wait until tomorrow', '--recommend', 'B']);
+    '--option', 'Install now', '--option', 'Wait until tomorrow',
+    '--tradeoff', 'unblocks work, but interrupts the build', '--tradeoff', 'safe, but delays the release', '--why-open', 'no rule covers it', '--recommend', 'B']);
   const confirmed = uid => until(() => batches().find(b => b.members.includes(uid) && b.status === 'confirmed'), 'confirmed batch');
   return { root, dir, env, world, write, clock, cli, raw, state, batches, calls, prompts, stop, bind, note, decision, confirmed, transcript };
 }
@@ -927,7 +928,7 @@ async function voidQuestion(r, mb, q, text = '') {
   const sent = await r.raw({ op: 'submit', mailbox: mb, generation, caller, items: [{ uid: q.uid, version: 1 }] });
   assert.equal(sent.results[0].ok, true, JSON.stringify(sent));
 }
-const askQuestion = (r, mb, question) => r.cli(['send', '--to', mb, '--type', 'decision', '--question', question, '--option', 'yes', '--option', 'no']);
+const askQuestion = (r, mb, question) => r.cli(['send', '--to', mb, '--type', 'decision', '--question', question, '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it']);
 
 test('338/AC-1 AC-2 a void with no note is not delivered and leaves the pending list; one with a note is sent at once', async t => {
   const r = rig(t, { mergeMs: 60000 });

@@ -101,7 +101,10 @@ setup アクションがお使いのマシンで動かない場合は、[AGENT-S
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to` には pane id、agent 名、メールボックス id を指定できます。`--recommend` は省略でき、付けないカードには推奨の選択肢が表示されません。

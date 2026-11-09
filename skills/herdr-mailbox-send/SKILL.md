@@ -21,22 +21,24 @@ Run `mailbox`. If it prints a usage list, it is found. If the shell does not fin
 | You want to | `--type` | Required |
 | --- | --- | --- |
 | Report, hand off or inform; no answer needed | `note` | one line of text |
-| Ask for a pick among 2 to 4 options | `decision` | `--question`, 2 to 4 `--option`, `--recommend <letter>` (optional: give it when you have checked, leave it off when you have not) |
+| Ask for a pick among 2 to 4 options | `decision` | `--question`, 2 to 4 `--option`, one `--tradeoff` per option in the same order, `--why-open`, `--recommend <letter>` (optional: give it when you have checked, leave it off when you have not) |
 | Ask for an opinion with no fixed options | `discussion` | `--question`, optionally `--idea` |
 
 ```sh
 mailbox send --to agent-a --type note "The sum of 1 to 100 is 5050."
-mailbox send --to agent-a --type decision --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+mailbox send --to agent-a --type decision --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 mailbox send --to agent-a --type discussion --question "Split the README?" --idea "One file is enough"
 ```
 
-`--to` takes the receiver's agent name, a pane address such as `w1:p2`, or an id starting with `MB-`. Options must be mutually exclusive; one question per letter. The receiver is whoever the task names; when it names none, ask the user once.
+`--to` takes the receiver's agent name, a pane address such as `w1:p2`, or an id starting with `MB-`. Options must be mutually exclusive; one question per letter. A `--tradeoff` says what choosing that option gives up or risks, not what it is; `--why-open` says why no existing rule, earlier decision or answer already settles the question. If one does, apply it and do not ask: the letter is for a choice only the user can make, and a card without both is refused. The receiver is whoever the task names; when it names none, ask the user once.
 
 When the receiver needs to look at a file to answer or follow the letter (a report, screenshot, spec or diff), attach it with `--attach <file>` (up to 5, repeat the flag) instead of pasting its path into the text; the receiver opens it from the letter.
 
 ### Step 3 — Length limits
 
-A question is up to 200 characters, one option 80, a discussion idea 300, a note 500. Longer is rejected with `too_long`. Write the full text to a `.md` file (a `.txt` attachment is refused), send it with `--attach <file>`, and keep one summary sentence in the letter. Do not cut the content yourself.
+A question is up to 200 characters, one option 80, one `--tradeoff` 80, `--why-open` 150, a discussion idea 300, a note 500. Longer is rejected with `too_long`. Write the full text to a `.md` file (a `.txt` attachment is refused), send it with `--attach <file>`, and keep one summary sentence in the letter. Do not cut the content yourself.
 
 ### Step 4 — Read the receipt
 
@@ -46,7 +48,7 @@ The command prints one JSON line and exits 0 only when it says `ok: true`. Look 
 - `status`: where the letter is now
 - `pending`: your letters to that mailbox that are not closed yet
 
-If the command prints plain text such as `unknown agent or pane: agent-a` and exits 1, there is no receipt: the receiver name does not resolve. Do not send to another receiver or by another tool; tell the user the name you used and ask for the agent's actual name or pane address. Otherwise, when `ok` is `false`, read `error`: `too_long` → Step 3; `duplicate_open_question` → you already asked this and it is unanswered, do not resend, look it up with `mailbox status`; `daemon_unavailable` → the mailbox service did not start; send it the way Step 1 describes for a missing mailbox, and tell the user.
+If the command prints plain text such as `unknown agent or pane: agent-a` and exits 1, there is no receipt: the receiver name does not resolve. Do not send to another receiver or by another tool; tell the user the name you used and ask for the agent's actual name or pane address. Otherwise, when `ok` is `false`, read `error`: `too_long` → Step 3; `missing_tradeoff` or `missing_why_open` → the message says what to add; if you cannot fill them in honestly, the question is probably already decided by a rule, so do not send it; `duplicate_open_question` → you already asked this and it is unanswered, do not resend, look it up with `mailbox status`; `daemon_unavailable` → the mailbox service did not start; send it the way Step 1 describes for a missing mailbox, and tell the user.
 
 ### Step 5 — Check before resending
 

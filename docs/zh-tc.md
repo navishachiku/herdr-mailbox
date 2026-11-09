@@ -101,7 +101,10 @@ delivery = "herdr"
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to` 可以填 pane id、agent 名稱或信箱 id。`--recommend` 可省略；沒有它的卡片不標建議選項。

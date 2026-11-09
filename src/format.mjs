@@ -25,7 +25,7 @@ const t = table({
     replyFor: (who, id) => `${who}: reply to ${id} whenever the message asks you to report or answer, even if the work is done; skip the reply only if the message asks for nothing and you would just confirm receipt`,
     repliesHead: n => `📬 herdr-mailbox: ${n} decision ${n === 1 ? 'reply' : 'replies'}`,
     replyItem: (serial, uid, who, pane) => `[${serial} · uid ${uid}] from ${who} (${pane})`,
-    question: 'Question', answer: 'Answer', note: 'Note', idea: 'Idea', recommend: 'Recommended',
+    question: 'Question', answer: 'Answer', note: 'Note', idea: 'Idea', recommend: 'Recommended', whyOpen: 'Why no rule settles it', tradeoff: 'gives up',
     option: (letter, text) => `${letter} "${text}"`,
     picked: (letter, text) => `${letter} "${text}"`,
     accepted: (letter, text) => `P (took the recommendation: ${letter} "${text}")`,
@@ -37,7 +37,7 @@ const t = table({
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
     options: 'Options',
-    reminder: id => `This pane has the herdr-mailbox mailbox ${id} open; the user answers questions on the mailbox screen. Send each question that asks the user to pick among options as a decision letter with \`mailbox send --to ${id} --type decision\`, one question per letter, not as a numbered list in the conversation; a question without fixed options goes as \`--type discussion\`. When the user needs to look at a file to answer, attach that file with \`--attach <file>\`. Do not mention letters waiting in the mailbox when you report; the mailbox tells the user about new ones.`,
+    reminder: id => `This pane has the herdr-mailbox mailbox ${id} open; the user answers questions on the mailbox screen. Send each question that asks the user to pick among options as a decision letter with \`mailbox send --to ${id} --type decision\` (it needs one \`--tradeoff\` per option and a \`--why-open\` saying why no existing rule settles it), one question per letter, not as a numbered list in the conversation; a question without fixed options goes as \`--type discussion\`. When the user needs to look at a file to answer, attach that file with \`--attach <file>\`. Do not mention letters waiting in the mailbox when you report; the mailbox tells the user about new ones.`,
   },
   'zh-TW': {
     colon: '：',
@@ -60,7 +60,7 @@ const t = table({
     replyFor: (who, id) => `${who}：內文要求回報或回覆時，一定要寄 ${id}，做完了也要回；內文沒有任何要求、只是確認收到才不必回`,
     repliesHead: n => `📬 herdr-mailbox：決策回覆 ${n} 題`,
     replyItem: (serial, uid, who, pane) => `[${serial} · uid ${uid}] 來自 ${who}（${pane}）`,
-    question: '題目', answer: '作答', note: '補充', idea: '想法', recommend: '推薦',
+    question: '題目', answer: '作答', note: '補充', idea: '想法', recommend: '推薦', whyOpen: '規則為何決定不了', tradeoff: '取捨',
     option: (letter, text) => `${letter}「${text}」`,
     picked: (letter, text) => `${letter}「${text}」`,
     accepted: (letter, text) => `P（按建議：${letter}「${text}」）`,
@@ -72,7 +72,7 @@ const t = table({
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
     options: '選項',
-    reminder: id => `這個視窗開著 herdr-mailbox 信箱 ${id}，使用者在信箱畫面作答。要使用者在幾個選項裡挑的題，用 \`mailbox send --to ${id} --type decision\` 寄成決策卡，一題一張，不在對話裡列題號；沒有固定選項的題用 \`--type discussion\`。使用者要看某個檔才答得出時，用 \`--attach <檔>\` 附上那個檔。回報時不提信箱裡的卡，新卡由信箱提醒使用者。`,
+    reminder: id => `這個視窗開著 herdr-mailbox 信箱 ${id}，使用者在信箱畫面作答。要使用者在幾個選項裡挑的題，用 \`mailbox send --to ${id} --type decision\` 寄成決策卡（每個選項要一個 \`--tradeoff\`、另有 \`--why-open\` 寫規則為何決定不了），一題一張，不在對話裡列題號；沒有固定選項的題用 \`--type discussion\`。使用者要看某個檔才答得出時，用 \`--attach <檔>\` 附上那個檔。回報時不提信箱裡的卡，新卡由信箱提醒使用者。`,
   },
 });
 
@@ -168,7 +168,8 @@ export function forwardQuestion({ letterType, content, from, label, attachments 
   const lines = [t.forward, t.sentBy(oneLine(label), oneLine(from)), `${t.question}${t.colon}${sanitize(content.question)}`];
   if (letterType === 'decision') {
     lines.push(`${t.options}${t.colon}`);
-    content.options.forEach((o, i) => lines.push(t.option('ABCD'[i], sanitize(o))));
+    content.options.forEach((o, i) => lines.push(t.option('ABCD'[i], sanitize(o)) + (content.tradeoffs?.[i] ? ` (${t.tradeoff}${t.colon}${sanitize(content.tradeoffs[i])})` : '')));
+    if (content.whyOpen) lines.push(`${t.whyOpen}${t.colon}${sanitize(content.whyOpen)}`);
     if (content.recommend) lines.push(`${t.recommend}${t.colon}${t.picked(content.recommend, sanitize(content.options['ABCD'.indexOf(content.recommend)]))}`);
   } else if (content.idea) {
     lines.push(`${t.idea}${t.colon}${sanitize(content.idea)}`);

@@ -101,7 +101,10 @@ Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi th
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to` nhận pane id, tên agent hoặc id hộp thư. `--recommend` là tuỳ chọn; thẻ không có nó sẽ không đánh dấu phương án đề xuất.

@@ -40,7 +40,10 @@ function fresh() {
   return { core, clock, dir };
 }
 const TO = 'w1:p1';
-const decision = (o = {}) => ({ op: 'send', to: TO, from: 'w2:p2', type: 'decision', question: 'Install it?', options: ['yes', 'no'], recommend: 'a', ...o });
+const decision = (o = {}) => {
+  const options = o.options ?? ['yes', 'no'];
+  return { op: 'send', to: TO, from: 'w2:p2', type: 'decision', question: 'Install it?', options, tradeoffs: options.map((_, i) => `trade-off ${i}`), whyOpen: 'no rule covers it', recommend: 'a', ...o };
+};
 const note = (text, o = {}) => ({ op: 'send', to: TO, from: 'w2:p2', type: 'note', text, ...o });
 
 test('receipt carries uid, status and the sender pending list for every type', () => {
@@ -369,7 +372,7 @@ test('a killed daemon comes back with the letter and the answer draft', async ()
   const s = sandbox();
   try {
     await s.bind();
-    const sent = s.cli('send', '--to', TO, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--recommend', 'A');
+    const sent = s.cli('send', '--to', TO, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster, but one more thing to keep', '--tradeoff', 'nothing new, but done by hand', '--why-open', 'no rule covers it', '--recommend', 'A');
     assert.equal(sent.code, 0);
     const uid = sent.out.uid;
     assert.equal((await s.raw({ op: 'answer', uid, version: 1, choice: 'B', text: 'with a note' })).userAnswered, true);

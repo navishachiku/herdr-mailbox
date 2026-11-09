@@ -101,7 +101,10 @@ Quand l'écran n'est pas ouvert, une nouvelle question de décision ou de discus
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to` accepte un id de pane, un nom d'agent ou un id de boîte. `--recommend` est facultatif ; une carte sans lui n'affiche aucune option recommandée.

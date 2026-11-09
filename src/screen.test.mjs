@@ -96,7 +96,7 @@ async function ready(w) {
   return mbOf(b);
 }
 const send = (w, o) => w.raw({ op: 'send', to: RECV, from: SENDER, ...o });
-const decision = (w, o = {}) => send(w, { type: 'decision', question: 'Install it?', options: ['yes', 'no', 'later'], recommend: 'A', ...o });
+const decision = (w, o = {}) => send(w, { type: 'decision', question: 'Install it?', options: ['yes', 'no', 'later'], tradeoffs: ['costs a day', 'loses the offer', 'risks forgetting'], whyOpen: 'no rule covers it', recommend: 'A', ...o });
 const discussion = (w, o = {}) => send(w, { type: 'discussion', question: 'Split the readme?', idea: 'one file', ...o });
 const note = (w, text) => send(w, { type: 'note', text });
 const find = (v, uid) => v.questions.find(q => q.uid === uid);
@@ -308,6 +308,26 @@ test('202/AC-3 clicking an option, Recommend or Explain fills the answer slot wi
       assert.equal(find(after.model, q.uid).draft.choice, choice);
       assert.match(answerLine(after, q.uid), new RegExp(`\\bPick\\s*:\\s*${choice}\\b`, 'i'));
     }
+  } finally { w.cleanup(); }
+});
+
+test('462/AC-1,2 a decision card without a trade-off per option and a why-open is refused with what to add; once added the card shows both', async () => {
+  const w = world();
+  try {
+    const mb = await ready(w);
+    const bare = { type: 'decision', question: 'Which plan?', options: ['alpha', 'beta'] };
+    const noTradeoff = await send(w, { ...bare, whyOpen: 'no rule covers it' });
+    assert.equal(noTradeoff.error, 'missing_tradeoff');
+    assert.match(noTradeoff.message, /one --tradeoff per option/);
+    const neither = await send(w, bare);
+    assert.match(neither.message, /one --tradeoff per option.*--why-open/, 'both missing parts are named at once');
+    const noWhy = await send(w, { ...bare, tradeoffs: ['costs a day', 'loses the offer'] });
+    assert.equal(noWhy.error, 'missing_why_open');
+    assert.match(noWhy.message, /--why-open/);
+    const q = await send(w, { ...bare, tradeoffs: ['costs a day', 'loses the offer'], whyOpen: 'no rule covers it' });
+    assert.equal(q.ok, true);
+    const ui = await screen(w, mb);
+    for (const text of ['costs a day', 'loses the offer', 'no rule covers it']) assert.ok(ui.lines.some(l => l.includes(text)), `the card shows "${text}"`);
   } finally { w.cleanup(); }
 });
 

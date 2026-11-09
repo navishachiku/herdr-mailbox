@@ -101,7 +101,10 @@ setup 동작이 당신의 컴퓨터에서 작동하지 않으면 [AGENT-SETUP.md
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to`에는 pane id, agent 이름, 우편함 id를 쓸 수 있습니다. `--recommend`는 생략할 수 있으며, 이것이 없는 카드에는 추천 선택지가 표시되지 않습니다.

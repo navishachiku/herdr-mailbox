@@ -221,6 +221,13 @@ function card(q, ctx) {
     rows.push(r);
   });
 
+  // Why no existing rule settles the question. Compact mode keeps it to one row with the full text in the tooltip.
+  if (q.type === 'decision' && q.content.whyOpen) {
+    const whyText = `${t.whyOpen}: ${q.content.whyOpen}`;
+    const whyLines = compact ? [cut(whyText, w - 2)] : wrap(whyText, w - 2);
+    for (const l of whyLines) add([{ ...textItem(` ${l}`, S.dim), ...(compact && l !== whyText ? { tip: whyText } : {}) }]);
+  }
+
   if (q.type === 'decision') {
     const letters = 'ABCD';
     blank(); // the question stands a row apart from its options
@@ -242,9 +249,14 @@ function card(q, ctx) {
       const room = Math.max(4, w - indent - 1);
       const lines = compact ? [cut(opt, room)] : wrap(opt, room);
       const fill = segs => [...segs, seg(' '.repeat(Math.max(1, w - segs.reduce((n, x) => n + width(x.t), 0))), s, h)];
-      const rowsOf = [item(fill([...lead, seg(lines[0], s, h)]), action), ...lines.slice(1).map(l => item(fill([seg(' '.repeat(indent), s, h), seg(l, s, h)]), action))];
+      // What choosing this option gives up: dim rows under the option; compact mode keeps it to one row, cut with
+      // the full text in the tooltip.
+      const cost = q.content.tradeoffs?.[i];
+      const costLines = cost ? (compact ? [cut(cost, room)] : wrap(cost, room)) : [];
+      const rowsOf = [item(fill([...lead, seg(lines[0], s, h)]), action), ...lines.slice(1).map(l => item(fill([seg(' '.repeat(indent), s, h), seg(l, s, h)]), action)),
+        ...costLines.map(l => item(fill([seg(' '.repeat(indent), s, h), seg(l, S.dim, h)]), action))];
       rowsOf.forEach(it => { it.group = `${q.uid}:${L}`; });
-      if (lines[0] !== opt && compact) rowsOf[0].tip = opt;
+      if (compact && (lines[0] !== opt || (cost && costLines[0] !== cost))) rowsOf[0].tip = cost ? `${opt} — ${cost}` : opt;
       return rowsOf;
     };
     const at = rows.length;

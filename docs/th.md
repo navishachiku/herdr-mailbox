@@ -101,7 +101,10 @@ delivery = "herdr"
 mailbox send --to <address|MB-id> --type note "tests pass"
 
 mailbox send --to <address|MB-id> --type decision \
-  --question "Install the skill too?" --option "Yes" --option "No" --recommend A
+  --question "Install the skill too?" --option "Yes" --option "No" \
+  --tradeoff "Agents can send letters; one more skill to keep updated" \
+  --tradeoff "Nothing new to maintain; agents must be told by hand" \
+  --why-open "No rule says whether agents get the skill" --recommend A
 ```
 
 `--to` รับได้ทั้ง pane id, ชื่อ agent หรือ id ของกล่องจดหมาย `--recommend` ใส่หรือไม่ใส่ก็ได้ การ์ดที่ไม่มีจะไม่แสดงตัวเลือกที่แนะนำ
