@@ -37,3 +37,9 @@ test('298/AC-4 the send skill tells agents not to send a reply with nothing new,
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.includes('Do not send a reply that has nothing new in it, such as one that only says you received a letter.'));
 });
+
+test('554/AC-2 the send skill says cards are for the person to answer and agent questions go as notes', () => {
+  const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), 'skill'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.includes('Decision and discussion cards are answered by the person at the mailbox screen; to ask the receiving agent itself, or something that can be looked up, send a note.'));
+});

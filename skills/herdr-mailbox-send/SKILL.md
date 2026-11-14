@@ -18,9 +18,11 @@ Run `mailbox`. If it prints a usage list, it is found. If the shell does not fin
 
 ### Step 2 — Choose the letter type
 
+Decision and discussion cards are answered by the person at the mailbox screen; to ask the receiving agent itself, or something that can be looked up, send a note. A card is only for a choice that no rule or earlier answer settles and only the user can make.
+
 | You want to | `--type` | Required |
 | --- | --- | --- |
-| Report, hand off or inform; no answer needed | `note` | one line of text |
+| Report, hand off, inform, or ask the receiving agent itself; it reads the letter in its conversation and replies by letter only when the letter has something to answer | `note` | one line of text |
 | Ask for a pick among 2 to 4 options | `decision` | `--question`, 2 to 4 `--option`, one `--tradeoff` per option in the same order, `--why-open`, `--recommend <letter>` (optional: give it when you have checked, leave it off when you have not) |
 | Ask for an opinion with no fixed options | `discussion` | `--question`, optionally `--idea` |
 
@@ -32,7 +34,7 @@ mailbox send --to agent-a --type decision --question "Install the skill too?" --
 mailbox send --to agent-a --type discussion --question "Split the README?" --idea "One file is enough"
 ```
 
-`--to` takes the receiver's agent name, a pane address such as `w1:p2`, or an id starting with `MB-`. Options must be mutually exclusive. Count questions of either kind (with or without fixed options): send 1 to 7 questions as one letter each (a decision letter for a pick-one question, a `--type discussion` letter for one without fixed options). With 8 or more questions at once, send a single `--type discussion` letter instead: write the questions into an interactive answer page (one HTML file where the user answers and copies the reply), attach it with `--attach`, say the question count and ask the user to paste the copied reply into the Reply field. A `--tradeoff` says what choosing that option gives up or risks, not what it is; `--why-open` says why no existing rule, earlier decision or answer already settles the question. If one does, apply it and do not ask: the letter is for a choice only the user can make, and a card without both is refused. The receiver is whoever the task names; when it names none, ask the user once.
+`--to` takes the receiver's agent name, a pane address such as `w1:p2`, or an id starting with `MB-`. Options must be mutually exclusive. Count questions of either kind (with or without fixed options): send 1 to 7 questions as one letter each (a decision letter for a pick-one question, a `--type discussion` letter for one without fixed options). With 8 or more questions at once, send a single `--type discussion` letter instead: write the questions into an interactive answer page (one HTML file where the user answers and copies the reply), attach it with `--attach`, say the question count and ask the user to paste the copied reply into the Reply field. A `--tradeoff` says what choosing that option gives up or risks, not what it is; `--why-open` says why no existing rule, earlier decision or answer already settles the question. If one does, apply it and do not ask; a card without both is refused. The receiver is whoever the task names; when it names none, ask the user once.
 
 When the receiver needs to look at a file to answer or follow the letter (a report, screenshot, spec or diff), attach it with `--attach <file>` (up to 5, repeat the flag) instead of pasting its path into the text; the receiver opens it from the letter.
 
