@@ -37,7 +37,7 @@ const t = table({
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
     options: 'Options',
-    reminder: id => `This pane has the herdr-mailbox mailbox ${id} open; the user answers questions on the mailbox screen. Send each question that asks the user to pick among options as a decision letter with \`mailbox send --to ${id} --type decision\` (it needs one \`--tradeoff\` per option and a \`--why-open\` saying why no existing rule settles it), one question per letter, not as a numbered list in the conversation; a question without fixed options goes as \`--type discussion\`. When the user needs to look at a file to answer, attach that file with \`--attach <file>\`. Do not mention letters waiting in the mailbox when you report; the mailbox tells the user about new ones.`,
+    reminder: id => `This pane has the herdr-mailbox mailbox ${id} open; the user answers questions on the mailbox screen. Send each question that asks the user to pick among options as a decision letter with \`mailbox send --to ${id} --type decision\` (it needs one \`--tradeoff\` per option and a \`--why-open\` saying why no existing rule settles it), not as a numbered list in the conversation; a question without fixed options goes as \`--type discussion\`. Count questions of either kind: with 1 to 7 questions, send one letter per question; with 8 or more at once, send a single \`--type discussion\` letter instead: write the questions into an interactive answer page (one HTML file where the user answers and copies the reply), attach it with \`--attach\`, say the question count and ask the user to paste the copied reply into the Reply field. When the user needs to look at a file to answer, attach that file with \`--attach <file>\`. Do not mention letters waiting in the mailbox when you report; the mailbox tells the user about new ones.`,
   },
   'zh-TW': {
     colon: '：',
@@ -72,7 +72,7 @@ const t = table({
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
     options: '選項',
-    reminder: id => `這個視窗開著 herdr-mailbox 信箱 ${id}，使用者在信箱畫面作答。要使用者在幾個選項裡挑的題，用 \`mailbox send --to ${id} --type decision\` 寄成決策卡（每個選項要一個 \`--tradeoff\`、另有 \`--why-open\` 寫規則為何決定不了），一題一張，不在對話裡列題號；沒有固定選項的題用 \`--type discussion\`。使用者要看某個檔才答得出時，用 \`--attach <檔>\` 附上那個檔。回報時不提信箱裡的卡，新卡由信箱提醒使用者。`,
+    reminder: id => `這個視窗開著 herdr-mailbox 信箱 ${id}，使用者在信箱畫面作答。要使用者在幾個選項裡挑的題，用 \`mailbox send --to ${id} --type decision\` 寄成決策卡（每個選項要一個 \`--tradeoff\`、另有 \`--why-open\` 寫規則為何決定不了），不在對話裡列題號；沒有固定選項的題用 \`--type discussion\`。有無固定選項的題都算進題數：1～7 題時一題一張；一次有 8 題以上時改寄一張 \`--type discussion\` 討論卡：把題目寫進互動作答頁（使用者作答後可複製回應的單一 HTML 檔），用 \`--attach\` 附上，卡上寫明題數並請使用者把複製的回應貼進回覆欄。使用者要看某個檔才答得出時，用 \`--attach <檔>\` 附上那個檔。回報時不提信箱裡的卡，新卡由信箱提醒使用者。`,
   },
 });
 

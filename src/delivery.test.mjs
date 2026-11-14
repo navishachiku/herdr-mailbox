@@ -845,6 +845,29 @@ test('278.1/AC-2 a prompt typed into a pane that owns a connected mailbox gets t
   assert.ok(otherContext.includes(`mailbox ${otherBox} open`) && !otherContext.includes(`mailbox ${mb} open`));
 });
 
+test('547/AC-1 the reminder sends 1 to 7 questions as one decision letter each and 8 or more as one discussion letter with an answer page', async t => {
+  const r = rig(t);
+  await r.bind();
+  const result = spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' },
+    input: JSON.stringify({ prompt: 'What should we do next?' }), encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(context.includes('1 to 7 questions'), 'names the one-letter-per-question tier');
+  assert.ok(context.includes('8 or more'), 'names the discussion-letter tier');
+  assert.ok(context.includes('questions of either kind'), 'questions with and without fixed options both count toward the tier');
+  assert.ok(/answer page/.test(context) && context.includes('--type discussion'), 'the 8-or-more tier is one discussion letter with an answer page');
+  assert.ok(!context.includes('one question per letter, not as'), 'the unconditional one-per-letter wording is gone');
+  assert.ok(context.includes('Reply field') && !context.includes('answer field'), 'the field is named as the screen names it');
+});
+
+test('547/AC-1 the send skill tells agents the same tiers: 1 to 7 questions one decision letter each, 8 or more one discussion letter with an answer page', () => {
+  const skill = fs.readFileSync(path.join(here, '..', 'skills', 'herdr-mailbox-send', 'SKILL.md'), 'utf8');
+  assert.ok(skill.includes('questions of either kind') && skill.includes('1 to 7 questions as one letter each') && skill.includes('With 8 or more questions at once'));
+  assert.ok(!skill.includes('one question per letter.'), 'the unconditional one-per-letter wording is gone');
+});
+
 test('278.1/AC-1 a prompt typed into a pane without a mailbox gets no reminder', async t => {
   const r = rig(t);
   await r.bind();
