@@ -5,6 +5,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+const QUESTIONS = ['decision', 'discussion'];
+const IMAGE_EXT = /\.(png|apng|jpe?g|jfif|gif|webp|bmp|svg|heic|heif|tiff?|avif)$/i;
 export const LIMITS = { question: 200, option: 80, tradeoff: 80, whyOpen: 150, idea: 300, note: 500, attach: 5 };
 
 // Letters stored before several attachments existed keep a single `attach`; both shapes read as one list.
@@ -159,8 +161,11 @@ export class Mailboxes {
   }
 
   // `files` is one path or a list. A bad list is refused as a whole, so a letter never goes out with some attachments missing.
-  readAttach(files) {
+  // A question card (decision or discussion) carries at most one image: several images on one card leave the reader
+  // opening each file and guessing which part of the question it belongs to.
+  readAttach(files, type) {
     const list = [].concat(files ?? []);
+    if (QUESTIONS.includes(type) && list.filter(f => IMAGE_EXT.test(f)).length > 1) return fail('too_many_images', `a ${type} card takes at most 1 image attachment; put the images on one page (html or md) that says which image goes with which option or point, and attach that page instead`);
     if (list.length > LIMITS.attach) return fail('too_many_attach', `at most ${LIMITS.attach} attachments per letter, got ${list.length}`);
     const attaches = [];
     for (const file of list) {
@@ -226,7 +231,7 @@ export class Mailboxes {
   send(req) {
     const { to, from = 'unknown', type, supersedes } = req;
     if (!to) return fail('missing_to', '--to is required');
-    const att = this.readAttach(req.attach);
+    const att = this.readAttach(req.attach, type);
     if (!att.ok) return att;
     const dest = this.hooks.route(to, req);
     if (dest.ok === false) return dest;
@@ -301,7 +306,7 @@ export class Mailboxes {
     const e = this.editable(req.uid, req.from ?? 'unknown');
     if (!e.ok) return e;
     const l = e.letter;
-    const att = this.readAttach(req.attach);
+    const att = this.readAttach(req.attach, l.type);
     if (!att.ok) return att;
     const old = l.content;
     // New option texts with the old trade-offs would put a cost under an option it was not written for.

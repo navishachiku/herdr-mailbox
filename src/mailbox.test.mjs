@@ -142,6 +142,27 @@ test('363 a .txt attachment refuses the whole letter and says to use .md; a .md 
   assert.equal(core.handle(note('see', { attach: md })).ok, true);
 });
 
+test('526 replay of a real case: a decision or discussion card with 2 or more images is refused and asks for one page; one image, non-images and notes go out', () => {
+  const { core, dir } = fresh();
+  const make = names => names.map(n => { const f = path.join(dir, n); fs.writeFileSync(f, 'x'); return f; });
+  const shots = make(['f02.png', 'f04.png', 'f08.png', 'f10.PNG']);
+  const [page, sample] = make(['pages.html', 'notes.md']);
+  const discussion = o => ({ op: 'send', to: TO, from: 'w2:p2', type: 'discussion', question: 'Which layout?', idea: 'two pages', ...o });
+  for (const card of [decision({ attach: shots }), discussion({ attach: shots.slice(0, 2) }), decision({ attach: [shots[0], page, shots[1]] })]) {
+    const r = core.handle(card);
+    assert.equal(r.ok, false);
+    assert.equal(r.error, 'too_many_images');
+    assert.match(r.message, /one page/);
+  }
+  assert.equal(Object.keys(core.state.letters).length, 0, 'no partial letter is stored');
+  assert.equal(core.handle(decision({ attach: shots[0] })).ok, true);
+  assert.equal(core.handle(discussion({ attach: [shots[1], page, sample] })).ok, true);
+  assert.equal(core.handle(decision({ question: 'Other?', attach: [page, sample] })).ok, true);
+  assert.equal(core.handle(note('shots for you', { attach: shots })).ok, true);
+  const q = core.handle(decision({ question: 'Edit me?', attach: shots[2] }));
+  assert.equal(core.handle({ op: 'edit', uid: q.uid, from: 'w2:p2', attach: shots }).error, 'too_many_images');
+});
+
 test('207/AC-1 every attachment of one letter is kept and shown to the receiver, and a single-attachment letter from before still reads', () => {
   const { core, dir } = fresh();
   const files = ['a.md', 'b.md', 'c.md'].map(n => { const f = path.join(dir, n); fs.writeFileSync(f, `body of ${n}`); return f; });
