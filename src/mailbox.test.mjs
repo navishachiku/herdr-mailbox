@@ -10,6 +10,7 @@ import { Mailboxes, DEDUP_MS, attachmentsOf } from './core.mjs';
 import { notesBatch } from './format.mjs';
 import { emptyState } from './store.mjs';
 import { sessionKey } from './paths.mjs';
+import { readCardRules } from './card-rules.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mb-'));
@@ -609,4 +610,47 @@ test('338/AC-6 withdrawing, editing or superseding a voided question says it was
   }
   assert.equal(core.state.letters[a.uid].status, 'voided');
   assert.equal(Object.keys(core.state.letters).length, 1);
+});
+
+// Card rules: an optional JSON file; without it every card is accepted.
+test('550/AC-1 a configured reject phrase or an over-long sentence refuses the card and says why', () => {
+  const dir = tmp();
+  const rules = { rejectPhrases: ['Basically'], maxSentenceUnits: 5 };
+  const core = boundCore({ save: () => {}, attachDir: path.join(dir, 'att'), cardRules: () => rules });
+  const phrase = core.handle(note('tests pass, basically fine'));
+  assert.equal(phrase.error, 'rejected_phrase');
+  assert.match(phrase.message, /Basically/i);
+  const inOption = core.handle(decision({ options: ['yes', 'Basically no'] }));
+  assert.equal(inOption.error, 'rejected_phrase');
+  // 5 Han characters and a run of letters count 6 units; sentence ends and line breaks reset the count.
+  const long = core.handle(note('一二三四五 ok'));
+  assert.equal(long.error, 'sentence_too_long');
+  assert.match(long.message, /6.*5/);
+  assert.equal(core.handle(note('一二三四五。一二 ok\nab cd')).ok, true);
+});
+
+test('550/AC-1 the daemon reads card-rules.json beside prefs.json and refuses a card that holds a reject phrase', async () => {
+  const s = sandbox();
+  try {
+    await s.bind();
+    fs.writeFileSync(path.join(s.root, 'card-rules.json'), JSON.stringify({ rejectPhrases: ['as you know'], maxSentenceUnits: 50 }));
+    const refused = s.cli('send', '--to', TO, '--type', 'note', 'As you know, tests pass');
+    assert.equal(refused.code, 1);
+    assert.equal(refused.out.error, 'rejected_phrase');
+    assert.equal(s.cli('send', '--to', TO, '--type', 'note', 'tests pass').code, 0);
+  } finally { s.cleanup(); }
+});
+
+test('550/AC-2 without a card-rules file, or with an unusable one, every card is accepted', async () => {
+  const s = sandbox();
+  try {
+    await s.bind();
+    const text = 'As you know, basically all of this is fine and a long sentence that never ends and keeps going on and on and on and on';
+    assert.equal(s.cli('send', '--to', TO, '--type', 'note', text).code, 0);
+    for (const bad of ['{ not json', '[]', '{"rejectPhrases":"x","maxSentenceUnits":"7"}', '{"rejectPhrases":[3,""],"maxSentenceUnits":0}']) {
+      fs.writeFileSync(path.join(s.root, 'card-rules.json'), bad);
+      assert.equal(s.cli('send', '--to', TO, '--type', 'note', `${text} ${bad.length}`).code, 0, bad);
+    }
+  } finally { s.cleanup(); }
+  assert.deepEqual(readCardRules(path.join(tmp(), 'missing.json')), {});
 });

@@ -9,6 +9,7 @@ import { waitForReceiver, START_WINDOW_MS } from './wait.mjs';
 import { call } from './ipc.mjs';
 import { resolvePane } from './signature.mjs';
 import { senderPane } from './sender.mjs';
+import { CARD_RULES_HELP } from './card-rules.mjs';
 
 const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'renew', 'open', 'close', 'deliver', 'skill'];
 const dir = new URL('./cli/', import.meta.url);
@@ -25,6 +26,7 @@ function usage(msg) {
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
+if (cmd === '--help' || cmd === '-h' || cmd === 'help') { console.log(`${usageText()}\n\n${CARD_RULES_HELP}`); process.exit(0); }
 const command = commands[cmd];
 if (!command) usage(cmd ? `unknown command: ${cmd}` : '');
 

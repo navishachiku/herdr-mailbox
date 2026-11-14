@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkText } from './card-rules.mjs';
 
 const QUESTIONS = ['decision', 'discussion'];
 const IMAGE_EXT = /\.(png|apng|jpe?g|jfif|gif|webp|bmp|svg|heic|heif|tiff?|avif)$/i;
@@ -62,8 +63,8 @@ export function latestMailbox(state, id) {
 }
 
 export class Mailboxes {
-  constructor({ state, save, now = Date.now, attachDir }) {
-    Object.assign(this, { state, persist: save, now, attachDir });
+  constructor({ state, save, now = Date.now, attachDir, cardRules = () => ({}) }) {
+    Object.assign(this, { state, persist: save, now, attachDir, cardRules });
     this.ops = new Map();
     this.ticks = [];
     this.listeners = {};
@@ -155,6 +156,16 @@ export class Mailboxes {
     if (type === 'discussion' && f.idea) {
       if (len(f.idea) > LIMITS.idea) return tooLong('idea', LIMITS.idea);
       content.idea = String(f.idea);
+    }
+    // Optional rules the mailbox owner set (see card-rules.mjs); with none set nothing here can refuse.
+    const rules = this.cardRules();
+    if (rules.rejectPhrases || rules.maxSentenceUnits) {
+      const fields = [['text', content.text], ['question', content.question], ['idea', content.idea], ['why-open', content.whyOpen],
+        ...(content.options ?? []).map((o, i) => [`option ${LETTERS[i]}`, o]), ...(content.tradeoffs ?? []).map((t, i) => [`tradeoff for option ${LETTERS[i]}`, t])];
+      for (const [where, text] of fields) {
+        const bad = text && checkText(text, rules, where);
+        if (bad) return fail(bad.error, bad.message);
+      }
     }
     if (attaches.length) content.attachments = attaches.map(a => ({ name: a.name, sha256: a.sha256 }));
     return { ok: true, content };

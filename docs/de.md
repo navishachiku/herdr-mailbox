@@ -118,6 +118,19 @@ Mit `--wait [--timeout <ms>]` kehrt der Versand erst zurück, wenn der leader de
 - Eine Frage darf höchstens 200 Zeichen lang sein, eine normale Nachricht höchstens 500; längerer Text gehört mit `--attach` in eine Datei.
 - Der Agent, dem der Briefkasten gehört (der leader), muss Claude Code oder agy sein, weil die Zustellung wartet, bis sein Eingabefeld leer ist, und sich nur diese beiden Eingabefelder auslesen lassen; Absender können beliebige Agents sein.
 
+## Karten-Regeln (optional)
+
+Um Briefe abzulehnen, die eine unerwünschte Wendung oder einen zu langen Satz enthalten, legen Sie `card-rules.json` im Plugin-Statusverzeichnis von Herdr neben `prefs.json` an (`mailbox --help` zeigt den genauen Pfad):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: Ein Brief, dessen Text eine dieser Wendungen enthält (ohne Beachtung der Groß-/Kleinschreibung), wird abgelehnt, und der Absender erfährt, welche.
+- `maxSentenceUnits`: Ein Brief mit einem längeren Satz wird abgelehnt. Ein chinesisches Zeichen zählt 1, ebenso jede zusammenhängende Folge von Buchstaben oder Ziffern; Sätze enden bei `。！？.!?` oder einem Zeilenumbruch.
+
+Beide Schlüssel sind optional, ein ungültiger Wert wird ignoriert. Ohne Datei werden alle Briefe angenommen. Geprüft wird der Text von Notiz, Frage, Optionen, Abwägungen, why-open und idea; Anhänge werden nicht gelesen.
+
 ## Bekannte Probleme
 
 - **Codex: kann noch keinen Briefkasten besitzen.** Codex 0.163 führt seine Unterhaltungen in einem gemeinsamen Hintergrundserver aus, daher meldet Herdrs Codex-Integration jede Unterhaltung an das Pane, das diesen Server gestartet hat, und das Codex-Pane selbst bekommt nie eine Unterhaltungs-ID, an die sich ein Briefkasten binden ließe. Codex kann trotzdem Briefe senden, und eine normale Nachricht an ein Codex-Pane ohne Briefkasten wird signiert und einmal direkt hineingetippt. Die Pane-ID von Codex in `HERDR_PANE_ID` kann falsch sein, deshalb muss ein Codex-Absender sein eigenes Pane mit `--from <pane id>` angeben.

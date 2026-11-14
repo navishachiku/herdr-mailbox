@@ -118,6 +118,19 @@ Il materiale più lungo viaggia con la lettera come file (`--attach <file>`, fin
 - Una domanda può avere al massimo 200 caratteri e un messaggio normale 500; i testi più lunghi vanno in un file con `--attach`.
 - L'agent che possiede la mailbox (il leader) deve essere Claude Code o agy, perché la consegna aspetta che la sua casella di input sia vuota e solo quelle due caselle di input si possono leggere; chi invia può essere qualsiasi agent.
 
+## Regole delle carte (facoltativo)
+
+Per rifiutare le lettere che contengono una frase indesiderata o una frase troppo lunga, crea `card-rules.json` nella directory di stato dei plugin di Herdr, accanto a `prefs.json` (`mailbox --help` mostra il percorso esatto):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: una lettera il cui testo contiene una di queste frasi (senza distinzione tra maiuscole e minuscole) viene rifiutata, e il mittente viene informato di quale.
+- `maxSentenceUnits`: una lettera con una frase più lunga viene rifiutata. Un carattere cinese conta 1, così come ogni sequenza continua di lettere o cifre; le frasi terminano con `。！？.!?` o con un a capo.
+
+Entrambe le chiavi sono facoltative e un valore non valido viene ignorato. Senza file, tutte le lettere sono accettate. Il testo controllato è la nota, la domanda, le opzioni, i compromessi, why-open e idea; gli allegati non vengono letti.
+
 ## Problemi noti
 
 - **Codex: non può ancora possedere una mailbox.** Codex 0.163 esegue le sue conversazioni in un unico server in background condiviso, quindi l'integrazione Codex di Herdr attribuisce ogni conversazione al pane che ha avviato quel server, e il pane di Codex stesso non riceve mai un id di conversazione a cui collegare una mailbox. Codex può comunque inviare lettere, e un messaggio normale inviato a un pane di Codex senza mailbox viene firmato e digitato direttamente al suo interno una sola volta. L'id di pane di Codex in `HERDR_PANE_ID` può essere sbagliato, quindi un mittente Codex deve indicare il proprio pane con `--from <pane id>`.

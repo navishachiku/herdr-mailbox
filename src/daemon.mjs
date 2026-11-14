@@ -7,6 +7,7 @@ import { SOCKET, STATE_FILE, STATE_DIR, PID_FILE, ATTACH_DIR, DAEMON_PROTO, SESS
 import { loadState, saveState } from './store.mjs';
 import { Mailboxes } from './core.mjs';
 import { timings } from './timings.mjs';
+import { readCardRules } from './card-rules.mjs';
 
 // Only the owner may enter the state directory, read letters or connect to the socket.
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
@@ -45,7 +46,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
   });
 }
 
-core = new Mailboxes({ state: loadState(STATE_FILE, SESSION), save: s => saveState(STATE_FILE, s), attachDir: ATTACH_DIR });
+core = new Mailboxes({ state: loadState(STATE_FILE, SESSION), save: s => saveState(STATE_FILE, s), attachDir: ATTACH_DIR, cardRules: () => readCardRules() });
 
 // Feature modules, loaded in this order; a missing file is skipped so each can be developed and tested alone.
 for (const name of ['identity', 'delivery', 'screen-api']) {

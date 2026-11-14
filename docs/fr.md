@@ -118,6 +118,19 @@ Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <fil
 - Une question fait au plus 200 caractères et un message ordinaire au plus 500 ; un texte plus long va dans un fichier joint avec `--attach`.
 - L'agent qui possède la boîte (le leader) doit être Claude Code ou agy, car la livraison attend que sa zone de saisie soit vide et seules ces deux zones de saisie peuvent être lues ; les expéditeurs peuvent être n'importe quel agent.
 
+## Règles de carte (facultatif)
+
+Pour refuser les lettres qui contiennent une expression indésirable ou une phrase trop longue, créez `card-rules.json` dans le dossier d'état des plugins de Herdr, à côté de `prefs.json` (`mailbox --help` affiche le chemin exact) :
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases` : une lettre dont le texte contient l'une de ces expressions (sans distinction de casse) est refusée, et l'expéditeur est informé de laquelle.
+- `maxSentenceUnits` : une lettre contenant une phrase plus longue est refusée. Un caractère chinois compte 1, de même qu'une suite de lettres ou de chiffres ; les phrases se terminent par `。！？.!?` ou un saut de ligne.
+
+Les deux clés sont facultatives et une valeur invalide est ignorée. Sans fichier, toutes les lettres sont acceptées. Le texte vérifié est la note, la question, les options, les compromis, why-open et idea ; les pièces jointes ne sont pas lues.
+
 ## Problèmes connus
 
 - **Codex : il ne peut pas encore posséder de boîte.** Codex 0.163 exécute ses conversations dans un seul serveur d'arrière-plan partagé, donc l'intégration Codex de Herdr rattache chaque conversation au pane qui a lancé ce serveur, et le pane Codex lui-même ne reçoit jamais d'id de conversation auquel lier une boîte. Codex peut quand même envoyer des lettres, et un message ordinaire envoyé à un pane Codex sans boîte est signé et tapé directement dedans une seule fois. L'id de pane de Codex dans `HERDR_PANE_ID` peut être faux, donc un expéditeur Codex doit indiquer son propre pane avec `--from <pane id>`.

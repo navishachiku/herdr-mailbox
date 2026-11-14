@@ -118,6 +118,19 @@ Material mais longo vai junto com a carta como arquivo (`--attach <file>`, até 
 - Uma pergunta tem até 200 caracteres e uma mensagem comum até 500; textos mais longos vão num arquivo com `--attach`.
 - O agente dono da caixa de correio (o leader) precisa ser o Claude Code ou o agy, porque a entrega espera o campo de texto dele ficar vazio e só esses dois campos de texto podem ser lidos; quem envia pode ser qualquer agente.
 
+## Regras de cartão (opcional)
+
+Para recusar cartas que contenham uma frase indesejada ou uma frase longa demais, crie `card-rules.json` no diretório de estado de plugins do Herdr, ao lado de `prefs.json` (`mailbox --help` mostra o caminho exato):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: uma carta cujo texto contenha alguma destas expressões (sem diferenciar maiúsculas) é recusada, e o remetente é informado de qual.
+- `maxSentenceUnits`: uma carta com uma frase mais longa é recusada. Um caractere chinês conta 1, assim como cada sequência de letras ou dígitos; as frases terminam em `。！？.!?` ou em uma quebra de linha.
+
+As duas chaves são opcionais e um valor inválido é ignorado. Sem o arquivo, todas as cartas são aceitas. O texto verificado é a nota, a pergunta, as opções, as contrapartidas, why-open e idea; os anexos não são lidos.
+
 ## Problemas conhecidos
 
 - **Codex: ainda não pode ser dono de uma caixa de correio.** O Codex 0.163 roda as conversas num único servidor compartilhado em segundo plano, então a integração do Codex no Herdr atribui cada conversa ao pane que iniciou esse servidor, e o próprio pane do Codex nunca recebe um id de conversa ao qual vincular uma caixa de correio. O Codex ainda pode enviar cartas, e uma mensagem comum enviada a um pane do Codex sem caixa de correio é assinada e digitada direto nele uma única vez. O id de pane do Codex em `HERDR_PANE_ID` pode estar errado, então um remetente Codex precisa indicar o próprio pane com `--from <pane id>`.

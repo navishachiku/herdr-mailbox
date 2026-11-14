@@ -118,6 +118,19 @@ Với `--wait [--timeout <ms>]`, lệnh gửi chỉ trả về sau khi leader đ
 - Một câu hỏi dài tối đa 200 ký tự, một tin nhắn thường tối đa 500 ký tự; nội dung dài hơn thì để trong tệp và đính kèm bằng `--attach`.
 - Agent sở hữu hộp thư (leader) phải là Claude Code hoặc agy, vì việc chuyển thư phải chờ ô nhập liệu của nó trống, và chỉ đọc được ô nhập liệu của hai loại này; bên gửi thì agent nào cũng được.
 
+## Quy tắc thẻ (tùy chọn)
+
+Để từ chối thư chứa cụm từ không mong muốn hoặc câu quá dài, hãy tạo `card-rules.json` trong thư mục trạng thái plugin của Herdr, cạnh `prefs.json` (`mailbox --help` in ra đường dẫn chính xác):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: thư có văn bản chứa bất kỳ cụm nào trong số này (không phân biệt hoa thường) sẽ bị từ chối, và người gửi được báo là cụm nào.
+- `maxSentenceUnits`: thư có câu dài hơn mức này sẽ bị từ chối. Một chữ Hán tính 1, một chuỗi liên tục chữ cái hoặc chữ số cũng tính 1; câu kết thúc ở `。！？.!?` hoặc xuống dòng.
+
+Cả hai khóa đều tùy chọn và giá trị không hợp lệ bị bỏ qua. Không có tệp thì mọi thư đều được nhận. Văn bản được kiểm tra gồm ghi chú, câu hỏi, các lựa chọn, đánh đổi, why-open và idea; tệp đính kèm không được đọc.
+
 ## Vấn đề đã biết
 
 - **Codex: chưa thể sở hữu hộp thư.** Codex 0.163 chạy mọi cuộc trò chuyện trong một máy chủ nền dùng chung, nên tích hợp Codex của Herdr báo mọi cuộc trò chuyện về pane đã khởi động máy chủ đó, còn chính pane Codex không bao giờ nhận được id cuộc trò chuyện để gắn hộp thư vào. Codex vẫn gửi thư được, và tin nhắn thường gửi tới một pane Codex không có hộp thư sẽ được ký tên và gõ thẳng vào đó một lần. Pane id của Codex trong `HERDR_PANE_ID` có thể sai, nên bên gửi là Codex phải tự chỉ rõ pane của mình bằng `--from <pane id>`.

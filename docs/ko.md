@@ -118,6 +118,19 @@ mailbox send --to <address|MB-id> --type decision \
 - 질문은 최대 200자, 일반 메시지는 최대 500자입니다. 더 긴 내용은 파일에 담아 `--attach`로 첨부하세요.
 - 우편함을 가진 agent(leader)는 Claude Code나 agy여야 합니다. 전달이 입력창이 빌 때까지 기다리는데, 입력창을 읽을 수 있는 것은 이 둘뿐이기 때문입니다. 보내는 쪽은 어떤 agent든 괜찮습니다.
 
+## 카드 규칙 (선택)
+
+원하지 않는 문구가 들어 있거나 문장이 너무 긴 편지를 거부하려면, Herdr 플러그인 상태 디렉터리의 `prefs.json` 옆에 `card-rules.json`을 만드세요(정확한 경로는 `mailbox --help`로 확인):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: 본문에 이 문구 중 하나라도 들어 있으면(대소문자 구분 없음) 거부되고, 보낸 쪽에 어느 문구인지 알려 줍니다.
+- `maxSentenceUnits`: 이보다 긴 문장이 있는 편지는 거부됩니다. 한자는 1자에 1, 연속된 영문자나 숫자 한 덩어리도 1로 세며, 문장은 `。！？.!?` 또는 줄바꿈에서 끝납니다.
+
+두 키 모두 생략할 수 있고 잘못된 값은 무시됩니다. 파일이 없으면 모든 편지를 받습니다. 검사하는 텍스트는 메모, 질문, 선택지, 트레이드오프, why-open, idea이며 첨부 파일은 읽지 않습니다.
+
 ## 알려진 문제
 
 - **Codex: 아직 우편함을 가질 수 없습니다.** Codex 0.163은 모든 대화를 하나의 공유 백그라운드 서버에서 실행하므로, Herdr의 Codex 연동은 모든 대화를 그 서버를 시작한 pane으로 보고하고, Codex pane 자체는 우편함을 연결할 대화 id를 얻지 못합니다. Codex도 편지를 보낼 수는 있으며, 우편함이 없는 Codex pane으로 보낸 일반 메시지는 서명을 붙여 한 번 직접 입력됩니다. Codex의 `HERDR_PANE_ID`는 잘못된 pane을 가리킬 수 있으므로, Codex가 보낼 때는 `--from <pane id>`로 자기 pane을 지정해야 합니다.

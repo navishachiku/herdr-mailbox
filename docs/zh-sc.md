@@ -118,6 +118,19 @@ mailbox send --to <address|MB-id> --type decision \
 - 问题最多 200 个字符、一般消息最多 500 个字符；更长的内容放进文件，用 `--attach` 附上。
 - 拥有信箱的 agent（leader）必须是 Claude Code 或 agy，因为投递要等它的输入框清空，而只有这两种的输入框读得到；寄件方可以是任何 agent。
 
+## 卡片规则（可选）
+
+想拒收含有不想看到的片语、或句子太长的信，在 Herdr 的插件状态目录里、`prefs.json` 旁创建 `card-rules.json`（确切路径用 `mailbox --help` 查）：
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`：信的文字含其中任一片语（不分大小写）就拒收，并告诉发件方是哪一个。
+- `maxSentenceUnits`：有句子超过这个数就拒收。一个汉字算 1，连续的英文字母或数字算 1；句子以 `。！？.!?` 或换行结束。
+
+两个字段都可省略，值不合法时会被忽略。没有这个文件时，所有信都照收。检查的文字是普通消息、问题、选项、取舍、why-open 与 idea；附件不读。
+
 ## 已知问题
 
 - **Codex：还不能拥有信箱。** Codex 0.163 的所有对话都跑在同一个共享的后台服务器里，所以 Herdr 的 Codex 集成会把每个对话都报告到启动那个服务器的 pane，Codex 自己的 pane 拿不到可以绑定信箱的对话 id。Codex 仍然可以寄信，寄给没有信箱的 Codex pane 的一般消息，会签名后直接打进去一次。Codex 的 `HERDR_PANE_ID` 可能指向错误的 pane，所以 Codex 寄信时必须用 `--from <pane id>` 指明自己的 pane。

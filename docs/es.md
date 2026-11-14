@@ -118,6 +118,19 @@ El material más largo viaja con la carta como archivo (`--attach <file>`, hasta
 - Una pregunta admite hasta 200 caracteres y un mensaje normal hasta 500; el texto más largo va en un archivo con `--attach`.
 - El agente dueño del buzón (el leader) tiene que ser Claude Code o agy, porque la entrega espera a que su cuadro de entrada esté vacío y solo se pueden leer esos dos cuadros de entrada; quien envía puede ser cualquier agente.
 
+## Reglas de tarjeta (opcional)
+
+Para rechazar cartas que contengan una frase no deseada o una oración demasiado larga, crea `card-rules.json` en el directorio de estado de plugins de Herdr, junto a `prefs.json` (`mailbox --help` muestra la ruta exacta):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: se rechaza una carta cuyo texto contenga alguna de estas frases (sin distinguir mayúsculas), y se dice al remitente cuál.
+- `maxSentenceUnits`: se rechaza una carta con una oración más larga. Un carácter chino cuenta 1 y también cada serie de letras o dígitos; las oraciones terminan en `。！？.!?` o en un salto de línea.
+
+Ambas claves son opcionales y un valor no válido se ignora. Sin archivo, se aceptan todas las cartas. Se revisa el texto de la nota, la pregunta, las opciones, las contrapartidas, why-open e idea; los adjuntos no se leen.
+
 ## Problemas conocidos
 
 - **Codex: todavía no puede ser dueño de un buzón.** Codex 0.163 ejecuta sus conversaciones en un único servidor en segundo plano compartido, así que la integración de Codex de Herdr atribuye cada conversación al pane que inició ese servidor, y el propio pane de Codex nunca recibe un id de conversación al que vincular un buzón. Codex sí puede enviar cartas, y un mensaje normal enviado a un pane de Codex sin buzón se firma y se escribe directamente en él una sola vez. El id de pane de Codex en `HERDR_PANE_ID` puede ser incorrecto, así que un remitente Codex debe indicar su propio pane con `--from <pane id>`.

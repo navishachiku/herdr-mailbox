@@ -118,6 +118,19 @@ Longer material goes with the letter as a file (`--attach <file>`, up to 5 per l
 - A question is up to 200 characters and a note up to 500; longer text goes in a file with `--attach`.
 - The agent that owns the mailbox (the leader) has to be Claude Code or agy, because delivery waits until its input box is empty and only those two input boxes can be read; senders can be any agent.
 
+## Card rules (optional)
+
+To refuse letters that hold a phrase you do not want, or a sentence that is too long, create `card-rules.json` in Herdr's plugin state directory, next to `prefs.json` (`mailbox --help` prints the exact path):
+
+```json
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+```
+
+- `rejectPhrases`: a letter whose text holds any of these phrases (case-insensitive) is refused, and the sender is told which one.
+- `maxSentenceUnits`: a letter with a longer sentence is refused. A Chinese character counts 1 and so does a run of letters or digits; sentences end at `。！？.!?` or a line break.
+
+Both keys are optional and a bad value is ignored. With no file, every letter is accepted. The text checked is the note, question, options, trade-offs, why-open and idea; attachments are not read.
+
 ## Known issues
 
 - **Codex: it cannot own a mailbox yet.** Codex 0.163 runs its conversations in one shared background server, so Herdr's Codex integration reports every conversation to the pane that started that server, and the Codex pane itself never gets a conversation id to bind a mailbox to. Codex can still send letters, and a note sent to a Codex pane that has no mailbox is signed and typed straight into it once. Codex's pane id in `HERDR_PANE_ID` can be wrong, so a Codex sender must name its own pane with `--from <pane id>`.
