@@ -2,7 +2,7 @@
 // Pure, so it can be tested without a terminal. `model` is the daemon's `view` answer.
 // Look: solid colour blocks. Buttons are one row of background colour with a column of padding on each side, never
 // bracketed text; adjacent clickable things keep a column apart; the hovered one gets a brighter background.
-import { width, cut, wrap, charWidth, pad, linkParts } from './text.mjs';
+import { width, cut, wrap, charWidth, pad, linkParts, fileUrl } from './text.mjs';
 import { screenText, LOCALES, LANGUAGE_NAMES } from './messages.mjs';
 import { feedbackFor } from './feedback.mjs';
 
@@ -87,7 +87,7 @@ export const BATCH = '__batch'; // the key of the batch note's text in `drafts` 
 // A row is { segs: [{ t, s, h }], hits: [{ c0, c1, i0, i1, action }], col, caret }.
 // An item is { segs, action?, caret? } and is placed whole; caret is a column offset inside the item.
 const newRow = () => ({ segs: [], hits: [], blocks: [], tips: [], col: 0, caret: null });
-const seg = (t, s = S.plain, h) => ({ t, s, h });
+const seg = (t, s = S.plain, h, link) => ({ t, s, h, ...(link ? { link } : {}) });
 const item = (segs, action = null, caret = null) => ({ segs, action, caret });
 const textItem = (t, s = S.text) => item([seg(t, s)]);
 // Text cut to n columns. When something was cut the item carries the full text as `tip`, so hovering it can show
@@ -268,7 +268,7 @@ function card(q, ctx) {
   (q.content.attachments ?? (q.content.attach ? [q.content.attach] : [])).forEach((a, index) => {
     const open = { type: 'attachment', mailbox: model.mailbox.id, uid: q.uid, ...(index ? { index } : {}) };
     const look = FB.look(open);
-    add([look ? { ...textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off), block: true } : { ...item([seg(` 📎 ${cut(a.name, w - 6)} `, S.link, S.linkHover)], open), ...(cut(a.name, w - 6) !== a.name ? { tip: a.name } : {}) }]);
+    add([look ? { ...textItem(` 📎 ${cut(FB.label(look), w - 6)} `, S.off), block: true } : { ...item([seg(` 📎 ${cut(a.name, w - 6)} `, S.link, S.linkHover, a.path ? fileUrl(a.path) : undefined)], open), ...(cut(a.name, w - 6) !== a.name ? { tip: a.name } : {}) }]);
   });
   if (q.draft?.reconfirm) {
     add([clipItem(` ${t.reconfirm}`, w - 1 + 1, S.hold)]);
@@ -655,7 +655,7 @@ function finish(r, cols, lit) {
   }
   return {
     line: out.map(x => x.t).join(''),
-    styled: out.map(x => { const code = sgr(x.s ?? {}); return code ? `${code}${x.t}\x1b[0m` : x.t; }).join(''),
+    styled: out.map(x => { const code = sgr(x.s ?? {}); const text = code ? `${code}${x.t}\x1b[0m` : x.t; return x.link ? `\x1b]8;;${x.link}\x1b\\${text}\x1b]8;;\x1b\\` : text; }).join(''),
     hits: r.hits.filter(h => h.c0 < cols).map(h => ({ c0: h.c0, c1: Math.min(h.c1, cols), action: h.action })),
     caret: r.caret !== null && r.caret < cols ? r.caret : null,
   };

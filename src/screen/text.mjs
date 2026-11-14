@@ -107,3 +107,12 @@ export function linkParts(text, lines) {
     return parts.length ? parts : [{ t: line }];
   });
 }
+
+// A file path as a file:/// address, for OSC 8 links: each segment percent-encoded (spaces, Chinese, anything that
+// would end an escape sequence), a Windows drive path written as file:///C:/…
+export function fileUrl(p) {
+  const norm = String(p).replace(/\\/g, '/');
+  const drive = /^[A-Za-z]:(\/|$)/.test(norm);
+  const parts = norm.split('/').map((seg, i) => (drive && i === 0 ? seg : encodeURIComponent(seg)));
+  return `file://${drive ? '/' : ''}${parts.join('/')}`;
+}

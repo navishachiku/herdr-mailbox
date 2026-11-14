@@ -633,6 +633,33 @@ test('262/AC-4 while one attachment opens only that line shows it, and no other 
   assert.deepEqual(during.lines.map(l => l.trimEnd()).filter((_, i) => i !== busy).map(l => l.length > 0), before.lines.map(l => l.trimEnd()).filter((_, i) => i !== busy).map(l => l.length > 0), 'blank rows between lines are unchanged');
 });
 
+test('540/AC-1 each attachment line is wrapped in an OSC 8 file:/// link to its snapshot, encoded for spaces and Chinese, and Windows paths start with file:///C:/', () => {
+  const model = interactionModel();
+  const paths = ['/state/att dir/Q1/v1-計畫 plan.md', 'C:\\Users\\Navi\\att dir\\v1-計畫.html'];
+  const urls = ['file:///state/att%20dir/Q1/v1-%E8%A8%88%E7%95%AB%20plan.md', 'file:///C:/Users/Navi/att%20dir/v1-%E8%A8%88%E7%95%AB.html'];
+  model.questions = [{ ...model.questions[0], content: { ...model.questions[0].content, attachments: [{ name: '計畫 plan.md', path: paths[0] }, { name: '計畫.html', path: paths[1] }] } }];
+  const frame = render(model, { cols: 80, rows: 40, locale: 'en', now: 0 });
+  urls.forEach((url, i) => {
+    const at = frame.lines.findIndex(l => l.includes(i ? '計畫.html' : '計畫 plan.md'));
+    assert.ok(at >= 0);
+    assert.ok(frame.styled[at].includes(`\x1b]8;;${url}\x1b\\`), `line ${i} carries ${url}`);
+    assert.ok(frame.styled[at].includes('\x1b]8;;\x1b\\'), 'the link is closed');
+    assert.ok(!frame.lines[at].includes('\x1b'), 'the plain text has no escape');
+    assert.ok(frame.hits.some(h => h.row === at && h.action.type === 'attachment'), 'the click stays the mailbox\'s own for the host');
+  });
+});
+
+test('540/AC-1 an attachment without a stored path, or one that is busy opening, gets no link', () => {
+  const model = interactionModel();
+  model.questions = [{ ...model.questions[0], content: { ...model.questions[0].content, attachments: [{ name: 'a.md' }, { name: 'b.md', path: '/state/b.md' }] } }];
+  const options = { cols: 80, rows: 40, locale: 'en', now: 0 };
+  const before = render(model, options);
+  assert.equal(before.styled.filter(l => l.includes('\x1b]8;;file:')).length, 1, 'only the attachment with a path is linked');
+  const first = before.hits.find(h => h.action.type === 'attachment' && h.action.index === 1).action;
+  const during = render(model, { ...options, feedback: { key: feedbackKey(first), type: 'attachment', state: 'pending', at: 0 } });
+  assert.equal(during.styled.filter(l => l.includes('\x1b]8;;file:')).length, 0, 'the busy line shows its state instead of the link');
+});
+
 test('262/AC-3 a web address in a question is a link to the default browser, even when the wrap breaks it, and other schemes are not', async () => {
   const url = 'https://example.com/reports/2026/very-long-path-that-the-wrap-must-break?id=42';
   const model = interactionModel();
