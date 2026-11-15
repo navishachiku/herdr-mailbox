@@ -44,7 +44,7 @@ Mailbox มอบกล่องจดหมายให้ leader นอกจ�
 # 1. ติดตั้งปลั๊กอิน
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. รันการกระทำ setup: คำสั่ง `mailbox`, hooks ของ Claude Code และกฎอนุญาตของ Codex กับ agy
+# 2. รันการกระทำ setup: คำสั่ง `mailbox`, hooks ของ Claude Code, กฎอนุญาตของ Codex กับ agy และตัวป้องกันการส่งของ Codex กับ agy
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. การเชื่อมต่อ agent ของ Herdr เอง ติดตั้งตาม agent ที่คุณใช้
@@ -62,7 +62,7 @@ npx skills add navishachiku/herdr-mailbox --global
 
 agent ที่ไม่มีระบบ skill อ่านคำแนะนำชุดเดียวกันได้จาก `mailbox skill` ให้วางผลลัพธ์ของคำสั่งนี้ลงในไฟล์คำสั่งของ agent นั้น
 
-การกระทำ setup จะสำรองทุกไฟล์ก่อนแก้ไข (`<file>.bak-<date>`) รันซ้ำก็ไม่เพิ่มอะไรซ้ำ และยังทำงานได้ตามปกติหลัง `herdr plugin update` ย้อนกลับได้ด้วย `node <plugin dir>/src/setup.mjs uninstall` จากนั้นรีสตาร์ท session ของ Claude Code ที่จะรับจดหมาย
+การกระทำ setup จะสำรองทุกไฟล์ก่อนแก้ไข (`<file>.bak-<date>`) รันซ้ำก็ไม่เพิ่มอะไรซ้ำ และยังทำงานได้ตามปกติหลัง `herdr plugin update` ย้อนกลับได้ด้วย `node <plugin dir>/src/setup.mjs uninstall` จากนั้นรีสตาร์ท session ของ Claude Code ที่จะรับจดหมาย Codex จะถามหนึ่งครั้งบนหน้าจอของมัน ว่าไว้ใจ hook ใหม่หรือไม่
 
 หลัง `herdr plugin update` ให้รันการกระทำ setup อีกครั้งหนึ่ง: hook ของ Claude Code ถูกเขียนใหม่โดย setup เท่านั้น และรุ่นที่เพิ่มแหล่งเหตุการณ์ (เช่น `fork` ที่ทำให้กล่องจดหมายยืนยันต่อได้เมื่อผู้รับย้ายบทสนทนาไปทำงานเบื้องหลัง) จะถึงเครื่องที่ติดตั้งไว้แล้วด้วยวิธีนี้เท่านั้น
 

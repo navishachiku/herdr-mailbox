@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Setup for a freshly installed plugin: `node setup.mjs install` puts `mailbox` on the PATH, merges the Claude Code
-// hooks into the user's settings and, when Codex is there, adds the Codex rule; `node setup.mjs uninstall` undoes
-// exactly that. Every existing file is copied to <file>.bak-<date> before its first change, rerunning adds nothing
+// hooks into the user's settings and, when Codex and agy are there, adds their allow rules and the send guard to
+// their own hook files; `node setup.mjs uninstall` undoes exactly that. Every existing file is copied to <file>.bak-<date> before its first change, rerunning adds nothing
 // twice, and what install created is recorded in ~/.herdr-mailbox-setup.json so uninstall can remove it again.
 // Hooks and the PATH link go through ~/.herdr-mailbox/run.mjs (see stable.mjs), so a plugin update does not strand them.
 // It does not touch herdr's own config (integration, shortcut); the README covers those.
@@ -33,6 +33,10 @@ const RUN = path.join(STABLE_DIR, 'run.mjs');
 const hookCommand = file => `node "${posix(RUN)}" --hook ${file}`;
 const AGY_SETTINGS = path.join(HOME, '.gemini', 'antigravity-cli', 'settings.json');
 const AGY_RULE = 'command(mailbox)';
+const CODEX_HOOKS = path.join(CODEX_DIR, 'hooks.json');
+const AGY_HOOKS = path.join(HOME, '.gemini', 'config', 'hooks.json');
+// agy keys its hook file by hook name; the send guard lives under its own name so it never mixes with other entries.
+const AGY_HOOK_NAME = 'herdr-mailbox';
 
 const manifest = (() => {
   try { return JSON.parse(fs.readFileSync(MANIFEST, 'utf8')); } catch { return {}; }
@@ -41,6 +45,8 @@ manifest.createdFiles ??= [];
 manifest.createdDirs ??= [];
 // What this install added itself; uninstall removes only these, so an identical entry the user made by hand stays.
 manifest.added ??= { hooks: [] };
+// The user's own text of a hook file we changed, so uninstall can put it back byte for byte.
+manifest.originals ??= {};
 const say = msg => console.log(msg);
 const die = msg => { console.error(`setup: ${msg}`); process.exit(1); };
 const save = () => fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2) + '\n');
@@ -229,6 +235,60 @@ const uninstallHooks = () => {
   if ((restored ? writeFile(SETTINGS, original) : writeSettings(settings))) say(`removed the mailbox hooks from ${SETTINGS}`);
 };
 
+// --- send guard for Codex and agy ---
+const SEND_GUARD = hookCommand('send-guard.mjs');
+const readHookFile = file => {
+  if (!fs.existsSync(file)) return {};
+  try { return JSON.parse(readText(file)); } catch (e) { return die(`${file} is not valid JSON (${e.message}); fix it and rerun`); }
+};
+// Writes a hook file we changed; an uninstall that leaves it as the user had it writes their original text back.
+const saveHookFile = (file, data, label) => {
+  if (fs.existsSync(file) && manifest.originals[file] === undefined) manifest.originals[file] = readText(file);
+  if (writeFile(file, JSON.stringify(data, null, 2) + '\n')) say(`${label} ${file}`);
+};
+const dropFromHookFile = (file, key, label, owns) => {
+  if (!fs.existsSync(file) || !manifest.added[key]) return;
+  const data = readHookFile(file);
+  const groups = owns(data);
+  if (!groups) return;
+  groups.list = groups.list.map(g => ({ ...g, hooks: (g.hooks ?? []).filter(h => h.command !== SEND_GUARD) })).filter(g => g.hooks.length);
+  groups.set(groups.list);
+  const original = manifest.originals[file];
+  const same = original !== undefined && JSON.stringify(data) === JSON.stringify(JSON.parse(original));
+  if (same ? writeFile(file, original) : writeFile(file, JSON.stringify(data, null, 2) + '\n')) say(`${label} ${file}`);
+  delete manifest.added[key];
+  delete manifest.originals[file];
+};
+
+// Codex reads the same hooks.json shape as Claude Code. A new or changed hook needs one trust on its screen.
+const installCodexHook = () => {
+  if (!codexPresent()) return say('Codex not found, skipped the Codex send guard');
+  const data = readHookFile(CODEX_HOOKS);
+  data.hooks ??= {};
+  if (hasCommand(data.hooks.PreToolUse, SEND_GUARD)) return;
+  (data.hooks.PreToolUse ??= []).push({ matcher: 'Bash', hooks: [{ type: 'command', command: SEND_GUARD, timeout: 10 }] });
+  manifest.added.codexHook = true;
+  saveHookFile(CODEX_HOOKS, data, 'added the send guard to');
+};
+const uninstallCodexHook = () => dropFromHookFile(CODEX_HOOKS, 'codexHook', 'removed the send guard from', data => {
+  if (!data.hooks?.PreToolUse) return null;
+  return { list: data.hooks.PreToolUse, set: list => { if (list.length) data.hooks.PreToolUse = list; else delete data.hooks.PreToolUse; if (!Object.keys(data.hooks).length) delete data.hooks; } };
+});
+
+const agyHookPresent = () => fs.existsSync(path.dirname(AGY_HOOKS)) || fs.existsSync(AGY_SETTINGS);
+const installAgyHook = () => {
+  if (!agyHookPresent()) return say('agy not found, skipped the agy send guard');
+  const data = readHookFile(AGY_HOOKS);
+  if (hasCommand(data[AGY_HOOK_NAME]?.PreToolUse, SEND_GUARD)) return;
+  ((data[AGY_HOOK_NAME] ??= {}).PreToolUse ??= []).push({ matcher: 'run_command', hooks: [{ type: 'command', command: SEND_GUARD, timeout: 10 }] });
+  manifest.added.agyHook = true;
+  saveHookFile(AGY_HOOKS, data, 'added the send guard to');
+};
+const uninstallAgyHook = () => dropFromHookFile(AGY_HOOKS, 'agyHook', 'removed the send guard from', data => {
+  if (!data[AGY_HOOK_NAME]?.PreToolUse) return null;
+  return { list: data[AGY_HOOK_NAME].PreToolUse, set: list => { if (list.length) data[AGY_HOOK_NAME].PreToolUse = list; else delete data[AGY_HOOK_NAME].PreToolUse; if (!Object.keys(data[AGY_HOOK_NAME]).length) delete data[AGY_HOOK_NAME]; } };
+});
+
 // --- agy rule ---
 const agyPresent = () => fs.existsSync(AGY_SETTINGS);
 const installAgy = () => {
@@ -268,11 +328,13 @@ const uninstallCodex = () => {
 
 const cmd = process.argv[2];
 if (cmd === 'install') {
-  installStable(); installPath(); installHooks(); installCodex(); installAgy();
+  // A hook file that cannot be read stops the install before anything is written, so a rerun never meets a half-recorded state.
+  for (const file of [CODEX_HOOKS, AGY_HOOKS, SETTINGS]) readHookFile(file);
+  installStable(); installPath(); installHooks(); installCodex(); installAgy(); installCodexHook(); installAgyHook();
   save();
-  say('done. Open a new terminal, restart Claude Code sessions that should get mail, and press prefix+shift+r in herdr.');
+  say('done. Open a new terminal, restart Claude Code sessions that should get mail, trust the new hook in Codex when it asks, and press prefix+shift+r in herdr.');
 } else if (cmd === 'uninstall') {
-  uninstallPath(); uninstallHooks(); uninstallCodex(); uninstallAgy(); uninstallStable();
+  uninstallPath(); uninstallHooks(); uninstallCodex(); uninstallAgy(); uninstallCodexHook(); uninstallAgyHook(); uninstallStable();
   dropCreated();
   fs.rmSync(MANIFEST, { force: true });
   say('done. Backups (*.bak-*) were left in place.');

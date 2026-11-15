@@ -57,7 +57,9 @@ Codex runs shell commands in a sandbox where the mailbox daemon cannot start. Al
 prefix_rule(pattern=["mailbox"], decision="allow")
 ```
 
-The rule matches the command prefix, so `send`, `status`, `edit` and `withdraw` are all allowed. Codex has no hook to rewrite `herdr agent prompt`, so a Codex agent has to call `mailbox send` itself.
+The rule matches the command prefix, so `send`, `status`, `edit` and `withdraw` are all allowed.
+
+The setup action also registers the send guard as a `PreToolUse` hook (matcher `Bash`) in `~/.codex/hooks.json`, so a Codex agent's `herdr agent prompt <mailbox owner> "…"` is rewritten into `mailbox send --type note` exactly as for Claude Code; a target without a mailbox is left to herdr. Codex asks once, on its screen (`/hooks`), to trust a new or changed hook, and the hook does not run until you do.
 
 ## agy
 
@@ -66,6 +68,8 @@ The setup action adds an allow rule for the `mailbox` command to `permissions.al
 ```json
 { "permissions": { "allow": ["command(mailbox)"] } }
 ```
+
+The setup action also registers the send guard under its own name, `herdr-mailbox`, in `~/.gemini/config/hooks.json` (a `PreToolUse` hook with matcher `run_command`), so an agy agent's `herdr agent prompt <mailbox owner> "…"` is rewritten into `mailbox send --type note` and a target without a mailbox is left to herdr. The entry is removed again by `uninstall`.
 
 agy can own a mailbox as well as send to one. To own one, it needs Herdr's agy integration (`herdr integration install antigravity-cli`), which tells the mailbox which conversation is in the pane.
 

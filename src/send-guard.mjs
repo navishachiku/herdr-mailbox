@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// PreToolUse hook (matcher Bash): sends between agents go through the mailbox instead of typing into the receiver.
+// PreToolUse hook (Claude Code and Codex: matcher Bash; agy: matcher run_command): sends between agents go through the
+// mailbox instead of typing into the receiver. Claude Code and Codex share one payload and answer shape; agy sends
+// toolCall.args.CommandLine and is answered with {decision, overwrite} (see `dialect`).
 //   - `herdr agent prompt <target> <text>` (no --wait) to an
 //     agent pane is rewritten to `mailbox send --to <target> --type note <text>`; the daemon decides between
 //     the mailbox and a direct send.
@@ -17,11 +19,13 @@
 // Only direct invocations are seen (no subshells, bash -c, ssh, eval, xargs). Exit 2 blocks the call and feeds
 // stderr to the model. Any hook failure exits 0: this hook must never fail a tool call.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as herdr from './herdr.mjs';
 import { classify, typedText } from './input-box.mjs';
 import { STATE_FILE } from './paths.mjs';
+import { senderPane } from './sender.mjs';
 
 const MAILBOX = path.join(path.dirname(fileURLToPath(import.meta.url)), 'mailbox.mjs');
 const MAX_TYPED = 40;
@@ -211,7 +215,17 @@ async function inputBox(pane) {
 
 const shellQuote = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
 
-async function judge(action, ownPane) {
+// How the rewritten send is spelled. Codex's allow rule matches the bare `mailbox` command (setup adds it), which lets it
+// run outside Codex's sandbox; a node call is sandboxed there and cannot reach the daemon. So Codex gets `mailbox`
+// whenever it is on the PATH. agy and Claude Code keep the explicit node call: on a real agy (1.5.9) the bare `mailbox`
+// is refused by its sandbox (exit 127, operation not permitted) while the node call runs after one approval.
+function mailboxCommand(bare) {
+  const dirs = [...(process.env.PATH ?? '').split(path.delimiter), path.join(os.homedir(), '.local', 'bin')];
+  if (bare && dirs.some(d => d && fs.existsSync(path.join(d, 'mailbox')))) return 'mailbox';
+  return `node ${shellQuote(MAILBOX)}`;
+}
+
+async function judge(action, ownPane, via) {
   const receiver = await agentReceiver(action.target);
   if (!receiver || receiver.pane_id === ownPane || SLASH_RE.test(action.text)) return { pass: true };
   // No mailbox: nothing to rewrite into, so a plain or --wait send goes straight through after the typing check.
@@ -231,36 +245,63 @@ async function judge(action, ownPane) {
     return { block: `Blocked: messages to ${action.target} go through the mailbox, and this command is not a plain herdr agent prompt <target> "<text>" (it has expansions, a redirect, a pipe or other commands). Use: mailbox send --to ${action.target} --type note "<text>"` };
   }
   // The mailbox signs the letter itself; the text goes in as the sender wrote it.
-  return { rewrite: `node ${shellQuote(MAILBOX)} send --to ${shellQuote(receiver.pane_id)} --type note${action.wait ? ' --wait' : ''}${action.wait && action.timeout ? ` --timeout ${action.timeout}` : ''} ${shellQuote(action.text)}` };
+  return { rewrite: `${mailboxCommand(via.bare)} send${via.from ? ` --from ${shellQuote(via.from)}` : ''} --to ${shellQuote(receiver.pane_id)} --type note${action.wait ? ' --wait' : ''}${action.wait && action.timeout ? ` --timeout ${action.timeout}` : ''} ${shellQuote(action.text)}` };
+}
+
+// Claude Code and Codex: { tool_name: 'Bash', tool_input: { command } }, answered with hookSpecificOutput, block = exit 2.
+// agy: { toolCall: { name: 'run_command', args: { CommandLine } } }, answered with { decision, overwrite }, block = decision deny.
+function dialect(payload) {
+  const tool = payload?.toolCall;
+  if (tool && typeof tool === 'object') {
+    if (tool.name !== 'run_command' || typeof tool.args?.CommandLine !== 'string') return null;
+    return {
+      command: tool.args.CommandLine,
+      block: reason => { process.stdout.write(JSON.stringify({ decision: 'deny', reason })); return 0; },
+      rewrite: fixed => process.stdout.write(JSON.stringify({ decision: 'allow', overwrite: { CommandLine: fixed } })),
+    };
+  }
+  if ((payload?.tool_name ?? payload?.toolName) !== 'Bash') return null;
+  const input = payload.tool_input ?? payload.toolInput;
+  if (typeof input?.command !== 'string') return null;
+  return {
+    command: input.command,
+    block: reason => { process.stderr.write(`${reason}\n`); return 2; },
+    rewrite: fixed => process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+        permissionDecisionReason: 'Agent-to-agent message sent through the mailbox',
+        updatedInput: { ...input, command: fixed },
+      },
+    })),
+  };
 }
 
 async function main() {
   let payload;
   try { payload = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { return 0; }
-  if ((payload?.tool_name ?? payload?.toolName) !== 'Bash') return 0;
-  const command = payload.tool_input?.command ?? payload.toolInput?.command;
-  if (typeof command !== 'string' || !/herdr/i.test(command)) return 0;
-  const ownPane = process.env.HERDR_PANE_ID || '';
+  const shell = dialect(payload);
+  if (!shell || !/herdr/i.test(shell.command)) return 0;
+  const command = shell.command;
+  // Codex runs its conversations in one shared server, so the pane in its environment may be another one: the hook
+  // (outside Codex's sandbox) finds the real pane and names it with --from, since the sandboxed command could not.
+  const codex = !payload.toolCall && (payload.turn_id !== undefined || Boolean(process.env.CODEX_THREAD_ID));
+  const from = codex ? await senderPane({ ...process.env, CODEX_THREAD_ID: process.env.CODEX_THREAD_ID || 'codex' }, payload.cwd ?? process.cwd()) : null;
+  const via = { bare: codex, from };
+  const ownPane = codex ? (from ?? '') : process.env.HERDR_PANE_ID || '';
   const edits = [];
   const segments = tokenize(command);
   for (const segment of segments) {
     for (const action of actionsIn(segment, segments.length === 1)) {
-      const v = await judge(action, ownPane);
-      if (v.block) { process.stderr.write(`${v.block}\n`); return 2; }
+      const v = await judge(action, ownPane, via);
+      if (v.block) return shell.block(v.block);
       if (v.rewrite) edits.push({ range: action.range, text: v.rewrite });
     }
   }
   if (!edits.length) return 0;
   let fixed = command;
   for (const e of edits.sort((a, b) => b.range[0] - a.range[0])) fixed = fixed.slice(0, e.range[0]) + e.text + fixed.slice(e.range[1]);
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'allow',
-      permissionDecisionReason: 'Agent-to-agent message sent through the mailbox',
-      updatedInput: { ...payload.tool_input, command: fixed },
-    },
-  }));
+  shell.rewrite(fixed);
   return 0;
 }
 

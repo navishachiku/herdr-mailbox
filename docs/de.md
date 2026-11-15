@@ -44,7 +44,7 @@ Benötigt Herdr 0.9.3 oder neuer und Node 18 oder neuer.
 # 1. Das Plugin installieren
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. Seine setup-Aktion ausführen: der Befehl `mailbox`, die Claude-Code-Hooks und die Freigaberegeln für Codex und agy
+# 2. Seine setup-Aktion ausführen: der Befehl `mailbox`, die Claude-Code-Hooks, die Freigaberegeln für Codex und agy sowie die Sendewächter für Codex und agy
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Herdrs eigene Agent-Integrationen, für jeden Agent, den du nutzt
@@ -62,7 +62,7 @@ Herdrs Integrationen erkennen die Unterhaltung in jedem Pane, damit sich der Bri
 
 Ein Agent ohne Skill-System kann dieselbe Anleitung über `mailbox skill` lesen; füge die Ausgabe in die Anweisungsdatei des Agents ein.
 
-Die setup-Aktion sichert jede Datei, bevor sie sie ändert (`<file>.bak-<date>`), fügt bei erneutem Ausführen nichts doppelt hinzu und funktioniert auch nach `herdr plugin update` weiter. `node <plugin dir>/src/setup.mjs uninstall` macht sie rückgängig. Starte die Claude-Code-Sessions neu, die Post empfangen sollen.
+Die setup-Aktion sichert jede Datei, bevor sie sie ändert (`<file>.bak-<date>`), fügt bei erneutem Ausführen nichts doppelt hinzu und funktioniert auch nach `herdr plugin update` weiter. `node <plugin dir>/src/setup.mjs uninstall` macht sie rückgängig. Starte die Claude-Code-Sessions neu, die Post empfangen sollen. Codex fragt einmal auf seinem Bildschirm, ob du den neuen Hook vertraust.
 
 Führe die setup-Aktion nach `herdr plugin update` einmal erneut aus: Die Claude-Code-Hooks werden nur von setup neu geschrieben, und eine Version, die eine Ereignisquelle hinzufügt (etwa `fork`, damit das Postfach weiter bestätigt, wenn ein Empfänger seine Unterhaltung in den Hintergrund verschiebt), erreicht eine bereits eingerichtete Maschine nur auf diesem Weg.
 

@@ -44,7 +44,7 @@ Mailbox 给 leader 一个信箱。worker 除了寄一般消息（像明信片）
 # 1. 安装插件
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. 运行它的 setup 动作：`mailbox` 命令、Claude Code 的 hooks，以及 Codex 与 agy 的放行规则
+# 2. 运行它的 setup 动作：`mailbox` 命令、Claude Code 的 hooks、Codex 与 agy 的放行规则，以及 Codex 与 agy 的发送拦截
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Herdr 自带的 agent 集成，用哪个 agent 就装哪个
@@ -62,7 +62,7 @@ Herdr 的集成负责识别每个 pane 里的对话，信箱才能绑定到它�
 
 没有 skill 机制的 agent，可以从 `mailbox skill` 读到同一份说明；把它的输出贴进该 agent 的指令文件。
 
-setup 动作改任何文件前都会先备份（`<file>.bak-<date>`），重复运行不会重复添加，`herdr plugin update` 之后也照常工作。`node <plugin dir>/src/setup.mjs uninstall` 可以还原。要收信的 Claude Code session 请重新启动。
+setup 动作改任何文件前都会先备份（`<file>.bak-<date>`），重复运行不会重复添加，`herdr plugin update` 之后也照常工作。`node <plugin dir>/src/setup.mjs uninstall` 可以还原。要收信的 Claude Code session 请重新启动。Codex 会在它的画面上问一次，是否信任新的 hook。
 
 `herdr plugin update` 之后请再运行一次 setup 动作：Claude Code 的钩子只有 setup 会改写，新版若增加事件来源（例如 `fork`，让收件方把对话移到后台后信箱仍能确认），已安装的机器只能这样才拿得到。
 

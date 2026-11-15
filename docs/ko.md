@@ -44,7 +44,7 @@ Herdr 0.9.3 이상과 Node 18 이상이 필요합니다.
 # 1. 플러그인 설치
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. setup 동작 실행: `mailbox` 명령, Claude Code hooks, Codex와 agy 허용 규칙
+# 2. setup 동작 실행: `mailbox` 명령, Claude Code hooks, Codex와 agy 허용 규칙, Codex와 agy의 전송 가드
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Herdr 자체의 agent 연동, 사용하는 agent마다 설치
@@ -62,7 +62,7 @@ Herdr의 연동은 각 pane의 대화를 식별해 우편함이 수신자에 연
 
 skill 시스템이 없는 agent는 `mailbox skill`에서 같은 안내를 읽을 수 있습니다. 그 출력을 해당 agent의 지시 파일에 붙여 넣으세요.
 
-setup 동작은 파일을 바꾸기 전에 항상 백업하고(`<file>.bak-<date>`), 다시 실행해도 중복으로 추가하지 않으며, `herdr plugin update` 후에도 그대로 동작합니다. `node <plugin dir>/src/setup.mjs uninstall`로 되돌릴 수 있습니다. 편지를 받을 Claude Code session은 다시 시작하세요.
+setup 동작은 파일을 바꾸기 전에 항상 백업하고(`<file>.bak-<date>`), 다시 실행해도 중복으로 추가하지 않으며, `herdr plugin update` 후에도 그대로 동작합니다. `node <plugin dir>/src/setup.mjs uninstall`로 되돌릴 수 있습니다. 편지를 받을 Claude Code session은 다시 시작하세요. Codex는 화면에서 한 번, 새 hook을 신뢰할지 묻습니다.
 
 `herdr plugin update` 후에는 setup 동작을 한 번 더 실행하세요. Claude Code hook은 setup만 다시 쓰며, 이벤트 소스를 추가하는 릴리스(예: `fork`, 수신자가 대화를 백그라운드로 옮겨도 메일함이 계속 확인할 수 있게 해 줍니다)는 이미 설치된 기기에 이 방법으로만 반영됩니다.
 

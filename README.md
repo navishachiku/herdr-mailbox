@@ -44,7 +44,7 @@ Requires Herdr 0.9.3 or newer and Node 18 or newer.
 # 1. Install the plugin
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. Run its setup action: the `mailbox` command, the Claude Code hooks, and the Codex and agy allow rules
+# 2. Run its setup action: the `mailbox` command, the Claude Code hooks, the Codex and agy allow rules, and the Codex and agy send guards
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Herdr's own agent integrations, for each agent you use
@@ -62,7 +62,7 @@ Herdr's integrations identify the conversation in each pane so the mailbox can b
 
 An agent with no skill system can read the same instructions from `mailbox skill`; paste its output into the agent's instruction file.
 
-The setup action backs up every file before it changes it (`<file>.bak-<date>`), adds nothing twice when run again, and keeps working after `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` reverts it. Restart the Claude Code sessions that should receive mail.
+The setup action backs up every file before it changes it (`<file>.bak-<date>`), adds nothing twice when run again, and keeps working after `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` reverts it. Restart the Claude Code sessions that should receive mail. Codex asks once, on its screen, to trust the new hook.
 
 After `herdr plugin update`, run the setup action again once: the Claude Code hooks are rewritten only by setup, and a release that adds an event source (for example `fork`, which lets the mailbox keep confirming after a receiver moves its conversation to the background) reaches an installed machine only that way.
 

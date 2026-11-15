@@ -44,7 +44,7 @@ Requiere Herdr 0.9.3 o posterior y Node 18 o posterior.
 # 1. Instala el plugin
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. Ejecuta su acción setup: el comando `mailbox`, los hooks de Claude Code y las reglas de permiso de Codex y agy
+# 2. Ejecuta su acción setup: el comando `mailbox`, los hooks de Claude Code, las reglas de permiso de Codex y agy, y los guardas de envío de Codex y agy
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Las integraciones de agentes propias de Herdr, una por cada agente que uses
@@ -62,7 +62,7 @@ Las integraciones de Herdr identifican la conversación de cada pane para que el
 
 Un agente sin sistema de skills puede leer las mismas instrucciones con `mailbox skill`; pega su salida en el archivo de instrucciones de ese agente.
 
-La acción setup hace una copia de seguridad de cada archivo antes de modificarlo (`<file>.bak-<date>`), no añade nada dos veces si se vuelve a ejecutar y sigue funcionando después de `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` la revierte. Reinicia las sesiones de Claude Code que deban recibir correo.
+La acción setup hace una copia de seguridad de cada archivo antes de modificarlo (`<file>.bak-<date>`), no añade nada dos veces si se vuelve a ejecutar y sigue funcionando después de `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` la revierte. Reinicia las sesiones de Claude Code que deban recibir correo. Codex pide una vez, en su pantalla, confiar en el nuevo hook.
 
 Tras `herdr plugin update`, vuelve a ejecutar la acción setup una vez: los hooks de Claude Code solo los reescribe setup, y una versión que añade un origen de evento (por ejemplo `fork`, que permite al buzón seguir confirmando cuando un receptor pasa su conversación a segundo plano) solo llega a una máquina ya instalada de esa forma.
 

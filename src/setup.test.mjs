@@ -200,3 +200,52 @@ test('249/AC-3 regression: a home set up by the old install is switched to the s
   assert.equal(cmds.length, 3);
   assert.ok(cmds.every(c => c.includes('.herdr-mailbox') && c.includes('--hook')));
 });
+
+// 567 the Codex and agy interception hooks
+test('567/AC-1 AC-2 install registers the send guard for Codex and agy, rerun adds nothing, uninstall puts both files back', () => {
+  const home = newHome();
+  const codex = path.join(home, '.codex', 'hooks.json');
+  const agy = path.join(home, '.gemini', 'config', 'hooks.json');
+  fs.mkdirSync(path.dirname(codex), { recursive: true });
+  fs.mkdirSync(path.dirname(agy), { recursive: true });
+  fs.mkdirSync(path.join(home, '.claude'));
+  fs.writeFileSync(path.join(home, '.claude', 'settings.json'), '{}\n');
+  const codexOriginal = JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo mine', timeout: 10 }] }] } }, null, 2) + '\n';
+  const agyOriginal = JSON.stringify({ herdr: { PreInvocation: [{ command: 'bash herdr-agent-state.sh session', timeout: 10, type: 'command' }] } }, null, 2);
+  fs.writeFileSync(codex, codexOriginal);
+  fs.writeFileSync(agy, agyOriginal);
+  assert.equal(run(home, 'install').status, 0);
+  const guard = `node "${path.join(home, '.herdr-mailbox', 'run.mjs')}" --hook send-guard.mjs`;
+  const c = JSON.parse(fs.readFileSync(codex, 'utf8'));
+  assert.deepEqual(c.hooks.PreToolUse[0].hooks[0].command, 'echo mine');
+  assert.deepEqual(c.hooks.PreToolUse[1], { matcher: 'Bash', hooks: [{ type: 'command', command: guard, timeout: 10 }] });
+  const a = JSON.parse(fs.readFileSync(agy, 'utf8'));
+  assert.deepEqual(a.herdr, JSON.parse(agyOriginal).herdr);
+  assert.deepEqual(a['herdr-mailbox'], { PreToolUse: [{ matcher: 'run_command', hooks: [{ type: 'command', command: guard, timeout: 10 }] }] });
+  const once = snapshot(home);
+  assert.equal(run(home, 'install').status, 0);
+  assert.deepEqual(snapshot(home), once);
+  assert.equal(run(home, 'uninstall').status, 0);
+  assert.equal(fs.readFileSync(codex, 'utf8'), codexOriginal);
+  assert.equal(fs.readFileSync(agy, 'utf8'), agyOriginal);
+  // Neither agent there: nothing is created for them.
+  const bare = newHome();
+  assert.equal(run(bare, 'install').status, 0);
+  assert.equal(fs.existsSync(path.join(bare, '.codex')), false);
+  assert.equal(fs.existsSync(path.join(bare, '.gemini')), false);
+});
+
+test('567/AC-1 AC-2 regression: an unreadable agy hook file stops install before Codex or anything else is written', () => {
+  const home = newHome();
+  const codex = path.join(home, '.codex', 'hooks.json');
+  const agy = path.join(home, '.gemini', 'config', 'hooks.json');
+  fs.mkdirSync(path.dirname(codex), { recursive: true });
+  fs.mkdirSync(path.dirname(agy), { recursive: true });
+  fs.writeFileSync(codex, '{}\n');
+  fs.writeFileSync(agy, '{ not json');
+  const before = snapshot(home);
+  const r = run(home, 'install');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /hooks\.json is not valid JSON/);
+  assert.deepEqual(snapshot(home), before);
+});

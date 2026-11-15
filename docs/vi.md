@@ -44,7 +44,7 @@ Cần Herdr 0.9.3 trở lên và Node 18 trở lên.
 # 1. Cài plugin
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. Chạy thao tác setup của nó: lệnh `mailbox`, hooks của Claude Code, và quy tắc cho phép của Codex và agy
+# 2. Chạy thao tác setup của nó: lệnh `mailbox`, hooks của Claude Code, quy tắc cho phép của Codex và agy, và bộ chặn gửi của Codex và agy
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Các tích hợp agent của chính Herdr, dùng agent nào thì cài cái đó
@@ -62,7 +62,7 @@ Các tích hợp của Herdr nhận diện cuộc trò chuyện trong từng pan
 
 Agent không có hệ thống skill có thể đọc cùng hướng dẫn đó từ `mailbox skill`; dán đầu ra của nó vào tệp chỉ dẫn của agent.
 
-Thao tác setup sao lưu mọi tệp trước khi sửa (`<file>.bak-<date>`), chạy lại cũng không thêm trùng, và vẫn hoạt động sau `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` sẽ hoàn tác. Hãy khởi động lại các session Claude Code cần nhận thư.
+Thao tác setup sao lưu mọi tệp trước khi sửa (`<file>.bak-<date>`), chạy lại cũng không thêm trùng, và vẫn hoạt động sau `herdr plugin update`. `node <plugin dir>/src/setup.mjs uninstall` sẽ hoàn tác. Hãy khởi động lại các session Claude Code cần nhận thư. Codex sẽ hỏi một lần trên màn hình của nó có tin hook mới hay không.
 
 Sau `herdr plugin update`, hãy chạy lại thao tác setup một lần: hook của Claude Code chỉ được setup ghi lại, và bản phát hành thêm nguồn sự kiện (ví dụ `fork`, giúp hộp thư tiếp tục xác nhận khi người nhận chuyển cuộc trò chuyện sang nền) chỉ đến được máy đã cài theo cách này.
 

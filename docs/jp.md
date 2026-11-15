@@ -44,7 +44,7 @@ Herdr 0.9.3 以降と Node 18 以降が必要です。
 # 1. プラグインをインストール
 herdr plugin install navishachiku/herdr-mailbox
 
-# 2. setup アクションを実行：`mailbox` コマンド、Claude Code の hooks、Codex と agy の許可ルール
+# 2. setup アクションを実行：`mailbox` コマンド、Claude Code の hooks、Codex と agy の許可ルール、Codex と agy の送信ガード
 herdr plugin action invoke setup --plugin herdr-mailbox
 
 # 3. Herdr 自身の agent 連携。使っている agent ごとに入れる
@@ -62,7 +62,7 @@ Herdr の連携は各 pane の会話を識別し、メールボックスを受�
 
 skill の仕組みがない agent は、`mailbox skill` から同じ説明を読めます。その出力を agent の指示ファイルに貼り付けてください。
 
-setup アクションはファイルを変更する前に必ずバックアップを取り（`<file>.bak-<date>`）、もう一度実行しても重複して追加せず、`herdr plugin update` の後もそのまま動きます。`node <plugin dir>/src/setup.mjs uninstall` で元に戻せます。手紙を受け取る Claude Code の session は再起動してください。
+setup アクションはファイルを変更する前に必ずバックアップを取り（`<file>.bak-<date>`）、もう一度実行しても重複して追加せず、`herdr plugin update` の後もそのまま動きます。`node <plugin dir>/src/setup.mjs uninstall` で元に戻せます。手紙を受け取る Claude Code の session は再起動してください。Codex は画面上で一度だけ、新しい hook を信頼するか尋ねます。
 
 `herdr plugin update` の後は setup アクションをもう一度実行してください。Claude Code の hook を書き換えるのは setup だけで、イベントの種類が増えるリリース（たとえば `fork`。受信側が会話をバックグラウンドへ移した後も、メールボックスが確認を続けられるようになります）は、導入済みのマシンにはこの方法でしか届きません。
 

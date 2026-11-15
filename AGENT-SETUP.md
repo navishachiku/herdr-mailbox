@@ -12,7 +12,7 @@ Take `plugin_root` of the entry whose `plugin_id` is `herdr-mailbox`. On Windows
 
 ## 2. Run the setup script
 
-This is what the plugin's `setup` action runs. One script puts `mailbox` on the PATH, merges the Claude Code hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`), adds the Codex rule only if Codex is installed, and adds the agy rule only if `~/.gemini/antigravity-cli/settings.json` exists. It backs up each existing file to `<file>.bak-<date>` before changing it, keeps every hook that is already there, and does nothing twice when rerun.
+This is what the plugin's `setup` action runs. One script puts `mailbox` on the PATH, merges the Claude Code hooks into `~/.claude/settings.json` (on Windows `%USERPROFILE%\.claude\settings.json`), adds the Codex rule and the Codex send guard (`~/.codex/hooks.json`) only if Codex is installed, and adds the agy rule and the agy send guard (`~/.gemini/config/hooks.json`) only if agy is installed. It backs up each existing file to `<file>.bak-<date>` before changing it, keeps every hook that is already there, and does nothing twice when rerun.
 
 ```sh
 node "<plugin dir>/src/setup.mjs" install
@@ -59,7 +59,7 @@ description = "open the mailbox"
 delivery = "herdr"
 ```
 
-Then tell the user to press `prefix+shift+r` in Herdr to reload, and to restart any Claude Code session that should receive mail so it picks up the hooks.
+Then tell the user to press `prefix+shift+r` in Herdr to reload, to restart any Claude Code session that should receive mail so it picks up the hooks, and to trust the new hook on Codex's screen when it asks (`/hooks`).
 
 ## Done
 
