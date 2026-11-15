@@ -43,3 +43,13 @@ test('554/AC-2 the send skill says cards are for the person to answer and agent 
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.includes('Decision and discussion cards are answered by the person at the mailbox screen; to ask the receiving agent itself, or something that can be looked up, send a note.'));
 });
+
+test('566/AC-4 the send skill shows the source on the decision and discussion examples and says what each source flag takes', () => {
+  const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), 'skill'], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /--type decision[\s\S]*--source-uid [0-9A-Z]{26}/);
+  assert.match(r.stdout, /--type discussion[^\n]*--source "/);
+  assert.ok(r.stdout.includes('`--source-uid <uid>` takes the uid of the letter in your own mailbox that raised it'));
+  assert.ok(r.stdout.includes('Only the owner of a mailbox sends cards to it; any other agent that has a question for the owner sends the owner a note.'));
+  assert.ok(r.stdout.includes('`--source "<text>"` takes a few words saying who or what did'));
+});

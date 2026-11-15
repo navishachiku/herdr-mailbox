@@ -27,6 +27,26 @@ export async function signatureFor(senderPane, targetPane) {
   } catch { return null; }
 }
 
+// The parts of the sender's signature, kept on every letter at the moment it is sent: a sender pane is usually
+// gone by the time a letter is cited, so the names cannot be looked up later. null when they cannot be read.
+export async function signatureParts(senderPane) {
+  try {
+    const { pane } = await get('pane', 'get', senderPane);
+    const tab = pane.tab_id ? (await get('tab', 'get', pane.tab_id)).tab.label : '';
+    const workspace = pane.workspace_id ? (await get('workspace', 'get', pane.workspace_id)).workspace.label : '';
+    const role = pane.label || '';
+    const position = tab && tab.toLowerCase() !== role.toLowerCase() ? tab[0].toUpperCase() + tab.slice(1) : '';
+    return { workspaceId: pane.workspace_id ?? null, workspace: workspace || '', position, role };
+  } catch { return null; }
+}
+
+// The stored parts as one signature line; the workspace name is left out for a reader in the same workspace.
+export function renderParts(parts, readerWorkspaceId) {
+  if (!parts) return null;
+  const space = parts.workspaceId !== readerWorkspaceId ? parts.workspace : '';
+  return [space, parts.position, parts.role].filter(Boolean).join('/') || null;
+}
+
 // A signature already at the start of the text is replaced, so only one is left. The head counts as a
 // signature only if it is shaped like one: no whitespace, parts separated by "/" (position/role or
 // workspace/position/role); a single bare word counts only when it is exactly the computed signature

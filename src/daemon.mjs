@@ -8,6 +8,7 @@ import { loadState, saveState } from './store.mjs';
 import { Mailboxes } from './core.mjs';
 import { timings } from './timings.mjs';
 import { readCardRules } from './card-rules.mjs';
+import { signatureParts } from './signature.mjs';
 
 // Only the owner may enter the state directory, read letters or connect to the socket.
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
@@ -63,6 +64,8 @@ async function respond(req) {
     return { ok: false, error: 'incompatible_daemon', message: `the running daemon speaks protocol ${DAEMON_PROTO}, this command speaks ${req.proto}; restart the daemon (stop pid ${process.pid}, the next command starts a new one)`, daemonProto: DAEMON_PROTO, SESSION };
   }
   if (req.op === 'ping') return { ok: true, pid: process.pid, proto: DAEMON_PROTO, SESSION };
+  // Every new letter keeps its sender's signature as it is now, so a card can later cite the letter as its source.
+  if (req.op === 'send' && req.from) req.signed = await signatureParts(req.from);
   try { return await core.handle(req, { caller: req.caller ?? {} }); } catch (e) { return { ok: false, error: 'internal', message: String(e.message || e) }; }
 }
 

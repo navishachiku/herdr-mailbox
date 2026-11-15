@@ -8,6 +8,7 @@ import { classify } from './input-box.mjs';
 import { readPrefs, writePrefs } from './prefs.mjs';
 import { timings, mergeMs } from './timings.mjs';
 import { attachmentsOf, latestMailbox } from './core.mjs';
+import { renderParts } from './signature.mjs';
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 const MAIN = fileURLToPath(new URL('./screen/main.mjs', import.meta.url));
@@ -34,6 +35,10 @@ async function view(req) {
   const panes = (await panesOrNull()) ?? [];
   const label = id => panes.find(p => p.pane_id === id)?.label || id;
   const mine = Object.values(api.state.letters).filter(l => l.mailbox === box.id);
+  // A card shows where its question came from: the written source, or the cited letter's signature as it was when sent.
+  const ownerSpace = panes.find(p => p.pane_id === box.owner?.pane)?.workspace_id;
+  // A line break in a written source would break the one-row header, so only those turn into a space.
+  const originOf = l => (l.origin?.text?.replace(/[\r\n\t]+/g, ' ') ?? renderParts(l.origin?.signed, ownerSpace)) || null;
   const base = l => ({ uid: l.uid, serial: l.serial, type: l.type, status: l.status, sender: l.sender, senderLabel: label(l.sender), createdAt: l.createdAt });
   const notes = mine.filter(l => l.status === 'queued' && l.type === 'note' && !l.batch)
     .sort((a, b) => a.createdAt - b.createdAt)
@@ -44,7 +49,7 @@ async function view(req) {
   const justSent = l => l.status === 'delivered' && api.now() - sentAt(l) < RECENT_MS;
   const questions = mine.filter(l => l.type !== 'note' && (['pending', 'submitted'].includes(l.status) || justSent(l)))
     .sort((a, b) => (PRIORITY[a.priority] ?? 1) - (PRIORITY[b.priority] ?? 1) || a.createdAt - b.createdAt)
-    .map(l => ({ ...base(l), status: l.status === 'delivered' ? 'submitted' : l.status, priority: l.priority, version: l.version, edited: l.edited, tags: l.tags ?? [], content: l.content, draft: l.draft ?? null }));
+    .map(l => ({ ...base(l), originLabel: originOf(l), status: l.status === 'delivered' ? 'submitted' : l.status, priority: l.priority, version: l.version, edited: l.edited, tags: l.tags ?? [], content: l.content, draft: l.draft ?? null }));
   let inputState = 'unknown';
   if (box.owner && box.state === 'connected') {
     const agent = panes.find(p => p.pane_id === box.owner.pane)?.agent;

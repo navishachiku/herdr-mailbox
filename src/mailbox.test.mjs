@@ -43,7 +43,7 @@ function fresh() {
 const TO = 'w1:p1';
 const decision = (o = {}) => {
   const options = o.options ?? ['yes', 'no'];
-  return { op: 'send', to: TO, from: 'w2:p2', type: 'decision', question: 'Install it?', options, tradeoffs: options.map((_, i) => `trade-off ${i}`), whyOpen: 'no rule covers it', recommend: 'a', ...o };
+  return { op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'decision', question: 'Install it?', options, tradeoffs: options.map((_, i) => `trade-off ${i}`), whyOpen: 'no rule covers it', recommend: 'a', ...o };
 };
 const note = (text, o = {}) => ({ op: 'send', to: TO, from: 'w2:p2', type: 'note', text, ...o });
 
@@ -51,7 +51,7 @@ test('receipt carries uid, status and the sender pending list for every type', (
   const { core } = fresh();
   const n = core.handle(note('tests pass'));
   const d = core.handle(decision());
-  const q = core.handle({ op: 'send', to: TO, from: 'w2:p2', type: 'discussion', question: 'Split the readme?', idea: 'one file' });
+  const q = core.handle({ op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'discussion', question: 'Split the readme?', idea: 'one file' });
   assert.deepEqual([n.status, d.status, q.status], ['queued', 'pending', 'pending']);
   assert.ok(n.uid && d.uid && q.uid && new Set([n.uid, d.uid, q.uid]).size === 3);
   assert.deepEqual(q.pending.map(p => p.uid), [n.uid, d.uid, q.uid]);
@@ -105,7 +105,7 @@ test('over-limit text is refused with an attachment hint; the limit itself is ac
   const cases = [
     decision({ question: 'q'.repeat(201) }),
     decision({ options: ['a', 'b'.repeat(81)] }),
-    { op: 'send', to: TO, from: 'w2:p2', type: 'discussion', question: 'q', idea: 'i'.repeat(301) },
+    { op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'discussion', question: 'q', idea: 'i'.repeat(301) },
     note('n'.repeat(501)),
   ];
   for (const c of cases) {
@@ -148,7 +148,7 @@ test('526 replay of a real case: a decision or discussion card with 2 or more im
   const make = names => names.map(n => { const f = path.join(dir, n); fs.writeFileSync(f, 'x'); return f; });
   const shots = make(['f02.png', 'f04.png', 'f08.png', 'f10.PNG']);
   const [page, sample] = make(['pages.html', 'notes.md']);
-  const discussion = o => ({ op: 'send', to: TO, from: 'w2:p2', type: 'discussion', question: 'Which layout?', idea: 'two pages', ...o });
+  const discussion = o => ({ op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'discussion', question: 'Which layout?', idea: 'two pages', ...o });
   for (const card of [decision({ attach: shots }), discussion({ attach: shots.slice(0, 2) }), decision({ attach: [shots[0], page, shots[1]] })]) {
     const r = core.handle(card);
     assert.equal(r.ok, false);
@@ -394,18 +394,18 @@ test('a killed daemon comes back with the letter and the answer draft', async ()
   const s = sandbox();
   try {
     await s.bind();
-    const sent = s.cli('send', '--to', TO, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster, but one more thing to keep', '--tradeoff', 'nothing new, but done by hand', '--why-open', 'no rule covers it', '--recommend', 'A');
+    const sent = s.cli('send', '--to', TO, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster, but one more thing to keep', '--tradeoff', 'nothing new, but done by hand', '--why-open', 'no rule covers it', '--recommend', 'A', '--from', TO, '--source', 'test');
     assert.equal(sent.code, 0);
     const uid = sent.out.uid;
     assert.equal((await s.raw({ op: 'answer', uid, version: 1, choice: 'B', text: 'with a note' })).userAnswered, true);
     process.kill(s.pid(), 'SIGKILL');
     await new Promise(r => setTimeout(r, 200));
-    const status = s.cli('status');
+    const status = s.cli('status', '--from', TO);
     assert.equal(status.code, 0);
     assert.deepEqual(status.out.mailboxes[0].pending.map(p => [p.uid, p.userAnswered]), [[uid, true]]);
     const saved = JSON.parse(fs.readFileSync(path.join(s.dir, 'state.json'), 'utf8'));
     assert.deepEqual(saved.letters[uid].draft, { choice: 'B', text: 'with a note' });
-    assert.equal(s.cli('edit', uid, '--question', 'x').out.error, 'user_answered');
+    assert.equal(s.cli('edit', uid, '--question', 'x', '--from', TO).out.error, 'user_answered');
   } finally { s.cleanup(); }
 });
 
@@ -653,4 +653,36 @@ test('550/AC-2 without a card-rules file, or with an unusable one, every card is
     }
   } finally { s.cleanup(); }
   assert.deepEqual(readCardRules(path.join(tmp(), 'missing.json')), {});
+});
+
+test('566/AC-2 a card without a source is refused and says how to give one; a written source is accepted, two sources are not', () => {
+  const { core } = fresh();
+  const bare = core.handle(decision({ source: undefined }));
+  assert.equal(bare.error, 'missing_source');
+  assert.match(bare.message, /--source-uid/);
+  assert.equal(core.handle({ op: 'send', to: TO, from: 'w2:p2', type: 'discussion', question: 'Which way?' }).error, 'missing_source');
+  assert.equal(core.handle(decision({ source: 'the TL of Task-7', sourceUid: 'x' })).error, 'bad_source');
+  const ok = core.handle(decision({ source: '  the TL of   Task-7 ' }));
+  assert.equal(ok.ok, true);
+  assert.deepEqual(core.state.letters[ok.uid].origin, { text: 'the TL of   Task-7' });
+  // The same question with another source is another card, not a resend of the first.
+  const again = core.handle(decision({ source: 'the PM' }));
+  assert.equal(again.duplicate, undefined);
+  assert.notEqual(again.uid, ok.uid);
+});
+
+test('566/AC-2 a card citing a letter that does not exist, is in another mailbox or kept no signature is refused; a letter of this mailbox is accepted', () => {
+  const { core } = fresh();
+  const signed = { workspaceId: 'w2', workspace: 'openpen', position: 'Task-9', role: 'TL' };
+  const mine = core.handle(note('the user must pick', { signed }));
+  const elsewhere = core.handle({ ...note('other mailbox'), to: 'w9:p9', signed });
+  const unsigned = core.handle(note('from before signatures were kept'));
+  assert.equal(core.handle(decision({ source: undefined, sourceUid: 'NOSUCHUID' })).error, 'unknown_uid');
+  const other = core.handle(decision({ source: undefined, sourceUid: elsewhere.uid }));
+  assert.equal(other.error, 'bad_source');
+  assert.match(other.message, /not in this mailbox/);
+  assert.match(core.handle(decision({ source: undefined, sourceUid: unsigned.uid })).message, /no signature/);
+  const ok = core.handle(decision({ source: undefined, sourceUid: mine.uid }));
+  assert.equal(ok.ok, true);
+  assert.deepEqual(core.state.letters[ok.uid].origin, { uid: mine.uid, signed });
 });

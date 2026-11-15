@@ -8,12 +8,14 @@ export const options = {
   tradeoff: { type: 'string', multiple: true }, 'why-open': { type: 'string' },
   idea: { type: 'string' }, priority: { type: 'string' }, tag: { type: 'string', multiple: true },
   attach: { type: 'string', multiple: true }, supersedes: { type: 'string' },
+  source: { type: 'string' }, 'source-uid': { type: 'string' },
   wait: { type: 'boolean' }, timeout: { type: 'string' },
 };
 
 export const usage = `  mailbox send --to <address|MB-id> --type note <text>
-  mailbox send --to <address|MB-id> --type decision --question <q> --option <o> --option <o> [--option <o>...] --tradeoff <t> (one per option, in order) --why-open <why> [--recommend <letter>]
-  mailbox send --to <address|MB-id> --type discussion --question <q> [--idea <text>]
+  mailbox send --to <address|MB-id> --type decision --question <q> --option <o> --option <o> [--option <o>...] --tradeoff <t> (one per option, in order) --why-open <why> [--recommend <letter>] (--source-uid <uid> | --source <text>)
+  mailbox send --to <address|MB-id> --type discussion --question <q> [--idea <text>] (--source-uid <uid> | --source <text>)
+    cards (decision, discussion) go only from the receiver of that mailbox; --source-uid names the letter in that mailbox the question came from (the card shows that letter's sender), --source is free text when there is no such letter
     optional: --priority high|medium|low  --tag <t>  --attach <file> (up to 5, repeat the flag)  --supersedes <uid>
     --wait [--timeout <ms>]  after the receipt, block until the receiver has taken the letter and finished its turn (exit 3: not delivered in 120s, letter still arrives; exit 4: receiver outlasted --timeout; never resend)`;
 
@@ -26,5 +28,6 @@ export async function build(v, positionals, h) {
     op: 'send', to: await h.target(v.to), from: h.from, type: v.type, text: strip(v.text ?? positionals.join(' ')), question: strip(v.question),
     options: v.option, tradeoffs: v.tradeoff?.map(strip), whyOpen: strip(v['why-open']), recommend: v.recommend, idea: strip(v.idea), priority: v.priority, tags: v.tag,
     attach: v.attach?.map(f => path.resolve(f)), supersedes: v.supersedes,
+    source: v.source, sourceUid: v['source-uid'],
   };
 }

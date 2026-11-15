@@ -191,9 +191,10 @@ function card(q, ctx) {
   // Header: only the serial (white) and the sender (bright amber). No priority word: the colour bar already says it.
   // Amber stays clear of the red and green bars for a red-green colour-blind reader by being much brighter, and of
   // the blue medium bar by hue.
+  const who = q.originLabel || q.senderLabel; // the card's source; a card from before sources existed shows its sender
   const room = Math.max(4, w - width(` ${q.serial} · `));
-  const headItem = item([seg(` ${q.serial}`, S.serial), seg(' · ', S.dim), seg(cut(q.senderLabel, room), S.sender)]);
-  if (cut(q.senderLabel, room) !== q.senderLabel) headItem.tip = `${q.serial} · ${q.senderLabel}`;
+  const headItem = item([seg(` ${q.serial}`, S.serial), seg(' · ', S.dim), seg(cut(who, room), S.sender)]);
+  if (cut(who, room) !== who) headItem.tip = `${q.serial} · ${who}`;
   add([headItem]);
   if (q.tags?.length) add(q.tags.map(x => textItem(` #${x} `, S.chip)));
   // Compact mode keeps the same layout and only shortens content: the question to three rows, the third ending in

@@ -239,6 +239,24 @@ export class Mailboxes {
     return { ok: true, uid: l.uid, serial: l.serial, status: l.status, version: l.version, pending: this.pendingOf(sender, l.mailbox), ...extra };
   }
 
+  // The source a card must carry: a letter in this mailbox (its stored signature is copied) or free text, one of the two.
+  originOf(req, mailboxId) {
+    const text = String(req.source ?? '').trim();
+    const uid = String(req.sourceUid ?? '').trim();
+    if (text && uid) return fail('bad_source', 'give the source as --source-uid or as --source, not both');
+    if (!text && !uid) return fail('missing_source', 'a decision or discussion card needs its source: --source-uid <uid of the letter this question came from>, or --source "<who or what raised it>" when no letter did');
+    if (text) return { ok: true, origin: { text } };
+    const found = this.find(uid);
+    if (!found.ok) return found;
+    const l = found.letter;
+    if (l.mailbox !== mailboxId) return fail('bad_source', `letter ${uid} is not in this mailbox, so it cannot be the source; name a letter this mailbox received, or write --source <text>`);
+    if (!l.signed) return fail('bad_source', `letter ${uid} kept no signature of its sender; write --source <text> instead`);
+    return { ok: true, origin: { uid, signed: l.signed } };
+  }
+
+  // Two cards with the same content but another source are different cards.
+  sameOrigin(l, origin) { return (l.origin?.uid ?? l.origin?.text ?? null) === (origin?.uid ?? origin?.text ?? null); }
+
   send(req) {
     const { to, from = 'unknown', type, supersedes } = req;
     if (!to) return fail('missing_to', '--to is required');
@@ -260,14 +278,20 @@ export class Mailboxes {
     }
     const box = this.state.mailboxes[dest.id];
     if (!box) return fail('unknown_mailbox', `no mailbox ${dest.id}`);
+    let origin;
+    if (QUESTIONS.includes(type)) {
+      const o = this.originOf(req, dest.id);
+      if (!o.ok) return o;
+      origin = o.origin;
+    }
     const now = this.now();
     const live = l => l.mailbox === dest.id && !['withdrawn', 'superseded'].includes(l.status);
     const sameSender = this.keyOf(content, from);
-    const dup = Object.values(this.state.letters).find(l => live(l) && l.sender === from && now - l.createdAt < DEDUP_MS && this.keyOf(l.content, from) === sameSender);
+    const dup = Object.values(this.state.letters).find(l => live(l) && l.sender === from && now - l.createdAt < DEDUP_MS && this.keyOf(l.content, from) === sameSender && this.sameOrigin(l, origin));
     if (dup) return this.receipt(dup, from, { duplicate: true, reason: 'duplicate', ...forwarded, ...this.annotate('send', box.id, from) });
     if (type === 'decision') {
       const anyone = this.keyOf(content, '');
-      const open = Object.values(this.state.letters).find(l => live(l) && l.sender === from && l.type === 'decision' && l.status === 'pending' && !this.answered(l) && this.keyOf(l.content, '') === anyone);
+      const open = Object.values(this.state.letters).find(l => live(l) && l.sender === from && l.type === 'decision' && l.status === 'pending' && !this.answered(l) && this.keyOf(l.content, '') === anyone && this.sameOrigin(l, origin));
       if (open) return this.receipt(open, from, { duplicate: true, reason: 'duplicate_open_question', ...forwarded, ...this.annotate('send', box.id, from) });
     }
     // Checked after the duplicate lookups: a resend of a letter that already superseded its target gets the
@@ -288,6 +312,7 @@ export class Mailboxes {
       uid, serial: `${type === 'note' ? 'N' : 'Q'}${String(box.counter).padStart(3, '0')}`, mailbox: box.id, sender: from, type,
       status: type === 'note' ? 'queued' : 'pending', edited: false, version: 1, priority: req.priority || 'medium', tags: req.tags ?? [],
       createdAt: now, updatedAt: now, content, draft: null,
+      ...(origin ? { origin } : {}), signed: req.signed ?? null,
     };
     try {
       att.attaches.forEach((a, i) => { content.attachments[i].path = this.snapshot(uid, 1, a, i); });

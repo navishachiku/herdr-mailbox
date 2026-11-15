@@ -96,8 +96,8 @@ async function ready(w) {
   return mbOf(b);
 }
 const send = (w, o) => w.raw({ op: 'send', to: RECV, from: SENDER, ...o });
-const decision = (w, o = {}) => send(w, { type: 'decision', question: 'Install it?', options: ['yes', 'no', 'later'], tradeoffs: ['costs a day', 'loses the offer', 'risks forgetting'], whyOpen: 'no rule covers it', recommend: 'A', ...o });
-const discussion = (w, o = {}) => send(w, { type: 'discussion', question: 'Split the readme?', idea: 'one file', ...o });
+const decision = (w, o = {}) => send(w, { from: RECV, source: 'test', type: 'decision', question: 'Install it?', options: ['yes', 'no', 'later'], tradeoffs: ['costs a day', 'loses the offer', 'risks forgetting'], whyOpen: 'no rule covers it', recommend: 'A', ...o });
+const discussion = (w, o = {}) => send(w, { from: RECV, source: 'test', type: 'discussion', question: 'Split the readme?', idea: 'one file', ...o });
 const note = (w, text) => send(w, { type: 'note', text });
 const find = (v, uid) => v.questions.find(q => q.uid === uid);
 async function until(fn, ms = 3000) {
@@ -315,7 +315,7 @@ test('462/AC-1,2 a decision card without a trade-off per option and a why-open i
   const w = world();
   try {
     const mb = await ready(w);
-    const bare = { type: 'decision', question: 'Which plan?', options: ['alpha', 'beta'] };
+    const bare = { from: RECV, source: 'test', type: 'decision', question: 'Which plan?', options: ['alpha', 'beta'] };
     const noTradeoff = await send(w, { ...bare, whyOpen: 'no rule covers it' });
     assert.equal(noTradeoff.error, 'missing_tradeoff');
     assert.match(noTradeoff.message, /one --tradeoff per option/);
@@ -465,7 +465,7 @@ test('202/AC-7 an answer to a question the sender has since edited is refused an
     const q = await decision(w, { question: 'Old wording?' });
     const oldScreen = await screen(w, mb);
     const oldAction = hit(oldScreen, 'choose', a => a.uid === q.uid && a.choice === 'A');
-    const edited = await w.raw({ op: 'edit', uid: q.uid, from: SENDER, question: 'New wording?' });
+    const edited = await w.raw({ op: 'edit', uid: q.uid, from: RECV, question: 'New wording?' });
     assert.equal(edited.ok, true);
     const calls = [];
     await click(w, oldScreen, oldAction, calls);
@@ -1415,7 +1415,7 @@ test('202/AC-27 Submit and stale Void disable while processing, then show comple
     const stale = await decision(w, { question: 'Old question for failed Void?' });
     const old = await screen(w, mb);
     const action = hit(old, 'void', a => a.uid === stale.uid);
-    assert.equal((await w.raw({ op: 'edit', uid: stale.uid, from: SENDER, question: 'Changed question for failed Void?' })).ok, true);
+    assert.equal((await w.raw({ op: 'edit', uid: stale.uid, from: RECV, question: 'Changed question for failed Void?' })).ok, true);
     const failed = await feedbackRequest(old.model, action, call, 'Processing…', run);
     assert.equal(failed.result.ok, false);
     assert.equal(failed.result.error, 'stale_version');
@@ -2858,5 +2858,26 @@ test('441/AC-4 the screen offers Renew on a connected mailbox and asks before it
     assert.equal(hit(next, 'renew').mailbox, after.mailbox.id, 'its Renew button names the new mailbox');
     const old = await performVoid(w, ui, action, async () => true, []);
     assert.equal(old.ok, false, 'a click drawn for the old id is refused as stale');
+  } finally { w.cleanup(); }
+});
+
+test('566/AC-3 a card citing a letter shows that letter\'s sender as signed when it was sent, even after the sender pane is gone; a written source shows as written', async () => {
+  const w = world();
+  try {
+    const mb = await ready(w);
+    // The sender sits in another workspace and tab, so its signature carries the workspace name.
+    w.setFake(f => { f.panes[1] = { ...f.panes[1], workspace_id: 'w2', tab_id: 'w2:t1' }; f.tabs = { 'w2:t1': 'task-9' }; f.workspaces = { w2: 'openpen' }; });
+    const from = await note(w, 'the user must pick the package manager');
+    const cited = await decision(w, { source: undefined, sourceUid: from.uid });
+    const written = await decision(w, { question: 'Which region?', source: 'the TL  of Task-7' });
+    const own = await send(w, { from: RECV, type: 'note', text: 'asked in the same workspace' });
+    const local = await decision(w, { question: 'Which tool?', source: undefined, sourceUid: own.uid });
+    w.setFake(f => { f.panes = f.panes.filter(p => p.pane_id !== SENDER); f.tabs['w2:t1'] = 'renamed'; });
+    const ui = await screen(w, mb);
+    assert.equal(find(ui.model, cited.uid).originLabel, 'openpen/Task-9/worker');
+    assert.equal(find(ui.model, written.uid).originLabel, 'the TL  of Task-7');
+    assert.equal(find(ui.model, local.uid).originLabel, 'PM', 'the workspace name is left out for a sender in the owner\'s workspace');
+    assert.ok(ui.lines.some(line => line.includes(`${cited.serial} · openpen/Task-9/worker`)), 'the card header shows the source');
+    assert.ok(ui.lines.some(line => line.includes(`${written.serial} · the TL  of Task-7`)), 'the card header shows a written source as written');
   } finally { w.cleanup(); }
 });

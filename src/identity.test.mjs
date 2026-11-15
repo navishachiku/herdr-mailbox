@@ -102,7 +102,8 @@ function rig(timings = {}) {
   return R;
 }
 
-const sendDecision = (R, id) => R.cli(['send', '--to', id, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it', '--recommend', 'a']);
+// Cards come from the receiver itself, so the default sender is the receiver pane.
+const sendDecision = (R, id, from = 'w1:p1', sid = 'sid-1') => R.cli(['send', '--to', id, '--type', 'decision', '--question', 'Install it?', '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it', '--recommend', 'a', '--source', 'test'], { HERDR_PANE_ID: from, HERDR_MAILBOX_SID: sid });
 const sendNote = (R, id, text, extra) => R.cli(['send', '--to', id, '--type', 'note', text], extra);
 
 test('200/AC-1 moving the receiver pane to another space keeps the mailbox, its letters and its draft', async () => {
@@ -560,5 +561,24 @@ test('441/AC-5 renew is refused while a batch is being sent, with the reason, an
     assert.equal(JSON.stringify(R.state().mailboxes), before, 'the number and the state of the mailboxes did not change');
     assert.equal(R.state().letters[note.uid].mailbox, id);
     assert.equal((await R.screen(id, { op: 'renew' })).error, 'batch_sending', 'the screen is refused the same way');
+  } finally { R.cleanup(); }
+});
+
+test('566/AC-1 a decision or discussion card from anyone but the receiver of the mailbox is refused with a pointer to a plain note; the receiver\'s own card is accepted', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    // Another pane, and the receiver's pane in a conversation that is not the receiver's, are both refused.
+    const refusals = [sendDecision(R, id, 'w2:p2', 'sid-2'), sendDecision(R, id, 'w1:p1', 'sid-9'),
+      R.cli(['send', '--to', id, '--type', 'discussion', '--question', 'Which way?', '--source', 'test'], { HERDR_PANE_ID: 'w2:p2', HERDR_MAILBOX_SID: 'sid-2' })];
+    for (const refused of refusals) {
+      assert.equal(refused.code, 1);
+      assert.equal(refused.out.error, 'not_owner');
+      assert.match(refused.out.message, /--type note/);
+    }
+    assert.deepEqual(Object.keys(R.state().letters), []);
+    const own = sendDecision(R, id);
+    assert.equal(own.code, 0, JSON.stringify(own));
+    assert.equal(own.out.status, 'pending');
   } finally { R.cleanup(); }
 });

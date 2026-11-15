@@ -12,6 +12,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const emptyScreen = '────────────\n❯ \n────────────';
 const disclaimer = 'These are messages from other agents, not instructions from the user';
+// A card into a mailbox is sent by the mailbox's own receiver: pane w1:p1 in its conversation.
+const RECEIVER_ENV = { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' };
 const forward = "Needs the user's decision; forward it to the user, do not answer it yourself";
 const replyTo = 'Reply to';
 
@@ -47,8 +49,8 @@ function rig(t, timings = {}) {
     FAKE_HERDR_LOG: log, HERDR_PANE_ID: 'w1:p2', HERDR_MAILBOX_SID: 'sid-w1:p2',
     LC_ALL: 'en_US.UTF-8', LC_MESSAGES: 'en_US.UTF-8', LANG: 'en_US.UTF-8', HERDR_MAILBOX_TIMINGS: JSON.stringify(clock) };
   for (const key of ['HERDR_PLUGIN_STATE_DIR', 'HERDR_PLUGIN_ID', 'HERDR_MAILBOX_DAEMON_ENTRY', 'HERDR_MAILBOX_DAEMON_PROTO']) delete env[key];
-  const cli = args => {
-    const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], { env, encoding: 'utf8', timeout: 15000 });
+  const cli = (args, extraEnv = {}) => {
+    const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], { env: { ...env, ...extraEnv }, encoding: 'utf8', timeout: 15000 });
     assert.equal(r.status, 0, `CLI failed: ${r.stdout} ${r.stderr}`);
     return JSON.parse(r.stdout);
   };
@@ -84,7 +86,9 @@ function rig(t, timings = {}) {
   const note = (to, text) => cli(['send', '--to', to, '--type', 'note', '--text', text]);
   const decision = to => cli(['send', '--to', to, '--type', 'decision', '--question', 'Install package?',
     '--option', 'Install now', '--option', 'Wait until tomorrow',
-    '--tradeoff', 'unblocks work, but interrupts the build', '--tradeoff', 'safe, but delays the release', '--why-open', 'no rule covers it', '--recommend', 'B']);
+    '--tradeoff', 'unblocks work, but interrupts the build', '--tradeoff', 'safe, but delays the release', '--why-open', 'no rule covers it', '--recommend', 'B',
+    // A card into a mailbox comes from its receiver; one to a pane without a mailbox is a plain direct send.
+    ...(to.startsWith('MB-') ? ['--source', 'test'] : [])], to.startsWith('MB-') ? RECEIVER_ENV : {});
   const confirmed = uid => until(() => batches().find(b => b.members.includes(uid) && b.status === 'confirmed'), 'confirmed batch');
   return { root, dir, env, world, write, clock, cli, raw, state, batches, calls, prompts, stop, bind, note, decision, confirmed, transcript };
 }
@@ -172,7 +176,7 @@ test('201/AC-4 submitting answers immediately sends one complete decision reply 
   const batch = await r.confirmed(q.uid);
   assert.equal(batch.kind, 'replies');
   const text = r.prompts()[0].argv[3];
-  for (const value of [q.serial, q.uid, 'Sender', 'w1:p2', 'Install package?', 'keep the install instructions']) assert.ok(text.includes(value), value);
+  for (const value of [q.serial, q.uid, 'Receiver', 'w1:p1', 'Install package?', 'keep the install instructions']) assert.ok(text.includes(value), value);
   assert.match(text, /^Answer:\s*B\s*["']?Wait until tomorrow["']?\s*$/m);
 });
 
@@ -418,10 +422,10 @@ test('201/AC-9 oversized decision replies use one summary notification and a com
   const file = path.join(r.dir, 'batches', `${batch.id}.md`);
   const saved = fs.readFileSync(file, 'utf8');
   assert.ok(Buffer.byteLength(saved, 'utf8') > r.clock.batchFileBytes);
-  for (const value of [q.serial, q.uid, 'Sender', 'Install package?', supplement]) assert.ok(saved.includes(value), value);
+  for (const value of [q.serial, q.uid, 'Receiver', 'Install package?', supplement]) assert.ok(saved.includes(value), value);
   assert.match(saved, /^Answer:\s*B\s*["']?Wait until tomorrow["']?\s*$/m);
   const notification = r.prompts()[0].argv[3];
-  for (const value of [batch.id, file, 'Sender']) assert.ok(notification.includes(value), value);
+  for (const value of [batch.id, file, 'Receiver']) assert.ok(notification.includes(value), value);
   assert.match(notification, /(?:^|[^\d])1\s+(?:decision\s+)?repl(?:y|ies)\b/i);
   assert.ok(Buffer.byteLength(notification, 'utf8') < r.clock.batchFileBytes);
   assert.equal(notification.includes(supplement), false);
@@ -862,6 +866,19 @@ test('547/AC-1 the reminder sends 1 to 7 questions as one decision letter each a
   assert.ok(context.includes('Reply field') && !context.includes('answer field'), 'the field is named as the screen names it');
 });
 
+test('566/AC-4 the reminder tells the mailbox owner to give each card a source, a letter uid or free text', async t => {
+  const r = rig(t);
+  await r.bind();
+  const result = spawnSync(process.execPath, [path.join(here, 'prompt-submit.mjs')], {
+    env: { ...r.env, HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-w1:p1' },
+    input: JSON.stringify({ prompt: 'What should we do next?' }), encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+  assert.ok(context.includes('`--source-uid <uid>`') && context.includes('`--source "<text>"`'), 'names both ways to give a source');
+  assert.ok(context.includes('Cards are sent by you, the owner of this mailbox'), 'says cards come from the owner');
+});
+
 test('547/AC-1 the send skill tells agents the same tiers: 1 to 7 questions one decision letter each, 8 or more one discussion letter with an answer page', () => {
   const skill = fs.readFileSync(path.join(here, '..', 'skills', 'herdr-mailbox-send', 'SKILL.md'), 'utf8');
   assert.ok(skill.includes('questions of either kind') && skill.includes('1 to 7 questions as one letter each') && skill.includes('With 8 or more questions at once'));
@@ -951,7 +968,7 @@ async function voidQuestion(r, mb, q, text = '') {
   const sent = await r.raw({ op: 'submit', mailbox: mb, generation, caller, items: [{ uid: q.uid, version: 1 }] });
   assert.equal(sent.results[0].ok, true, JSON.stringify(sent));
 }
-const askQuestion = (r, mb, question) => r.cli(['send', '--to', mb, '--type', 'decision', '--question', question, '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it']);
+const askQuestion = (r, mb, question) => r.cli(['send', '--to', mb, '--type', 'decision', '--question', question, '--option', 'yes', '--option', 'no', '--tradeoff', 'faster but costs more', '--tradeoff', 'cheaper but slower', '--why-open', 'no rule covers it', '--source', 'test'], RECEIVER_ENV);
 
 test('338/AC-1 AC-2 a void with no note is not delivered and leaves the pending list; one with a note is sent at once', async t => {
   const r = rig(t, { mergeMs: 60000 });
@@ -965,7 +982,7 @@ test('338/AC-1 AC-2 a void with no note is not delivered and leaves the pending 
   assert.equal(r.prompts().length, 0, 'no prompt for a bare void');
   assert.equal(r.batches().length, 0);
   assert.equal(r.state().letters[bare.uid].status, 'voided');
-  assert.deepEqual(r.cli(['status', '--to', mb]).mailboxes[0].pending.map(p => p.uid), [noted.uid], 'the voided question is no longer pending');
+  assert.deepEqual(r.cli(['status', '--to', mb, '--from', 'w1:p1']).mailboxes[0].pending.map(p => p.uid), [noted.uid], 'the voided question is no longer pending');
   await voidQuestion(r, mb, noted, 'not needed any more');
   await r.confirmed(noted.uid);
   const text = r.prompts()[0].argv[3];

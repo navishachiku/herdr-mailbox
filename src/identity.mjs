@@ -12,6 +12,8 @@ const text = table({
     ownerChanged: id => `The receiver of ${id} changed since your last message; replies now go to the new receiver.`,
     needsReconfirm: 'The receiver changed; the user must confirm this answer again before it is sent.',
     renewed: (from, to) => `${from} was replaced by ${to}; your letter went to ${to}. Send to ${to} from now on.`,
+    cardNotOwner: (id, pane) => `only the receiver of ${id} can send it decision or discussion cards: the user answers them from the mailbox screen. To ask or tell the receiver something, send a note: mailbox send --to ${pane ?? id} --type note "<text>"`,
+    cardNoReceiver: id => `${id} has no connected receiver, so no card can be sent to it now; if you are its receiver, run: mailbox claim ${id}`,
     sending: list => `a batch is still being sent (${list}), so renewing now would leave it with no way to be confirmed; try again once it is confirmed or marked unconfirmed (about a minute)`,
   },
   'zh-TW': {
@@ -19,6 +21,8 @@ const text = table({
     ownerChanged: id => `${id} 的接收者在你上次寄信後已變更；之後的回覆會送給新接收者。`,
     needsReconfirm: '接收者已變更，這個答案需要使用者再確認一次才會送出。',
     renewed: (from, to) => `${from} 已改為 ${to}；你的信已送到 ${to}，之後請寄給 ${to}。`,
+    cardNotOwner: (id, pane) => `只有 ${id} 的接收者能寄決策或討論卡給它：卡片由使用者在信箱畫面作答。要問或告知接收者，請改寄一般訊息：mailbox send --to ${pane ?? id} --type note "<內容>"`,
+    cardNoReceiver: id => `${id} 目前沒有接上的接收者，現在不能寄卡給它；若你就是它的接收者，請執行：mailbox claim ${id}`,
     sending: list => `有批次正在傳送（${list}），現在換新會讓它無從確認；等它確認或標為未確認後（約一分鐘）再試`,
   },
 });
@@ -110,7 +114,21 @@ function mailboxesOfRequest(req) {
   return [...new Set(uids.map(uid => api.state.letters[uid]?.mailbox).filter(Boolean))];
 }
 
+// A decision or discussion card goes into a mailbox only from that mailbox's receiver: the pane that owns it and, when
+// the caller says which conversation it is (Claude exports it; Codex does not), that pane's receiver conversation.
+function cardGuard(req, ctx) {
+  const dest = route(req.to);
+  if (dest.ok === false || dest.kind !== 'mailbox') return null;
+  const box = api.state.mailboxes[dest.id];
+  if (!box) return null;
+  if (box.state !== 'connected' || !box.owner) return fail('not_owner', text.cardNoReceiver(box.id));
+  const sid = ctx?.caller?.sid;
+  if (req.from === box.owner.pane && (!sid || isReceiverSid(box, req.from, sid))) return null;
+  return fail('not_owner', text.cardNotOwner(box.id, box.owner.pane));
+}
+
 function guard(op, req, ctx) {
+  if (op === 'send' && (req.type === 'decision' || req.type === 'discussion')) return cardGuard(req, ctx);
   if (!OWNER_OPS.has(op)) return null;
   for (const id of mailboxesOfRequest(req)) {
     const denied = checkOwner(id, req, ctx);
