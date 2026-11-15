@@ -23,7 +23,7 @@ Es baut nicht die Optionsfragen von Claude Code (AskUserQuestion) noch einmal na
 
 ![Ohne Mailbox: Der Bericht eines workers wird in den halb geschriebenen Prompt getippt und mit abgeschickt, danach weckt jeder Bericht und jede Frage den leader, und der Chat läuft voll](./media/demo-before.gif)
 
-Mailbox gibt dem leader einen Briefkasten. Die worker können dort normale Nachrichten einwerfen, wie Postkarten, und außerdem Entscheidungskarten und Diskussionskarten, die du beantwortest. Normale Nachrichten gehen als ein Paket hinein, nur wenn du nicht tippst und der leader Zeit hat; Karten bleiben im Briefkasten liegen, bis du sie mit der Maus beantwortest.
+Mailbox gibt dem leader einen Briefkasten. Die worker werfen dort normale Nachrichten ein, wie Postkarten; die Entscheidungskarten und Diskussionskarten, die du beantwortest, legt der leader selbst ein, und jede Karte nennt die Herkunft ihrer Frage. Normale Nachrichten gehen als ein Paket hinein, nur wenn du nicht tippst und der leader Zeit hat; Karten bleiben im Briefkasten liegen, bis du sie mit der Maus beantwortest.
 
 **Nachher**
 
@@ -31,7 +31,7 @@ Mailbox gibt dem leader einen Briefkasten. Die worker können dort normale Nachr
 
 - **Dein Eingabefeld gehört dir** — während du tippst, wird nichts hineingeschrieben, und solange der leader noch antwortet, kommt auch nichts an.
 - **Normale Nachrichten kommen zusammen** — normale Nachrichten warten bis zu einer Minute, damit sie als ein Paket hineingehen und den leader nur einmal wecken; mit **Jetzt senden** entfällt das Warten.
-- **Fragen an einem Ort** — Entscheidungsfragen werden zu Karten neben dem leader; beantworte sie mit der Maus, und alle Antworten gehen in einem Paket zurück.
+- **Fragen an einem Ort** — Entscheidungsfragen werden zu Karten neben dem leader, jede mit der Herkunft ihrer Frage; beantworte sie mit der Maus, und alle Antworten gehen in einem Paket zurück.
 - **Jeder Agent kann schreiben** — Absender führen nur `mailbox send` aus, also können Claude Code, Codex, agy und jeder Agent, der einen Shell-Befehl ausführen kann, in denselben Briefkasten schreiben.
 - **Eine Quittung für jeden Versand** — jeder Versand liefert sofort die ID und den Status des Briefs zurück.
 - **Er folgt dem leader** — Pane verschieben, Herdr neu starten oder die Unterhaltung leeren: Der Briefkasten bleibt beim selben Empfänger.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` akzeptiert eine Pane-ID, einen Agent-Namen oder eine Mailbox-ID. `--recommend` ist optional; eine Karte ohne diese Angabe zeigt keine empfohlene Option.
+
+Jede Karte trägt ihre Quelle: `--source-uid <uid>` nimmt die uid des Briefs in diesem Briefkasten, der die Frage ausgelöst hat, und die Karte zeigt den Absender dieses Briefs so, wie er ihn signiert hat; hat kein Brief die Frage ausgelöst, nimmt `--source "<wer oder was sie aufgeworfen hat>"` ein paar Worte.
 
 Längere Inhalte hängst du als Datei an den Brief an (`--attach <file>`, bis zu 5 pro Brief); die Karte zeigt einen Link, und ein Klick öffnet die Datei im Standardprogramm deines Systems (ein Bild im Bildbetrachter, eine Textdatei in ihrer Standard-App). Webadressen in einer Frage öffnen sich im Standardbrowser.
 
@@ -135,7 +138,7 @@ Beide Schlüssel sind optional, ein ungültiger Wert wird ignoriert. Ohne Datei 
 
 - **Codex: kann noch keinen Briefkasten besitzen.** Codex 0.163 führt seine Unterhaltungen in einem gemeinsamen Hintergrundserver aus, daher meldet Herdrs Codex-Integration jede Unterhaltung an das Pane, das diesen Server gestartet hat, und das Codex-Pane selbst bekommt nie eine Unterhaltungs-ID, an die sich ein Briefkasten binden ließe. Codex kann trotzdem Briefe senden, und eine normale Nachricht an ein Codex-Pane ohne Briefkasten wird signiert und einmal direkt hineingetippt. Die Pane-ID von Codex in `HERDR_PANE_ID` kann falsch sein, deshalb muss ein Codex-Absender sein eigenes Pane mit `--from <pane id>` angeben.
 - **agy: der Skill landet nicht dort, wo agy ihn liest.** Die `skills`-CLI kann nicht in den Ordner installieren, aus dem agy Skills lädt, daher erreicht `npx skills add` ihn nicht. Das ist eine Grenze dieser CLI; der Briefkasten umgeht sie nicht.
-- **agy: sieht den Skill, nutzt den Briefkasten aber nicht von selbst.** Sagt man ihm nur „berichte an agent-a“, greift agy zu seinem eingebauten Nachrichtenwerkzeug statt zu `mailbox send`. Nenne den Befehl in der Anfrage („schick es mit `mailbox send`“).
+- **agy: seine Sandbox verhindert das Senden.** Ein `herdr agent prompt` von agy an den Besitzer eines Briefkastens wird in eine Notiz im Briefkasten umgeschrieben; solange die Sandbox von agy aber aktiv ist, kann agy weder `herdr` noch `mailbox send` ausführen (auch der Socket des Briefkasten-Daemons ist gesperrt) und sendet daher nichts, ob der Empfänger einen Briefkasten hat oder nicht.
 
 <details>
 <summary>Für Fortgeschrittene: Funktionsweise, Zustand, Tests</summary>

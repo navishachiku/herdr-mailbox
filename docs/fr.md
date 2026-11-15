@@ -23,7 +23,7 @@ Ce n'est pas une nouvelle version des questions à options de Claude Code (AskUs
 
 ![Sans boîte aux lettres : le rapport d'un worker est tapé dans le prompt à moitié écrit et envoyé avec lui, puis chaque rapport et chaque question réveillent le leader et la conversation se remplit](./media/demo-before.gif)
 
-Mailbox donne une boîte aux lettres au leader. Les workers peuvent y déposer des messages ordinaires, comme des cartes postales, mais aussi des cartes de décision et des cartes de discussion auxquelles tu réponds. Les messages ordinaires arrivent en un seul lot, uniquement quand tu ne tapes pas et que le leader est libre ; les cartes attendent dans la boîte que tu y répondes à la souris.
+Mailbox donne une boîte aux lettres au leader. Les workers y déposent des messages ordinaires, comme des cartes postales ; les cartes de décision et de discussion auxquelles tu réponds sont déposées par le leader lui-même, et chaque carte dit d'où vient sa question. Les messages ordinaires arrivent en un seul lot, uniquement quand tu ne tapes pas et que le leader est libre ; les cartes attendent dans la boîte que tu y répondes à la souris.
 
 **Après**
 
@@ -31,7 +31,7 @@ Mailbox donne une boîte aux lettres au leader. Les workers peuvent y déposer d
 
 - **Ta zone de saisie reste à toi** — rien n'y est tapé pendant que tu écris, et rien n'arrive tant que le leader est en train de répondre.
 - **Les messages arrivent ensemble** — les messages ordinaires attendent jusqu'à une minute pour partir en un seul lot et ne réveiller le leader qu'une fois ; **Envoyer** évite l'attente.
-- **Les questions au même endroit** — les questions de décision deviennent des cartes à côté du leader ; réponds à la souris et toutes les réponses repartent en un seul lot.
+- **Les questions au même endroit** — les questions de décision deviennent des cartes à côté du leader, chacune indiquant d'où vient la question ; réponds à la souris et toutes les réponses repartent en un seul lot.
 - **N'importe quel agent peut écrire** — l'expéditeur n'a qu'à lancer `mailbox send`, donc Claude Code, Codex, agy et tout agent capable d'exécuter une commande shell écrivent dans la même boîte.
 - **Un accusé de réception pour chaque envoi** — chaque envoi renvoie aussitôt l'id et le statut de la lettre.
 - **Elle suit le leader** — déplacer le pane, redémarrer Herdr ou vider la conversation, la boîte reste attachée au même destinataire.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` accepte un id de pane, un nom d'agent ou un id de boîte. `--recommend` est facultatif ; une carte sans lui n'affiche aucune option recommandée.
+
+Chaque carte porte sa source : `--source-uid <uid>` prend l'uid de la lettre de cette boîte qui a soulevé la question, et la carte affiche l'expéditeur de cette lettre tel qu'il l'a signée ; quand aucune lettre ne l'a soulevée, `--source "<qui ou quoi l'a soulevée>"` prend quelques mots.
 
 Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <file>`, jusqu'à 5 par lettre) ; la carte affiche un lien, et un clic ouvre le fichier avec le programme par défaut du système (une image dans la visionneuse d'images, un fichier texte dans son application par défaut). Les adresses web d'une question s'ouvrent dans le navigateur par défaut.
 
@@ -135,7 +138,7 @@ Les deux clés sont facultatives et une valeur invalide est ignorée. Sans fichi
 
 - **Codex : il ne peut pas encore posséder de boîte.** Codex 0.163 exécute ses conversations dans un seul serveur d'arrière-plan partagé, donc l'intégration Codex de Herdr rattache chaque conversation au pane qui a lancé ce serveur, et le pane Codex lui-même ne reçoit jamais d'id de conversation auquel lier une boîte. Codex peut quand même envoyer des lettres, et un message ordinaire envoyé à un pane Codex sans boîte est signé et tapé directement dedans une seule fois. L'id de pane de Codex dans `HERDR_PANE_ID` peut être faux, donc un expéditeur Codex doit indiquer son propre pane avec `--from <pane id>`.
 - **agy : la skill n'est pas installée là où agy la lit.** La CLI `skills` ne peut pas installer dans le dossier depuis lequel agy charge les skills, donc `npx skills add` ne l'atteint pas. C'est une limite de cette CLI ; la boîte ne la contourne pas.
-- **agy : il voit la skill mais n'utilise pas la boîte de lui-même.** Si on lui dit seulement « fais ton rapport à agent-a », agy se rabat sur son outil de messagerie intégré au lieu de `mailbox send`. Nomme la commande dans la demande (« envoie-le avec `mailbox send` »).
+- **agy : son bac à sable empêche d'envoyer.** Un `herdr agent prompt` d'agy vers le propriétaire d'une boîte est réécrit en note dans la boîte, mais tant que le bac à sable d'agy est activé, agy ne peut exécuter ni `herdr` ni `mailbox send` (le socket du daemon de la boîte est lui aussi bloqué) ; il n'envoie donc rien, que le destinataire ait une boîte ou non.
 
 <details>
 <summary>Avancé : fonctionnement, état, tests</summary>

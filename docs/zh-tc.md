@@ -23,7 +23,7 @@
 
 ![沒有信箱：Worker 的回報被打進寫到一半的 prompt 一起送出，之後每則回報和問題都再叫醒 Leader，對話被塞滿](./media/demo-before.gif)
 
-Mailbox 給 Leader 一個信箱。Worker 除了寄一般訊息（像明信片），還能投遞決策卡和討論卡給你。一般訊息只在你沒在打字、Leader 也有空的時候才成批送進去；卡片則留在信箱裡，等你用滑鼠作答。
+Mailbox 給 Leader 一個信箱。Worker 寄一般訊息（像明信片）；決策卡和討論卡由 Leader 自己投遞給你作答，每張卡都標明問題的來源。一般訊息只在你沒在打字、Leader 也有空的時候才成批送進去；卡片則留在信箱裡，等你用滑鼠作答。
 
 **使用後**
 
@@ -31,7 +31,7 @@ Mailbox 給 Leader 一個信箱。Worker 除了寄一般訊息（像明信片）
 
 - **輸入框始終是你的** — 你在打字時不會有任何東西被打進去，Leader 還在回話時也不會送進去。
 - **一般訊息一起到** — 一般訊息最多等一分鐘，好合成一批送進去、只叫醒 Leader 一次；按 **立即投遞** 可以不等。
-- **問題集中一處** — 決策題變成 Leader 旁邊的卡片；用滑鼠作答，所有答案一次送回。
+- **問題集中一處** — 決策題變成 Leader 旁邊的卡片，每張標明問題的來源；用滑鼠作答，所有答案一次送回。
 - **任何 agent 都能寄** — 寄件方只要執行 `mailbox send`，所以 Claude Code、Codex、agy，以及任何能執行 shell 指令的 agent，都能寄到同一個信箱。
 - **每封都有回條** — 每次寄出都立即回傳這封信的 id 與狀態。
 - **跟著 Leader 走** — 搬動 pane、重啟 Herdr 或清空對話，信箱都還跟著同一個收件者。
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` 可以填 pane id、agent 名稱或信箱 id。`--recommend` 可省略；沒有它的卡片不標建議選項。
+
+每張卡都帶來源：`--source-uid <uid>` 填信箱裡提出這個問題的那封信的 uid，卡片就顯示該信寄出時的署名；沒有對應的信時，用 `--source "<誰或什麼提出的>"` 寫幾個字。
 
 較長的內容可以用檔案附在信上（`--attach <file>`，每封最多 5 個）；卡片上會出現連結，點下去用系統預設的程式打開（圖片用看圖程式、文字檔用預設的程式）。問題裡的網址會用預設瀏覽器打開。
 
@@ -135,7 +138,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 - **Codex：還不能擁有信箱。** Codex 0.163 的所有對話都跑在同一個共用的背景伺服器裡，所以 Herdr 的 Codex 整合會把每個對話都回報到啟動那個伺服器的 pane，Codex 自己的 pane 拿不到可以綁定信箱的對話 id。Codex 仍然可以寄信，寄給沒有信箱的 Codex pane 的一般訊息，會簽名後直接打進去一次。Codex 的 `HERDR_PANE_ID` 可能是錯的 pane，所以 Codex 寄信時必須用 `--from <pane id>` 指明自己的 pane。
 - **agy：skill 沒有裝到 agy 讀取的位置。** `skills` CLI 裝不進 agy 載入 skill 的資料夾，所以 `npx skills add` 對 agy 無效。這是該 CLI 的限制，信箱不另外繞過。
-- **agy：看得到 skill，但不會主動用信箱。** 只跟它說「回報給 agent-a」時，agy 會改用它內建的傳訊工具，而不是 `mailbox send`。請在要求裡直接點名指令（「用 `mailbox send` 寄」）。
+- **agy：沙盒開著時送不出信。** agy 用 `herdr agent prompt` 直送給信箱擁有者的訊息，會被改寫成寄進信箱的一般訊息；但 agy 的沙盒開著時，`herdr` 與 `mailbox send` 都執行不了（信箱 daemon 的 socket 也被擋），所以不論對方有沒有信箱，它都寄不出任何東西。
 
 <details>
 <summary>進階：運作方式、狀態、測試</summary>

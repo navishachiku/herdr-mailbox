@@ -23,7 +23,7 @@ Claude Code の選択式の質問（AskUserQuestion）を作り直したもの�
 
 ![メールボックスなし：worker の報告が書きかけの prompt に打ち込まれて一緒に送信され、その後も報告や質問のたびに leader が起こされて、会話が埋まっていく](./media/demo-before.gif)
 
-Mailbox は leader にメールボックスを用意します。worker は、はがきのような一般メッセージのほかに、あなたが答えるための判断カードや相談カードも投函できます。一般メッセージは、あなたが入力しておらず leader も手が空いているときにだけ、まとめて届きます。カードはメールボックスに残り、マウスで答えるのを待ちます。
+Mailbox は leader にメールボックスを用意します。worker は、はがきのような一般メッセージを投函します。あなたが答えるための判断カードや相談カードは leader 自身が投函し、各カードにはその質問がどこから来たかが示されます。一般メッセージは、あなたが入力しておらず leader も手が空いているときにだけ、まとめて届きます。カードはメールボックスに残り、マウスで答えるのを待ちます。
 
 **導入後**
 
@@ -31,7 +31,7 @@ Mailbox は leader にメールボックスを用意します。worker は、は
 
 - **入力欄はずっとあなたのもの** — 入力中は何も打ち込まれず、leader が返答している間も届きません。
 - **一般メッセージはまとめて届く** — 一般メッセージは最長1分待ち、1回のバッチにして leader を一度だけ起こします。**今すぐ送る** で待たずに送れます。
-- **質問は一か所に** — 判断の質問は leader の隣にカードとして並びます。マウスで答えれば、すべての回答を一度に返送できます。
+- **質問は一か所に** — 判断の質問は leader の隣にカードとして並び、各カードに質問の出どころが表示されます。マウスで答えれば、すべての回答を一度に返送できます。
 - **どの agent からでも書ける** — 送る側は `mailbox send` を実行するだけなので、Claude Code も Codex も agy も、シェルコマンドを実行できる agent なら同じメールボックスに書けます。
 - **送るたびに受領通知** — 送信のたびに、その手紙の id と状態がすぐ返ります。
 - **leader についていく** — pane を動かしても、Herdr を再起動しても、会話をクリアしても、メールボックスは同じ受け取り手に付いたままです。
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` には pane id、agent 名、メールボックス id を指定できます。`--recommend` は省略でき、付けないカードには推奨の選択肢が表示されません。
+
+どのカードにも出どころを付けます。`--source-uid <uid>` にはそのメールボックス内で質問のきっかけになった手紙の uid を指定し、カードにはその手紙の送信者が署名したとおりに表示されます。きっかけになった手紙がないときは `--source "<誰が、または何が出したか>"` に短い言葉を書きます。
 
 長めの内容はファイルにして手紙に添付できます（`--attach <file>`、1通につき5個まで）。カードにリンクが出て、クリックするとシステム既定のプログラムで開きます（画像は画像ビューア、テキストファイルは既定のアプリ）。質問の中のウェブアドレスは既定のブラウザで開きます。
 
@@ -135,7 +138,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 - **Codex：まだメールボックスを持てません。** Codex 0.163 はすべての会話を1つの共有バックグラウンドサーバーで動かすため、Herdr の Codex 連携はどの会話もそのサーバーを起動した pane に報告し、Codex の pane 自体はメールボックスを紐づけるための会話 id を得られません。Codex から手紙を送ることはでき、メールボックスのない Codex の pane に送った一般メッセージは、署名を付けて1回だけ直接打ち込まれます。Codex の `HERDR_PANE_ID` は間違った pane を指すことがあるので、Codex から送るときは `--from <pane id>` で自分の pane を明示する必要があります。
 - **agy：skill が agy の読む場所にインストールされません。** `skills` CLI は agy が skill を読み込むフォルダにインストールできないため、`npx skills add` は agy に届きません。これはその CLI の制限で、メールボックス側では回避していません。
-- **agy：skill は見えていても、自分からはメールボックスを使いません。** 「agent-a に報告して」とだけ伝えると、agy は `mailbox send` ではなく内蔵のメッセージツールを使おうとします。依頼の中でコマンドを名指ししてください（「`mailbox send` で送って」）。
+- **agy：サンドボックスが有効だと送れません。** agy がメールボックスの持ち主へ `herdr agent prompt` で直接送ったメッセージは、メールボックスの一般メッセージに書き換えられます。ただし agy のサンドボックスが有効な間は、`herdr` も `mailbox send` も実行できず（メールボックスの daemon のソケットも遮断されます）、相手にメールボックスがあってもなくても何も送れません。
 
 <details>
 <summary>応用：仕組み、状態、テスト</summary>

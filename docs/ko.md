@@ -23,7 +23,7 @@ Claude Code의 선택지 질문(AskUserQuestion)을 다시 만든 것이 아닙�
 
 ![우편함 없음: worker의 보고가 쓰다 만 prompt에 입력되어 함께 전송되고, 이후 보고와 질문마다 leader가 다시 깨어나 대화가 가득 참](./media/demo-before.gif)
 
-Mailbox는 leader에게 우편함을 만들어 줍니다. worker는 엽서 같은 일반 메시지를 보낼 수 있고, 당신이 답할 결정 카드와 토론 카드도 넣을 수 있습니다. 일반 메시지는 당신이 입력 중이 아니고 leader도 한가할 때만 한 묶음으로 들어가고, 카드는 우편함에 남아 당신이 마우스로 답할 때까지 기다립니다.
+Mailbox는 leader에게 우편함을 만들어 줍니다. worker는 엽서 같은 일반 메시지를 보냅니다. 당신이 답할 결정 카드와 토론 카드는 leader가 직접 넣고, 각 카드에는 그 질문이 어디서 왔는지가 표시됩니다. 일반 메시지는 당신이 입력 중이 아니고 leader도 한가할 때만 한 묶음으로 들어가고, 카드는 우편함에 남아 당신이 마우스로 답할 때까지 기다립니다.
 
 **사용 후**
 
@@ -31,7 +31,7 @@ Mailbox는 leader에게 우편함을 만들어 줍니다. worker는 엽서 같�
 
 - **입력창은 늘 당신의 것** — 타이핑하는 동안에는 아무것도 입력되지 않고, leader가 답하는 중에도 들어오지 않습니다.
 - **일반 메시지는 함께 도착** — 일반 메시지는 최대 1분 기다렸다가 한 묶음으로 들어가 leader를 한 번만 깨웁니다. **지금 전달**을 누르면 기다리지 않습니다.
-- **질문은 한곳에서** — 결정 질문은 leader 옆의 카드가 됩니다. 마우스로 답하면 모든 답이 한 번에 돌아갑니다.
+- **질문은 한곳에서** — 결정 질문은 leader 옆의 카드가 되며, 카드마다 질문의 출처가 표시됩니다. 마우스로 답하면 모든 답이 한 번에 돌아갑니다.
 - **어떤 agent든 보낼 수 있음** — 보내는 쪽은 `mailbox send`만 실행하면 되므로 Claude Code, Codex, agy, 셸 명령을 실행할 수 있는 모든 agent가 같은 우편함에 쓸 수 있습니다.
 - **모든 편지에 수신 확인** — 보낼 때마다 편지의 id와 상태가 바로 돌아옵니다.
 - **leader를 따라감** — pane을 옮기거나 Herdr를 다시 시작하거나 대화를 비워도 우편함은 같은 수신자에게 그대로 붙어 있습니다.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to`에는 pane id, agent 이름, 우편함 id를 쓸 수 있습니다. `--recommend`는 생략할 수 있으며, 이것이 없는 카드에는 추천 선택지가 표시되지 않습니다.
+
+모든 카드에는 출처가 붙습니다. `--source-uid <uid>`에는 그 우편함에서 질문을 일으킨 편지의 uid를 쓰고, 카드에는 그 편지의 보낸 사람이 서명한 그대로 표시됩니다. 그런 편지가 없을 때는 `--source "<누가 또는 무엇이 제기했는지>"`에 짧은 말을 씁니다.
 
 긴 내용은 파일로 편지에 첨부할 수 있습니다(`--attach <file>`, 편지당 최대 5개). 카드에 링크가 나타나고, 누르면 시스템 기본 프로그램으로 열립니다(이미지는 이미지 뷰어, 텍스트 파일은 기본 앱). 질문 속 웹 주소는 기본 브라우저로 열립니다.
 
@@ -135,7 +138,7 @@ mailbox send --to <address|MB-id> --type decision \
 
 - **Codex: 아직 우편함을 가질 수 없습니다.** Codex 0.163은 모든 대화를 하나의 공유 백그라운드 서버에서 실행하므로, Herdr의 Codex 연동은 모든 대화를 그 서버를 시작한 pane으로 보고하고, Codex pane 자체는 우편함을 연결할 대화 id를 얻지 못합니다. Codex도 편지를 보낼 수는 있으며, 우편함이 없는 Codex pane으로 보낸 일반 메시지는 서명을 붙여 한 번 직접 입력됩니다. Codex의 `HERDR_PANE_ID`는 잘못된 pane을 가리킬 수 있으므로, Codex가 보낼 때는 `--from <pane id>`로 자기 pane을 지정해야 합니다.
 - **agy: skill이 agy가 읽는 위치에 설치되지 않습니다.** `skills` CLI는 agy가 skill을 불러오는 폴더에 설치할 수 없어서 `npx skills add`가 agy에 닿지 않습니다. 이는 해당 CLI의 한계이며, 우편함은 이를 우회하지 않습니다.
-- **agy: skill은 보이지만 스스로 우편함을 쓰지는 않습니다.** "agent-a에게 보고해"라고만 하면 agy는 `mailbox send` 대신 내장 메시지 도구를 쓰려 합니다. 요청에서 명령을 직접 지정하세요("`mailbox send`로 보내").
+- **agy: 샌드박스가 켜져 있으면 보낼 수 없습니다.** agy가 `herdr agent prompt`로 우편함 주인에게 직접 보낸 메시지는 우편함의 일반 메시지로 바뀌어 들어가지만, agy의 샌드박스가 켜져 있는 동안에는 `herdr`도 `mailbox send`도 실행할 수 없고(우편함 daemon의 소켓도 막힙니다), 받는 쪽에 우편함이 있든 없든 아무것도 보내지 못합니다.
 
 <details>
 <summary>고급: 동작 방식, 상태, 테스트</summary>

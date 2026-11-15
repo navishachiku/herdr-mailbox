@@ -23,7 +23,7 @@ Nó không phải là bản làm lại câu hỏi lựa chọn của Claude Code
 
 ![Không có hộp thư: báo cáo của worker bị gõ vào prompt đang viết dở rồi gửi đi cùng, sau đó mỗi báo cáo và câu hỏi lại đánh thức leader, cuộc trò chuyện đầy ắp](./media/demo-before.gif)
 
-Mailbox cho leader một hộp thư. Ngoài tin nhắn thường (như tấm bưu thiếp), worker còn có thể gửi thẻ quyết định và thẻ thảo luận để bạn trả lời. Tin nhắn thường chỉ được đưa vào thành một lô khi bạn không đang gõ và leader đang rảnh; còn thẻ thì nằm yên trong hộp thư, chờ bạn trả lời bằng chuột.
+Mailbox cho leader một hộp thư. Worker gửi tin nhắn thường (như tấm bưu thiếp); thẻ quyết định và thẻ thảo luận để bạn trả lời do chính leader gửi, và mỗi thẻ ghi rõ câu hỏi đến từ đâu. Tin nhắn thường chỉ được đưa vào thành một lô khi bạn không đang gõ và leader đang rảnh; còn thẻ thì nằm yên trong hộp thư, chờ bạn trả lời bằng chuột.
 
 **Sau khi dùng**
 
@@ -31,7 +31,7 @@ Mailbox cho leader một hộp thư. Ngoài tin nhắn thường (như tấm bư
 
 - **Ô nhập liệu luôn là của bạn** — không có gì bị gõ vào khi bạn đang gõ, và không có gì được đưa vào khi leader còn đang trả lời.
 - **Tin nhắn thường đến cùng lúc** — tin nhắn thường chờ tối đa một phút để vào thành một lô và chỉ đánh thức leader một lần; bấm **Gửi ngay** nếu không muốn chờ.
-- **Câu hỏi gom về một chỗ** — câu hỏi quyết định biến thành thẻ ngay cạnh leader; trả lời bằng chuột rồi gửi toàn bộ câu trả lời một lượt.
+- **Câu hỏi gom về một chỗ** — câu hỏi quyết định biến thành thẻ ngay cạnh leader, mỗi thẻ ghi nguồn của câu hỏi; trả lời bằng chuột rồi gửi toàn bộ câu trả lời một lượt.
 - **Agent nào cũng gửi được** — bên gửi chỉ cần chạy `mailbox send`, nên Claude Code, Codex, agy và bất kỳ agent nào chạy được lệnh shell đều gửi được vào cùng một hộp thư.
 - **Mỗi lần gửi đều có biên nhận** — mỗi lần gửi trả về ngay id và trạng thái của lá thư.
 - **Đi theo leader** — di chuyển pane, khởi động lại Herdr hay xoá cuộc trò chuyện thì hộp thư vẫn thuộc về cùng một người nhận.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` nhận pane id, tên agent hoặc id hộp thư. `--recommend` là tuỳ chọn; thẻ không có nó sẽ không đánh dấu phương án đề xuất.
+
+Mỗi thẻ đều mang nguồn của nó: `--source-uid <uid>` nhận uid của lá thư trong hộp thư đó đã nêu ra câu hỏi, và thẻ hiển thị người gửi lá thư ấy đúng như họ đã ký; khi không có lá thư nào, `--source "<ai hoặc cái gì đã nêu ra>"` nhận vài từ.
 
 Nội dung dài hơn thì đính kèm vào thư dưới dạng tệp (`--attach <file>`, tối đa 5 tệp mỗi thư); trên thẻ sẽ có một liên kết, bấm vào là tệp mở bằng chương trình mặc định của hệ thống (ảnh mở trong trình xem ảnh, tệp văn bản mở trong ứng dụng mặc định). Địa chỉ web trong câu hỏi mở bằng trình duyệt mặc định.
 
@@ -135,7 +138,7 @@ Cả hai khóa đều tùy chọn và giá trị không hợp lệ bị bỏ qua
 
 - **Codex: chưa thể sở hữu hộp thư.** Codex 0.163 chạy mọi cuộc trò chuyện trong một máy chủ nền dùng chung, nên tích hợp Codex của Herdr báo mọi cuộc trò chuyện về pane đã khởi động máy chủ đó, còn chính pane Codex không bao giờ nhận được id cuộc trò chuyện để gắn hộp thư vào. Codex vẫn gửi thư được, và tin nhắn thường gửi tới một pane Codex không có hộp thư sẽ được ký tên và gõ thẳng vào đó một lần. Pane id của Codex trong `HERDR_PANE_ID` có thể sai, nên bên gửi là Codex phải tự chỉ rõ pane của mình bằng `--from <pane id>`.
 - **agy: skill không được cài vào chỗ agy đọc.** CLI `skills` không cài được vào thư mục mà agy nạp skill, nên `npx skills add` không tới được agy. Đây là giới hạn của CLI đó; hộp thư không tìm cách lách qua.
-- **agy: thấy skill nhưng không tự dùng hộp thư.** Nếu chỉ bảo nó "báo cáo cho agent-a", agy sẽ dùng công cụ nhắn tin có sẵn của nó thay vì `mailbox send`. Hãy nêu rõ lệnh trong yêu cầu ("gửi bằng `mailbox send`").
+- **agy: sandbox của nó chặn việc gửi.** Lệnh `herdr agent prompt` của agy gửi tới chủ một hộp thư được viết lại thành một tin nhắn thường trong hộp thư, nhưng khi sandbox của agy đang bật, agy không chạy được cả `herdr` lẫn `mailbox send` (socket của daemon hộp thư cũng bị chặn), nên nó không gửi được gì, dù bên nhận có hộp thư hay không.
 
 <details>
 <summary>Nâng cao: cách hoạt động, trạng thái, kiểm thử</summary>

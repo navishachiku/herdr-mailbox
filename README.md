@@ -23,7 +23,7 @@ It is not Claude Code's option questions (AskUserQuestion) built again. It uses 
 
 ![Without a mailbox: a worker's report is typed into the half-written prompt and sent with it, then every report and question wakes the leader and the chat fills up](docs/media/demo-before.gif)
 
-Mailbox gives the leader a mailbox. Workers can drop in plain notes, like postcards, and also decision cards and discussion cards for you to answer. Notes go in as one batch, only when you are not typing and the leader is free; cards wait in the mailbox until you answer them with the mouse.
+Mailbox gives the leader a mailbox. Workers drop in plain notes, like postcards; the leader itself puts in the decision cards and discussion cards for you to answer, and each card says where its question came from. Notes go in as one batch, only when you are not typing and the leader is free; cards wait in the mailbox until you answer them with the mouse.
 
 **After**
 
@@ -31,7 +31,7 @@ Mailbox gives the leader a mailbox. Workers can drop in plain notes, like postca
 
 - **Your input box stays yours** — nothing is typed while you are typing, and nothing lands while the leader is still answering.
 - **Notes arrive together** — notes wait up to a minute so they can go in as one batch and wake the leader once; **Send now** skips the wait.
-- **Questions in one place** — decision questions become cards beside the leader; answer with the mouse and send every answer in one batch.
+- **Questions in one place** — decision questions become cards beside the leader, each showing where the question came from; answer with the mouse and send every answer in one batch.
 - **Any agent can write** — senders only run `mailbox send`, so Claude Code, Codex, agy and any agent that can run a shell command can write to the same mailbox.
 - **A receipt for every send** — each send returns at once with the letter's id and status.
 - **It follows the leader** — moving the pane, restarting Herdr or clearing the conversation keeps the mailbox with the same receiver.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` takes a pane id, an agent name or a mailbox id. `--recommend` is optional; a card without it shows no recommended option.
+
+A card carries its source: `--source-uid <uid>` takes the uid of the letter in that mailbox that raised the question, and the card shows that letter's sender as it signed it; when no letter did, `--source "<who or what raised it>"` takes a few words instead.
 
 Longer material goes with the letter as a file (`--attach <file>`, up to 5 per letter); the card shows a link, and clicking it opens the file in your system's default program (an image in the image viewer, a text file in its default app). Web addresses in a question open in your default browser.
 
@@ -135,7 +138,7 @@ Both keys are optional and a bad value is ignored. With no file, every letter is
 
 - **Codex: it cannot own a mailbox yet.** Codex 0.163 runs its conversations in one shared background server, so Herdr's Codex integration reports every conversation to the pane that started that server, and the Codex pane itself never gets a conversation id to bind a mailbox to. Codex can still send letters, and a note sent to a Codex pane that has no mailbox is signed and typed straight into it once. Codex's pane id in `HERDR_PANE_ID` can be wrong, so a Codex sender must name its own pane with `--from <pane id>`.
 - **agy: the skill is not installed where agy reads it.** The `skills` CLI cannot install into the folder agy loads skills from, so `npx skills add` does not reach it. This is a limit of that CLI; the mailbox does not work around it.
-- **agy: it sees the skill but does not use the mailbox on its own.** Told only to "report to agent-a", agy reaches for its built-in messaging tool instead of `mailbox send`. Name the command in the request ("send it with `mailbox send`").
+- **agy: its sandbox blocks sending.** A `herdr agent prompt` from agy to a mailbox owner is rewritten into a note in the mailbox, but while agy's sandbox is on, agy can run neither `herdr` nor `mailbox send` (the mailbox daemon's socket is blocked too), so it sends nothing, with or without a mailbox.
 
 <details>
 <summary>Advanced: how it works, state, tests</summary>

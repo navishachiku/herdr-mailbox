@@ -21,7 +21,7 @@ test('250/AC-3 the README has a Known issues section with both agy limits', () =
   assert.ok(start > 0, 'Known issues section');
   const section = readme.slice(start, readme.indexOf('<details>', start));
   assert.match(section, /skill is not installed where agy reads it/);
-  assert.match(section, /does not use the mailbox on its own/);
+  assert.match(section, /its sandbox blocks sending/);
 });
 
 test('278.1/AC-4 mailbox skill prints the fallback, daemon_unavailable and attachment text', () => {

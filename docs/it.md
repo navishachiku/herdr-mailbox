@@ -23,7 +23,7 @@ Non è una riedizione delle domande a opzioni di Claude Code (AskUserQuestion). 
 
 ![Senza mailbox: il report di un worker viene digitato nel prompt scritto a metà e inviato con lui; poi ogni report e ogni domanda svegliano il leader e la chat si riempie](./media/demo-before.gif)
 
-Mailbox dà una casella di posta al leader. Oltre ai messaggi normali, che sono come cartoline, i worker possono lasciarti schede di decisione e schede di discussione a cui rispondere. I messaggi normali entrano in un unico gruppo, solo quando non stai scrivendo e il leader è libero; le schede restano nella casella finché non rispondi con il mouse.
+Mailbox dà una casella di posta al leader. I worker lasciano messaggi normali, che sono come cartoline; le schede di decisione e di discussione a cui rispondere le mette il leader stesso, e ogni scheda indica da dove viene la sua domanda. I messaggi normali entrano in un unico gruppo, solo quando non stai scrivendo e il leader è libero; le schede restano nella casella finché non rispondi con il mouse.
 
 **Dopo**
 
@@ -31,7 +31,7 @@ Mailbox dà una casella di posta al leader. Oltre ai messaggi normali, che sono 
 
 - **La tua casella di input resta tua** — niente viene digitato mentre scrivi tu, e niente arriva mentre il leader sta ancora rispondendo.
 - **I messaggi normali arrivano insieme** — aspettano fino a un minuto per entrare in un unico gruppo e svegliare il leader una volta sola; **Invia ora** salta l'attesa.
-- **Le domande in un solo posto** — le domande di decisione diventano schede accanto al leader; rispondi con il mouse e invia tutte le risposte in un colpo solo.
+- **Le domande in un solo posto** — le domande di decisione diventano schede accanto al leader, ognuna con l'origine della domanda; rispondi con il mouse e invia tutte le risposte in un colpo solo.
 - **Qualsiasi agent può scrivere** — chi invia esegue soltanto `mailbox send`, quindi Claude Code, Codex, agy e qualsiasi agent capace di lanciare un comando di shell scrivono nella stessa casella.
 - **Una ricevuta per ogni invio** — ogni invio restituisce subito l'id della lettera e il suo stato.
 - **Segue il leader** — spostare il pane, riavviare Herdr o cancellare la conversazione lascia la casella con lo stesso destinatario.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` accetta un id di pane, un nome di agent o un id di mailbox. `--recommend` è facoltativo; una scheda senza non mostra alcuna opzione consigliata.
+
+Ogni scheda porta la sua origine: `--source-uid <uid>` prende l'uid della lettera di quella casella che ha sollevato la domanda, e la scheda mostra il mittente di quella lettera così come l'ha firmata; quando nessuna lettera l'ha sollevata, `--source "<chi o che cosa l'ha sollevata>"` prende poche parole.
 
 Il materiale più lungo viaggia con la lettera come file (`--attach <file>`, fino a 5 per lettera); la scheda mostra un link e, cliccandolo, il file si apre con il programma predefinito del sistema (un'immagine nel visualizzatore di immagini, un file di testo nella sua app predefinita). Gli indirizzi web in una domanda si aprono nel browser predefinito.
 
@@ -135,7 +138,7 @@ Entrambe le chiavi sono facoltative e un valore non valido viene ignorato. Senza
 
 - **Codex: non può ancora possedere una mailbox.** Codex 0.163 esegue le sue conversazioni in un unico server in background condiviso, quindi l'integrazione Codex di Herdr attribuisce ogni conversazione al pane che ha avviato quel server, e il pane di Codex stesso non riceve mai un id di conversazione a cui collegare una mailbox. Codex può comunque inviare lettere, e un messaggio normale inviato a un pane di Codex senza mailbox viene firmato e digitato direttamente al suo interno una sola volta. L'id di pane di Codex in `HERDR_PANE_ID` può essere sbagliato, quindi un mittente Codex deve indicare il proprio pane con `--from <pane id>`.
 - **agy: la skill non viene installata dove agy la legge.** La CLI `skills` non riesce a installare nella cartella da cui agy carica le skill, quindi `npx skills add` non la raggiunge. È un limite di quella CLI; la mailbox non lo aggira.
-- **agy: vede la skill ma non usa la mailbox di sua iniziativa.** Se gli dici solo «fai rapporto ad agent-a», agy ricorre al suo strumento di messaggistica integrato invece di `mailbox send`. Nomina il comando nella richiesta («invialo con `mailbox send`»).
+- **agy: il suo sandbox impedisce l'invio.** Un `herdr agent prompt` di agy verso il proprietario di una casella viene riscritto come nota nella casella, ma finché il sandbox di agy è attivo, agy non può eseguire né `herdr` né `mailbox send` (anche il socket del daemon della casella è bloccato), quindi non invia nulla, che il destinatario abbia una casella o no.
 
 <details>
 <summary>Avanzate: come funziona, stato, test</summary>

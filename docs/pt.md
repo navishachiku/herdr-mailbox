@@ -23,7 +23,7 @@ Não é uma reconstrução das perguntas de opções do Claude Code (AskUserQues
 
 ![Sem caixa de correio: o relatório de um worker é digitado no prompt pela metade e enviado junto com ele; depois cada relatório e cada pergunta acordam o leader e o chat vai enchendo](./media/demo-before.gif)
 
-O Mailbox dá uma caixa de correio ao leader. Além de mensagens comuns, que são como cartões-postais, os workers podem deixar cartões de decisão e cartões de discussão para você responder. As mensagens comuns entram num único lote, só quando você não está digitando e o leader está livre; os cartões ficam esperando na caixa até você responder com o mouse.
+O Mailbox dá uma caixa de correio ao leader. Os workers deixam mensagens comuns, que são como cartões-postais; os cartões de decisão e de discussão para você responder são colocados pelo próprio leader, e cada cartão diz de onde veio a sua pergunta. As mensagens comuns entram num único lote, só quando você não está digitando e o leader está livre; os cartões ficam esperando na caixa até você responder com o mouse.
 
 **Depois**
 
@@ -31,7 +31,7 @@ O Mailbox dá uma caixa de correio ao leader. Além de mensagens comuns, que sã
 
 - **Seu campo de texto continua sendo seu** — nada é digitado enquanto você digita, e nada chega enquanto o leader ainda está respondendo.
 - **As mensagens comuns chegam juntas** — elas esperam até um minuto para entrar num único lote e acordar o leader uma vez só; **Enviar já** pula a espera.
-- **Perguntas num só lugar** — as perguntas de decisão viram cartões ao lado do leader; responda com o mouse e envie todas as respostas de uma vez.
+- **Perguntas num só lugar** — as perguntas de decisão viram cartões ao lado do leader, cada um mostrando de onde veio a pergunta; responda com o mouse e envie todas as respostas de uma vez.
 - **Qualquer agente pode escrever** — quem envia só executa `mailbox send`, então Claude Code, Codex, agy e qualquer agente que consiga rodar um comando de shell escrevem na mesma caixa de correio.
 - **Um recibo para cada envio** — cada envio devolve na hora o id da carta e o status dela.
 - **Acompanha o leader** — mover o pane, reiniciar o Herdr ou limpar a conversa mantém a caixa de correio com o mesmo destinatário.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` aceita um id de pane, um nome de agente ou um id de caixa de correio. `--recommend` é opcional; um cartão sem ele não mostra nenhuma opção recomendada.
+
+Cada cartão leva a sua origem: `--source-uid <uid>` recebe o uid da carta dessa caixa que levantou a pergunta, e o cartão mostra o remetente dessa carta como ela foi assinada; quando nenhuma carta a levantou, `--source "<quem ou o que a levantou>"` recebe poucas palavras.
 
 Material mais longo vai junto com a carta como arquivo (`--attach <file>`, até 5 por carta); o cartão mostra um link e, ao clicar, o arquivo abre no programa padrão do sistema (uma imagem no visualizador de imagens, um arquivo de texto no aplicativo padrão). Endereços web numa pergunta abrem no navegador padrão.
 
@@ -135,7 +138,7 @@ As duas chaves são opcionais e um valor inválido é ignorado. Sem o arquivo, t
 
 - **Codex: ainda não pode ser dono de uma caixa de correio.** O Codex 0.163 roda as conversas num único servidor compartilhado em segundo plano, então a integração do Codex no Herdr atribui cada conversa ao pane que iniciou esse servidor, e o próprio pane do Codex nunca recebe um id de conversa ao qual vincular uma caixa de correio. O Codex ainda pode enviar cartas, e uma mensagem comum enviada a um pane do Codex sem caixa de correio é assinada e digitada direto nele uma única vez. O id de pane do Codex em `HERDR_PANE_ID` pode estar errado, então um remetente Codex precisa indicar o próprio pane com `--from <pane id>`.
 - **agy: a skill não é instalada onde o agy a lê.** A CLI `skills` não consegue instalar na pasta de onde o agy carrega as skills, então `npx skills add` não chega até lá. É uma limitação dessa CLI; a caixa de correio não a contorna.
-- **agy: vê a skill, mas não usa a caixa de correio por conta própria.** Se você só disser "reporte para agent-a", o agy recorre à ferramenta de mensagens embutida dele em vez de `mailbox send`. Cite o comando no pedido ("envie com `mailbox send`").
+- **agy: o sandbox dele impede o envio.** Um `herdr agent prompt` do agy para o dono de uma caixa de correio é reescrito como uma nota na caixa, mas enquanto o sandbox do agy está ativado, o agy não consegue executar nem `herdr` nem `mailbox send` (o socket do daemon da caixa também é bloqueado), então ele não envia nada, haja caixa ou não.
 
 <details>
 <summary>Avançado: como funciona, estado, testes</summary>

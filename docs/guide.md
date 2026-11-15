@@ -79,8 +79,8 @@ The `herdr-mailbox-send` skill tells an agent when to send a letter, which kind 
 
 ## Sending a letter
 
-- **Three kinds of letter** — a note, a decision question (2 to 4 options, each with a `--tradeoff` saying what choosing it gives up, plus a `--why-open` saying why no existing rule settles it; a recommended one is optional) and a discussion question.
-- **No double sends** — an identical letter within 30 seconds is not created again, and neither is an identical unanswered decision question from the same sender.
+- **Three kinds of letter** — a note, a decision question (2 to 4 options, each with a `--tradeoff` saying what choosing it gives up, plus a `--why-open` saying why no existing rule settles it; a recommended one is optional) and a discussion question. Workers send notes; the agent that owns the mailbox sends the questions, each with its source.
+- **No double sends** — an identical letter within 30 seconds is not created again, and neither is an identical unanswered decision question from the same sender; the same question with another source is a different card.
 - **Change your mind, until you answer** — edit, withdraw or supersede a question; once you have answered, the answer is locked in.
 
 ```sh
@@ -90,11 +90,15 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 
 mailbox send --to <address|MB-id> --type discussion \
-  --question "Split the README?" --idea "One file is enough"
+  --question "Split the README?" --idea "One file is enough" \
+  --source "the docs owner"
 ```
+
+A question carries its source, either `--source-uid <uid>` or `--source "<text>"`. `--source-uid` takes the uid of a letter in the mailbox the question is sent to; the card shows that letter's sender as it signed it when it was sent, and keeps showing it after the sending pane has closed. When no letter raised the question, `--source` takes a few words saying who or what did, and the card shows them without leading or trailing spaces, with each run of line breaks and tabs shown as one space. On the screen the source takes the place of the sender in the card's header.
 
 `--to` takes a pane id, an agent name or a mailbox id (`MB-…`). Optional on any send: `--priority high|medium|low`, `--tag <t>`, `--attach <file>` (repeat it for up to 5 files), and `--supersedes <uid>` on a question.
 

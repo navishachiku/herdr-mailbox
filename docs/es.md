@@ -23,7 +23,7 @@ No es una nueva versión de las preguntas con opciones de Claude Code (AskUserQu
 
 ![Sin buzón: el informe de un worker se escribe dentro del prompt a medio redactar y se envía con él; luego cada informe y cada pregunta despiertan al leader y el chat se llena](./media/demo-before.gif)
 
-Mailbox le da un buzón al leader. Además de mensajes normales, que son como postales, los workers pueden dejarte tarjetas de decisión y tarjetas de debate para que las respondas. Los mensajes normales entran en un solo lote, y solo cuando no estás escribiendo y el leader está libre; las tarjetas esperan en el buzón hasta que las respondas con el ratón.
+Mailbox le da un buzón al leader. Los workers dejan mensajes normales, que son como postales; las tarjetas de decisión y de debate para que las respondas las deja el propio leader, y cada tarjeta indica de dónde viene su pregunta. Los mensajes normales entran en un solo lote, y solo cuando no estás escribiendo y el leader está libre; las tarjetas esperan en el buzón hasta que las respondas con el ratón.
 
 **Después**
 
@@ -31,7 +31,7 @@ Mailbox le da un buzón al leader. Además de mensajes normales, que son como po
 
 - **Tu cuadro de entrada sigue siendo tuyo** — no se escribe nada mientras tú escribes, y nada llega mientras el leader sigue respondiendo.
 - **Los mensajes normales llegan juntos** — esperan hasta un minuto para entrar como un solo lote y despertar al leader una sola vez; **Enviar ya** se salta la espera.
-- **Las preguntas, en un solo lugar** — las preguntas de decisión se convierten en tarjetas junto al leader; responde con el ratón y envía todas las respuestas de una vez.
+- **Las preguntas, en un solo lugar** — las preguntas de decisión se convierten en tarjetas junto al leader, cada una con el origen de su pregunta; responde con el ratón y envía todas las respuestas de una vez.
 - **Cualquier agente puede escribir** — quien envía solo ejecuta `mailbox send`, así que Claude Code, Codex, agy y cualquier agente que pueda ejecutar un comando de shell escriben en el mismo buzón.
 - **Un acuse de recibo por cada envío** — cada envío devuelve al instante el id de la carta y su estado.
 - **Sigue al leader** — mover el pane, reiniciar Herdr o limpiar la conversación mantiene el buzón con el mismo destinatario.
@@ -104,10 +104,13 @@ mailbox send --to <address|MB-id> --type decision \
   --question "Install the skill too?" --option "Yes" --option "No" \
   --tradeoff "Agents can send letters; one more skill to keep updated" \
   --tradeoff "Nothing new to maintain; agents must be told by hand" \
-  --why-open "No rule says whether agents get the skill" --recommend A
+  --why-open "No rule says whether agents get the skill" --recommend A \
+  --source-uid <uid>
 ```
 
 `--to` acepta un id de pane, un nombre de agente o un id de buzón. `--recommend` es opcional; una tarjeta sin él no muestra ninguna opción recomendada.
+
+Cada tarjeta lleva su origen: `--source-uid <uid>` toma el uid de la carta de ese buzón que planteó la pregunta, y la tarjeta muestra al remitente de esa carta tal como la firmó; cuando ninguna carta la planteó, `--source "<quién o qué la planteó>"` toma unas pocas palabras.
 
 El material más largo viaja con la carta como archivo (`--attach <file>`, hasta 5 por carta); la tarjeta muestra un enlace y, al hacer clic, el archivo se abre con el programa predeterminado del sistema (una imagen en el visor de imágenes, un archivo de texto en su aplicación predeterminada). Las direcciones web de una pregunta se abren en el navegador predeterminado.
 
@@ -135,7 +138,7 @@ Ambas claves son opcionales y un valor no válido se ignora. Sin archivo, se ace
 
 - **Codex: todavía no puede ser dueño de un buzón.** Codex 0.163 ejecuta sus conversaciones en un único servidor en segundo plano compartido, así que la integración de Codex de Herdr atribuye cada conversación al pane que inició ese servidor, y el propio pane de Codex nunca recibe un id de conversación al que vincular un buzón. Codex sí puede enviar cartas, y un mensaje normal enviado a un pane de Codex sin buzón se firma y se escribe directamente en él una sola vez. El id de pane de Codex en `HERDR_PANE_ID` puede ser incorrecto, así que un remitente Codex debe indicar su propio pane con `--from <pane id>`.
 - **agy: la skill no se instala donde agy la lee.** La CLI `skills` no puede instalar en la carpeta desde la que agy carga las skills, así que `npx skills add` no llega a ella. Es una limitación de esa CLI; el buzón no la sortea.
-- **agy: ve la skill pero no usa el buzón por su cuenta.** Si solo le dices «informa a agent-a», agy recurre a su herramienta de mensajería integrada en lugar de `mailbox send`. Nombra el comando en la petición («envíalo con `mailbox send`»).
+- **agy: su sandbox impide enviar.** Un `herdr agent prompt` de agy a quien posee un buzón se reescribe como una nota en el buzón, pero mientras el sandbox de agy está activado, agy no puede ejecutar ni `herdr` ni `mailbox send` (el socket del daemon del buzón también está bloqueado), así que no envía nada, haya buzón o no.
 
 <details>
 <summary>Avanzado: cómo funciona, estado, pruebas</summary>
