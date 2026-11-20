@@ -25,7 +25,7 @@ const t = table({
     replyFor: (who, id) => `${who}: reply to ${id} whenever the message asks you to report or answer, even if the work is done; skip the reply only if the message asks for nothing and you would just confirm receipt`,
     repliesHead: n => `📬 herdr-mailbox: ${n} decision ${n === 1 ? 'reply' : 'replies'}`,
     replyItem: (serial, uid, who, pane) => `[${serial} · uid ${uid}] from ${who} (${pane})`,
-    question: 'Question', answer: 'Answer', note: 'Note', idea: 'Idea', recommend: 'Recommended', whyOpen: 'Why no rule settles it', tradeoff: 'gives up',
+    question: 'Question', answer: 'Answer', note: 'Note', idea: 'Idea', recommend: 'Recommended', whyOpen: 'Why no rule settles it', tradeoff: 'gives up', steps: 'Steps for you to do', whyNot: 'an agent cannot do it because',
     option: (letter, text) => `${letter} "${text}"`,
     picked: (letter, text) => `${letter} "${text}"`,
     accepted: (letter, text) => `P (took the recommendation: ${letter} "${text}")`,
@@ -60,7 +60,7 @@ const t = table({
     replyFor: (who, id) => `${who}：內文要求回報或回覆時，一定要寄 ${id}，做完了也要回；內文沒有任何要求、只是確認收到才不必回`,
     repliesHead: n => `📬 herdr-mailbox：決策回覆 ${n} 題`,
     replyItem: (serial, uid, who, pane) => `[${serial} · uid ${uid}] 來自 ${who}（${pane}）`,
-    question: '題目', answer: '作答', note: '補充', idea: '想法', recommend: '推薦', whyOpen: '規則為何決定不了', tradeoff: '取捨',
+    question: '題目', answer: '作答', note: '補充', idea: '想法', recommend: '推薦', whyOpen: '規則為何決定不了', tradeoff: '取捨', steps: '需要你動手的步驟', whyNot: 'agent 做不到的理由',
     option: (letter, text) => `${letter}「${text}」`,
     picked: (letter, text) => `${letter}「${text}」`,
     accepted: (letter, text) => `P（按建議：${letter}「${text}」）`,
@@ -173,6 +173,10 @@ export function forwardQuestion({ letterType, content, from, label, attachments 
     if (content.recommend) lines.push(`${t.recommend}${t.colon}${t.picked(content.recommend, sanitize(content.options['ABCD'.indexOf(content.recommend)]))}`);
   } else if (content.idea) {
     lines.push(`${t.idea}${t.colon}${sanitize(content.idea)}`);
+  }
+  if (content.steps?.length) {
+    lines.push(`${t.steps}${t.colon}`);
+    content.steps.forEach((x, i) => lines.push(`${i + 1}. ${sanitize(x.do)} (${t.whyNot}${t.colon}${sanitize(x.why)})`));
   }
   for (const a of attachments) lines.push(t.attachment(sanitize(a)));
   return lines.join('\n');

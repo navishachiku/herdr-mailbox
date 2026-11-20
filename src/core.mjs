@@ -4,11 +4,11 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { checkText } from './card-rules.mjs';
+import { checkText, checkStepText } from './card-rules.mjs';
 
 const QUESTIONS = ['decision', 'discussion'];
 const IMAGE_EXT = /\.(png|apng|jpe?g|jfif|gif|webp|bmp|svg|heic|heif|tiff?|avif)$/i;
-export const LIMITS = { question: 200, option: 80, tradeoff: 80, whyOpen: 150, idea: 300, note: 500, attach: 5 };
+export const LIMITS = { question: 200, option: 80, tradeoff: 80, whyOpen: 150, step: 100, whyNotAgent: 150, idea: 300, note: 500, attach: 5 };
 
 // Letters stored before several attachments existed keep a single `attach`; both shapes read as one list.
 export const attachmentsOf = c => c.attachments ?? (c.attach ? [c.attach] : []);
@@ -157,14 +157,35 @@ export class Mailboxes {
       if (len(f.idea) > LIMITS.idea) return tooLong('idea', LIMITS.idea);
       content.idea = String(f.idea);
     }
+    // Steps the owner must do by hand, each with the reason an agent cannot do it; only a card is for the owner to act on.
+    const steps = (f.steps ?? []).map(x => String(x).trim());
+    const whyNot = (f.whyNotAgent ?? []).map(x => String(x).trim());
+    if (steps.length || whyNot.length) {
+      if (!QUESTIONS.includes(type)) return fail('bad_steps', '--step applies to decision and discussion cards');
+      const bare = steps.findIndex((s, i) => !s || !whyNot[i]);
+      if (bare >= 0 || whyNot.length > steps.length) return fail('missing_why_not_agent', `one --why-not-agent per --step, in step order, saying why an agent cannot do that step itself (got ${whyNot.filter(Boolean).length} reasons for ${steps.length} steps${bare >= 0 ? `; step ${bare + 1} has none` : ''}); if an agent can do it, do it instead of asking the owner`);
+      const longStep = steps.findIndex(x => len(x) > LIMITS.step);
+      if (longStep >= 0) return tooLong(`step ${longStep + 1}`, LIMITS.step);
+      const longWhy = whyNot.findIndex(x => len(x) > LIMITS.whyNotAgent);
+      if (longWhy >= 0) return tooLong(`the --why-not-agent for step ${longWhy + 1}`, LIMITS.whyNotAgent);
+      content.steps = steps.map((d, i) => ({ do: d, why: whyNot[i] }));
+    }
     // Optional rules the mailbox owner set (see card-rules.mjs); with none set nothing here can refuse.
     const rules = this.cardRules();
-    if (rules.rejectPhrases || rules.maxSentenceUnits) {
-      const fields = [['text', content.text], ['question', content.question], ['idea', content.idea], ['why-open', content.whyOpen],
+    if (rules.rejectPhrases || rules.maxSentenceUnits || rules.stepPatterns) {
+      const free = [['text', content.text], ['question', content.question], ['idea', content.idea], ['why-open', content.whyOpen],
         ...(content.options ?? []).map((o, i) => [`option ${LETTERS[i]}`, o]), ...(content.tradeoffs ?? []).map((t, i) => [`tradeoff for option ${LETTERS[i]}`, t])];
-      for (const [where, text] of fields) {
+      const stepFields = (content.steps ?? []).flatMap((s, i) => [[`step ${i + 1}`, s.do], [`reason for step ${i + 1}`, s.why]]);
+      for (const [where, text] of [...free, ...stepFields]) {
         const bad = text && checkText(text, rules, where);
         if (bad) return fail(bad.error, bad.message);
+      }
+      // Free text only: a step in --step is where it belongs.
+      if (QUESTIONS.includes(type)) {
+        for (const [where, text] of free) {
+          const bad = text && checkStepText(text, rules, where);
+          if (bad) return fail(bad.error, bad.message);
+        }
       }
     }
     if (attaches.length) content.attachments = attaches.map(a => ({ name: a.name, sha256: a.sha256 }));
@@ -199,7 +220,7 @@ export class Mailboxes {
   }
 
   keyOf(c, withSender) {
-    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.tradeoffs ?? null, c.whyOpen ?? null, c.recommend ?? null, c.idea ?? null, attachmentsOf(c).map(a => a.sha256).join() || null, c.supersedes ?? null]);
+    return JSON.stringify([withSender, c.type, c.text ?? null, c.question ?? null, c.options ?? null, c.tradeoffs ?? null, c.whyOpen ?? null, c.steps ?? null, c.recommend ?? null, c.idea ?? null, attachmentsOf(c).map(a => a.sha256).join() || null, c.supersedes ?? null]);
   }
 
   // The letters this sender still has open in one mailbox: queued notes and pending questions.
@@ -347,10 +368,12 @@ export class Mailboxes {
     const old = l.content;
     // New option texts with the old trade-offs would put a cost under an option it was not written for.
     if (l.type === 'decision' && req.options && !req.tradeoffs) return fail('missing_tradeoff', 'when you change the options, send --tradeoff again, one per option in the new order');
+    if (req.steps && !req.whyNotAgent) return fail('missing_why_not_agent', 'when you change the steps, send --why-not-agent again, one per step in the new order');
     const merged = {
       question: req.question ?? old.question, options: req.options ?? old.options, recommend: req.recommend ?? old.recommend,
       tradeoffs: req.tradeoffs ?? old.tradeoffs, whyOpen: req.whyOpen ?? old.whyOpen,
       idea: req.idea ?? old.idea, priority: req.priority ?? l.priority,
+      steps: req.steps ?? old.steps?.map(x => x.do), whyNotAgent: req.whyNotAgent ?? old.steps?.map(x => x.why),
     };
     const norm = this.normalize(l.type, merged, att.attaches.length ? att.attaches : attachmentsOf(old));
     if (!norm.ok) return norm;

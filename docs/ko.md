@@ -126,13 +126,14 @@ mailbox send --to <address|MB-id> --type decision \
 원하지 않는 문구가 들어 있거나 문장이 너무 긴 편지를 거부하려면, Herdr 플러그인 상태 디렉터리의 `prefs.json` 옆에 `card-rules.json`을 만드세요(정확한 경로는 `mailbox --help`로 확인):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: 본문에 이 문구 중 하나라도 들어 있으면(대소문자 구분 없음) 거부되고, 보낸 쪽에 어느 문구인지 알려 줍니다.
 - `maxSentenceUnits`: 이보다 긴 문장이 있는 편지는 거부됩니다. 한자는 1자에 1, 연속된 영문자나 숫자 한 덩어리도 1로 세며, 문장은 `。！？.!?` 또는 줄바꿈에서 끝납니다.
+- `stepPatterns`: 정규식(대소문자 구분 없음). 결정 카드나 토론 카드의 자유 텍스트에 글머리표나 번호가 붙은 줄(기호를 뗀 부분)이 이 중 하나와 일치하면 거부되며, 보낸 쪽에는 직접 해야 하는 단계를 `--step`에 넣고 각 단계마다 agent가 할 수 없는 이유를 `--why-not-agent`로 붙이라고 알려 줍니다. 이 키가 없으면 흔한 동작 동사(open, press, click, run, type과 그에 해당하는 중국어)의 내장 목록을 씁니다. `[]`로 두면 검사를 끕니다.
 
-두 키 모두 생략할 수 있고 잘못된 값은 무시됩니다. 파일이 없으면 모든 편지를 받습니다. 검사하는 텍스트는 메모, 질문, 선택지, 트레이드오프, why-open, idea이며 첨부 파일은 읽지 않습니다.
+모든 키는 생략할 수 있고 잘못된 값은 무시됩니다. 파일이 없으면 문구·길이 규칙은 없고, 단계 검사는 내장 목록을 씁니다. 검사하는 텍스트는 메모, 질문, 선택지, 트레이드오프, why-open, idea, 단계와 그 이유이며 첨부 파일은 읽지 않습니다.
 
 ## 알려진 문제
 

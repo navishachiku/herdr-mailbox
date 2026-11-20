@@ -126,13 +126,14 @@ Longer material goes with the letter as a file (`--attach <file>`, up to 5 per l
 To refuse letters that hold a phrase you do not want, or a sentence that is too long, create `card-rules.json` in Herdr's plugin state directory, next to `prefs.json` (`mailbox --help` prints the exact path):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: a letter whose text holds any of these phrases (case-insensitive) is refused, and the sender is told which one.
 - `maxSentenceUnits`: a letter with a longer sentence is refused. A Chinese character counts 1 and so does a run of letters or digits; sentences end at `。！？.!?` or a line break.
+- `stepPatterns`: regular expressions (case-insensitive). A decision or discussion card is refused when a bulleted or numbered line in its free text matches one (tested without the marker); the sender is told to put each step you must do by hand in `--step`, with a `--why-not-agent` saying why an agent cannot do it. Without this key a built-in list of common action verbs (such as open, press, click, run, type, and their Chinese equivalents) is used; `[]` turns the check off.
 
-Both keys are optional and a bad value is ignored. With no file, every letter is accepted. The text checked is the note, question, options, trade-offs, why-open and idea; attachments are not read.
+All keys are optional and a bad value is ignored. With no file there is no phrase or length rule, and the step check uses the built-in list. The text checked is the note, question, options, trade-offs, why-open, idea, steps and reasons; attachments are not read.
 
 ## Known issues
 
