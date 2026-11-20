@@ -126,13 +126,14 @@ El material más largo viaja con la carta como archivo (`--attach <file>`, hasta
 Para rechazar cartas que contengan una frase no deseada o una oración demasiado larga, crea `card-rules.json` en el directorio de estado de plugins de Herdr, junto a `prefs.json` (`mailbox --help` muestra la ruta exacta):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: se rechaza una carta cuyo texto contenga alguna de estas frases (sin distinguir mayúsculas), y se dice al remitente cuál.
 - `maxSentenceUnits`: se rechaza una carta con una oración más larga. Un carácter chino cuenta 1 y también cada serie de letras o dígitos; las oraciones terminan en `。！？.!?` o en un salto de línea.
+- `stepPatterns`: expresiones regulares (sin distinguir mayúsculas). Una tarjeta de decisión o de debate se rechaza cuando una línea con viñeta o número de su texto libre (sin el marcador) coincide con alguna; se le dice al remitente que ponga cada paso que usted debe hacer a mano en `--step`, con un `--why-not-agent` que explique por qué un agente no puede hacerlo. Sin esta clave se usa una lista integrada de verbos de acción comunes (como open, press, click, run, type y sus equivalentes en chino); `[]` desactiva la comprobación.
 
-Ambas claves son opcionales y un valor no válido se ignora. Sin archivo, se aceptan todas las cartas. Se revisa el texto de la nota, la pregunta, las opciones, las contrapartidas, why-open e idea; los adjuntos no se leen.
+Todas las claves son opcionales y un valor no válido se ignora. Sin archivo no hay regla de frases ni de longitud, y la comprobación de pasos usa la lista integrada. Se revisa el texto de la nota, la pregunta, las opciones, las contrapartidas, why-open, idea, los pasos y sus motivos; los adjuntos no se leen.
 
 ## Problemas conocidos
 

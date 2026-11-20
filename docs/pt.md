@@ -126,13 +126,14 @@ Material mais longo vai junto com a carta como arquivo (`--attach <file>`, até 
 Para recusar cartas que contenham uma frase indesejada ou uma frase longa demais, crie `card-rules.json` no diretório de estado de plugins do Herdr, ao lado de `prefs.json` (`mailbox --help` mostra o caminho exato):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: uma carta cujo texto contenha alguma destas expressões (sem diferenciar maiúsculas) é recusada, e o remetente é informado de qual.
 - `maxSentenceUnits`: uma carta com uma frase mais longa é recusada. Um caractere chinês conta 1, assim como cada sequência de letras ou dígitos; as frases terminam em `。！？.!?` ou em uma quebra de linha.
+- `stepPatterns`: expressões regulares (sem diferenciar maiúsculas). Um cartão de decisão ou de discussão é recusado quando uma linha com marcador ou número no texto livre (sem o marcador) corresponde a alguma; o remetente é orientado a pôr cada passo que você deve fazer à mão em `--step`, com um `--why-not-agent` explicando por que um agente não pode fazê-lo. Sem esta chave, usa-se uma lista embutida de verbos de ação comuns (como open, press, click, run, type e seus equivalentes em chinês); `[]` desliga a verificação.
 
-As duas chaves são opcionais e um valor inválido é ignorado. Sem o arquivo, todas as cartas são aceitas. O texto verificado é a nota, a pergunta, as opções, as contrapartidas, why-open e idea; os anexos não são lidos.
+Todas as chaves são opcionais e um valor inválido é ignorado. Sem o arquivo não há regra de expressões nem de tamanho, e a verificação de passos usa a lista embutida. O texto verificado é a nota, a pergunta, as opções, as contrapartidas, why-open, idea, os passos e seus motivos; os anexos não são lidos.
 
 ## Problemas conhecidos
 

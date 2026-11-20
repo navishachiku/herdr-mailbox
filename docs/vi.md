@@ -126,13 +126,14 @@ Với `--wait [--timeout <ms>]`, lệnh gửi chỉ trả về sau khi leader đ
 Để từ chối thư chứa cụm từ không mong muốn hoặc câu quá dài, hãy tạo `card-rules.json` trong thư mục trạng thái plugin của Herdr, cạnh `prefs.json` (`mailbox --help` in ra đường dẫn chính xác):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: thư có văn bản chứa bất kỳ cụm nào trong số này (không phân biệt hoa thường) sẽ bị từ chối, và người gửi được báo là cụm nào.
 - `maxSentenceUnits`: thư có câu dài hơn mức này sẽ bị từ chối. Một chữ Hán tính 1, một chuỗi liên tục chữ cái hoặc chữ số cũng tính 1; câu kết thúc ở `。！？.!?` hoặc xuống dòng.
+- `stepPatterns`: biểu thức chính quy (không phân biệt hoa thường). Thẻ quyết định hoặc thẻ thảo luận bị từ chối khi một dòng có gạch đầu dòng hoặc đánh số trong văn bản tự do của nó (bỏ ký hiệu đầu dòng) khớp với một mẫu; người gửi được báo là phải đưa mỗi bước bạn cần tự làm vào `--step`, kèm `--why-not-agent` nêu lý do agent không làm được. Không có khóa này thì dùng danh sách có sẵn các động từ hành động thường gặp (như open, press, click, run, type và các từ tiếng Trung tương ứng); `[]` tắt việc kiểm tra.
 
-Cả hai khóa đều tùy chọn và giá trị không hợp lệ bị bỏ qua. Không có tệp thì mọi thư đều được nhận. Văn bản được kiểm tra gồm ghi chú, câu hỏi, các lựa chọn, đánh đổi, why-open và idea; tệp đính kèm không được đọc.
+Mọi khóa đều tùy chọn và giá trị không hợp lệ bị bỏ qua. Không có tệp thì không có quy tắc về cụm từ hay độ dài, và việc kiểm tra bước dùng danh sách có sẵn. Văn bản được kiểm tra gồm ghi chú, câu hỏi, các lựa chọn, đánh đổi, why-open, idea, các bước và lý do của từng bước; tệp đính kèm không được đọc.
 
 ## Vấn đề đã biết
 
