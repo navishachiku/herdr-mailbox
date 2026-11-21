@@ -71,6 +71,10 @@ To replace a question, send the new one with `--supersedes <uid>`. Once the rece
 
 For a note, add `--wait [--timeout <ms>]` to block until the letter is delivered and the receiver has finished the turn that follows. `--to` must be an agent name or pane address, not an `MB-` id. Exit 3 means the letter was not delivered within 120 seconds (it is queued and will arrive); exit 4 means it was delivered but the receiver did not finish within `--timeout`. In both cases do not resend; `waitError` in the receipt says the same.
 
+## When the user is away (owner of a mailbox only)
+
+If you own a mailbox and take over for a user who is away, run `mailbox away on` when you start and `mailbox away off` when you stop. While away, the cards you send are kept without a notification; `away off` raises one notification for the cards still waiting. A sender that is not the owner has nothing to do here.
+
 ## Gotchas
 
 - Do not send a reply that has nothing new in it, such as one that only says you received a letter. The line at the end of a delivered letter says the same: reply only when you need to answer.

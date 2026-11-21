@@ -95,6 +95,8 @@ Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi th
 
 **Làm mới hộp thư**: muốn bắt đầu lại với id mới thay vì mang theo lịch sử dài, hãy chạy `mailbox renew` trong pane của người nhận, hoặc bấm **Làm mới** ở đầu màn hình. Pane nhận một id hộp thư mới và màn hình chuyển sang hộp đó. Tin nhắn và câu hỏi chưa gửi, kể cả bản nháp, được chuyển sang; lịch sử các lô ở lại với id cũ. Thư gửi tới id cũ được chuyển tiếp vĩnh viễn tới hộp thư mới nhất, và biên nhận của người gửi cho biết id đã đổi.
 
+**Khi bạn vắng mặt**: người nhận chạy `mailbox away on` trong pane của mình; thẻ vẫn vào nhưng không có thông báo. `mailbox away off` gửi một thông báo duy nhất cho những thẻ đã vào trong lúc đó và vẫn đang chờ.
+
 ## Gửi thư
 
 ```sh

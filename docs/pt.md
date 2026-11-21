@@ -95,6 +95,8 @@ Quando a tela não está aberta, uma nova pergunta de decisão ou de discussão 
 
 **Renovar uma caixa de correio**: para recomeçar com um id novo em vez de arrastar um histórico longo, execute `mailbox renew` no pane do receptor ou clique em **Renovar** no topo da tela. O pane recebe um id de caixa novo e a tela passa a mostrá-la. As mensagens e perguntas ainda não enviadas, rascunhos incluídos, são levadas; o histórico de lotes fica com o id antigo. As cartas enviadas a um id antigo são reencaminhadas para sempre à caixa mais recente, e o recibo do remetente avisa que o id mudou.
 
+**Enquanto você está fora**: o receptor executa `mailbox away on` no seu pane; os cartões continuam chegando, mas não geram notificação. `mailbox away off` gera uma única notificação para os cartões que chegaram nesse meio-tempo e ainda esperam.
+
 ## Enviar uma carta
 
 ```sh

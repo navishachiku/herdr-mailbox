@@ -11,7 +11,7 @@ import { resolvePane } from './signature.mjs';
 import { senderPane } from './sender.mjs';
 import { CARD_RULES_HELP } from './card-rules.mjs';
 
-const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'renew', 'open', 'close', 'deliver', 'skill'];
+const COMMANDS = ['send', 'status', 'sent', 'edit', 'withdraw', 'claim', 'release', 'renew', 'open', 'close', 'deliver', 'away', 'skill'];
 const dir = new URL('./cli/', import.meta.url);
 
 const commands = Object.create(null);

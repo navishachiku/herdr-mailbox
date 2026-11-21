@@ -95,6 +95,8 @@ Si la pantalla no está abierta, una nueva pregunta de decisión o de debate mue
 
 **Renovar un buzón**: para empezar de cero con un id nuevo en lugar de arrastrar un historial largo, ejecuta `mailbox renew` en el pane del receptor o pulsa **Renovar** en la parte superior de la pantalla. El pane recibe un id de buzón nuevo y la pantalla pasa a mostrarlo. Los mensajes y preguntas aún sin enviar, borradores incluidos, se trasladan; el historial de lotes se queda con el id anterior. Las cartas enviadas a un id antiguo se reenvían para siempre al buzón más reciente, y el recibo del remitente avisa de que el id cambió.
 
+**Mientras estás fuera**: el receptor ejecuta `mailbox away on` en su pane; las tarjetas siguen llegando pero no generan ninguna notificación. `mailbox away off` genera una sola notificación por las tarjetas que llegaron entretanto y siguen esperando.
+
 ## Enviar una carta
 
 ```sh

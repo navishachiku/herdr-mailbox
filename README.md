@@ -95,6 +95,8 @@ When the screen is not open, a new decision or discussion question raises a Herd
 
 **Renewing a mailbox**: to start over with a fresh id instead of carrying a long history, run `mailbox renew` in the receiver pane, or click **Renew** at the top of the screen. The pane gets a new mailbox id and the screen switches to it. Messages and questions not yet sent, drafts included, move over; the batch history stays with the old id. Letters sent to an old id are forwarded to the newest mailbox for good, and the sender's receipt says the id changed.
 
+**While you are away**: the receiver runs `mailbox away on` in its pane; cards still come in but raise no notification. `mailbox away off` raises one notification for the cards that came in meanwhile and are still waiting.
+
 ## Sending a letter
 
 ```sh

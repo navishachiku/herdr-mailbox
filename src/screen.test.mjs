@@ -2777,6 +2777,25 @@ test('266/AC-2 a decision or discussion sent while the mailbox screen is open ra
   } finally { w.cleanup(); }
 });
 
+test('while the receiver is away cards are accepted without a notification, and coming back raises one notification for the cards that waited', async () => {
+  const w = world();
+  try {
+    await ready(w);
+    assert.equal(w.cli('away', 'on').code, 0);
+    assert.equal((await decision(w, { question: 'Pick a layout?' })).ok, true);
+    assert.equal((await discussion(w, { question: 'Split the readme?' })).ok, true);
+    await sleep(300);
+    assert.equal(notifications(w).length, 0, 'no notification while away');
+    const view = await w.op('view', { mailbox: (await w.op('screen-find', { pane: RECV })).mailbox });
+    assert.equal(view.questions.length, 2, 'both cards were taken in');
+    assert.equal(w.cli('away', 'off').code, 0);
+    await until(() => notifications(w).length === 1);
+    assert.match(notifications(w)[0].argv.join(' '), /2/, 'one notification that counts the cards');
+    assert.equal((await decision(w, { question: 'Install it later?' })).ok, true);
+    await until(() => notifications(w).length === 2);
+  } finally { w.cleanup(); }
+});
+
 test('262/AC-5 an older background program that sends no path is reported, and nothing is opened', async () => {
   const opened = [];
   const res = await perform({ type: 'attachment', uid: 'u', index: 0 }, { call: async () => ({ ok: true, name: 'a.md', text: 'hi' }), open: async t => opened.push(t), generation: 1 });

@@ -95,6 +95,8 @@ Ist der Bildschirm nicht geöffnet, löst eine neue Entscheidungs- oder Diskussi
 
 **Einen Briefkasten erneuern**: Wer mit einer frischen Kennung neu anfangen will, statt eine lange Historie mitzuschleppen, führt im Empfänger-Pane `mailbox renew` aus oder klickt oben im Bildschirm auf **Erneuern**. Das Pane bekommt eine neue Briefkasten-Kennung, und der Bildschirm wechselt darauf. Noch nicht gesendete Nachrichten und Fragen samt Entwürfen ziehen mit um; der Verlauf der Sendungen bleibt bei der alten Kennung. Briefe an eine alte Kennung werden dauerhaft an den neuesten Briefkasten weitergeleitet, und die Quittung des Absenders sagt, dass sich die Kennung geändert hat.
 
+**Während du weg bist**: Der Empfänger führt in seinem Pane `mailbox away on` aus; Karten kommen weiter an, lösen aber keine Benachrichtigung aus. `mailbox away off` löst eine einzige Benachrichtigung für die Karten aus, die inzwischen eingegangen sind und noch warten.
+
 ## Einen Brief senden
 
 ```sh

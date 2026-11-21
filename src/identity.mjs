@@ -29,9 +29,9 @@ const text = table({
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Writes that only the receiver (through the CLI) or the user (through the screen) may perform.
-const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release', 'renew']);
+const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release', 'renew', 'away']);
 // Of those, the receiver agent may run only these; answering and sending for the user is the screen's job.
-const AGENT_OPS = new Set(['close', 'deliver', 'release', 'renew']);
+const AGENT_OPS = new Set(['close', 'deliver', 'release', 'renew', 'away']);
 const KEEP_REGISTRATIONS = 5;
 
 let api;
@@ -252,6 +252,7 @@ function renew(req) {
   api.state.mailboxes[id] = {
     id, counter: box.counter, owner: { ...box.owner }, state: 'connected', disconnect: null, paused: null, screen: box.screen ?? { open: false },
     ...(box.deliverNow ? { deliverNow: true } : {}),
+    ...(box.away ? { away: box.away } : {}),
   };
   let moved = 0;
   for (const l of Object.values(api.state.letters)) {

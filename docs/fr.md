@@ -95,6 +95,8 @@ Quand l'écran n'est pas ouvert, une nouvelle question de décision ou de discus
 
 **Renouveler une boîte** : pour repartir de zéro avec un nouvel identifiant plutôt que de traîner un long historique, lance `mailbox renew` dans le pane du destinataire, ou clique sur **Renouveler** en haut de l'écran. Le pane reçoit un nouvel identifiant de boîte et l'écran passe dessus. Les messages et questions pas encore envoyés, brouillons compris, suivent ; l'historique des lots reste avec l'ancien identifiant. Les lettres adressées à un ancien identifiant sont redirigées pour toujours vers la boîte la plus récente, et l'accusé de l'expéditeur indique que l'identifiant a changé.
 
+**Pendant ton absence** : le destinataire lance `mailbox away on` dans son pane ; les cartes arrivent toujours mais ne déclenchent aucune notification. `mailbox away off` déclenche une seule notification pour les cartes arrivées entre-temps et toujours en attente.
+
 ## Envoyer un courrier
 
 ```sh

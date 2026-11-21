@@ -340,10 +340,29 @@ async function notifyNewQuestion({ letter }) {
   if (letter.type === 'note') return;
   const box = api.state.mailboxes[letter.mailbox];
   const panes = await panesOrNull();
-  if (!box || !panes || screenState(box, panes) === 'alive') return;
+  if (!box || box.away || !panes || screenState(box, panes) === 'alive') return;
   const text = String(letter.content.question ?? '').replace(/\s+/g, ' ').trim();
   const summary = text.length > SUMMARY_CHARS ? `${text.slice(0, SUMMARY_CHARS)}…` : text;
   await herdr.notify('Mailbox', `${letter.serial}: ${summary}`).catch(() => {});
+}
+
+// The receiver says the user is away: cards still come in, but raise no notification. When the user is back, one
+// notification counts the cards that came in meanwhile and are still waiting.
+async function away(req) {
+  const box = api.state.mailboxes[req.mailbox];
+  if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
+  if (req.on) {
+    box.away ??= { since: api.now() };
+    api.save();
+    return { ok: true, mailbox: box.id, away: true };
+  }
+  const since = box.away?.since;
+  delete box.away;
+  api.save();
+  const waiting = since === undefined ? 0 : Object.values(api.state.letters)
+    .filter(l => l.mailbox === box.id && l.type !== 'note' && l.status === 'pending' && l.createdAt >= since).length;
+  if (waiting) await herdr.notify('Mailbox', `${waiting} card${waiting === 1 ? '' : 's'} came in while you were away`).catch(() => {});
+  return { ok: true, mailbox: box.id, away: false, waiting };
 }
 
 export default function registerScreen(a) {
@@ -358,6 +377,7 @@ export default function registerScreen(a) {
   api.op('screen-open', screenOpen, { mutates: true });
   api.op('screen-ensure', screenEnsure, { mutates: true });
   api.op('close', close, { mutates: true });
+  api.op('away', away, { mutates: true });
   api.op('screen-reload', screenReload, { mutates: true });
   api.op('screen-ready', screenReady, { mutates: true });
   api.tick('screen-ready-timeout', expireReloads, Math.max(20, Math.min(1000, Math.floor(timings.screenReadyMs / 2))));

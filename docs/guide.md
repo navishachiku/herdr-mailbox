@@ -154,6 +154,10 @@ mailbox claim MB-xxxx
 
 Any other receiver can claim a disconnected mailbox. A mailbox that is still connected refuses with `already_claimed`. After a claim, the answers you had given on the screen ask for one more confirmation (**Confirm answer**) before they can be sent, and senders get a notice on their next receipt that the receiver changed.
 
+### While the user is away
+
+The receiver runs `mailbox away on` in its pane when the user steps away. Cards still come in and wait on the screen, but a new decision or discussion question raises no notification. `mailbox away off` raises one notification that counts the cards that came in meanwhile and are still waiting. The away mark stays on the mailbox, across a daemon restart and `mailbox renew`, until `away off` clears it.
+
 ### Renewing a mailbox
 
 A mailbox id is tied to its pane, and a mailbox only grows: every batch stays in its record. To start over with a fresh id, the receiver runs `mailbox renew` in its pane, or you click **Renew** at the top of the screen and answer Yes. The pane gets a new mailbox id and the open screen switches to it.
