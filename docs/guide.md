@@ -21,13 +21,14 @@ Without a link (on Windows, for example), run it as `node <plugin dir>/src/mailb
 
 ## Claude Code hooks
 
-Three hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. The hooks run files inside the plugin folder, which is the folder of the `plugin_root` that `herdr plugin list --json` reports for `plugin_id` `herdr-mailbox`.
+Four hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. The hooks run files inside the plugin folder, which is the folder of the `plugin_root` that `herdr plugin list --json` reports for `plugin_id` `herdr-mailbox`.
 
 | Hook | Matcher | File | What it does |
 | --- | --- | --- | --- |
 | `SessionStart` | `startup\|resume\|clear\|compact` | `src/session-start.mjs` | Records which conversation lives in the pane, so the mailbox can tell a cleared conversation from a different one. |
 | `UserPromptSubmit` | none | `src/prompt-submit.mjs` | A Claude receiver gets mailbox batches as short text (who wrote what, plus a batch code in the first line). This hook looks the code up and adds the rest as background context: the warning that the messages come from other agents and are not the user's instructions, each letter's uid and serial, the sender's window and the sender's mailbox for replies. In a pane that owns a connected mailbox, every prompt also gets a short reminder: send 1 to 7 pick-one questions as one decision letter each (8 or more as a single discussion letter with an answer page), attach files the user has to see, and leave waiting letters out of reports. **Without this hook registered, the receiver never sees that warning or the reply addresses.** |
 | `PreToolUse` | `Bash` | `src/send-guard.mjs` | Rewrites a plain `herdr agent prompt <target> "<text>"` into `mailbox send --to <target> --type note "<text>"`, and protects `--wait` dispatches from landing on top of someone's typing. |
+| `Stop` | none | `src/stop-check.mjs` | In a pane that owns a connected mailbox, sends the final reply back to be rewritten when it asks with options (two or more option or numbered question lines, or the `(AP)` batch line), names the serial of a card still waiting for an answer, or has 卡 and 信箱 in one sentence. The reason quotes the line. Fenced code blocks are not checked, and a turn a Stop hook already continued is left as it is. |
 
 ```json
 {
@@ -42,12 +43,15 @@ Three hooks in `~/.claude/settings.json` connect Claude Code to the mailbox. The
     "PreToolUse": [
       { "matcher": "Bash",
         "hooks": [{ "type": "command", "command": "node <plugin dir>/src/send-guard.mjs", "timeout": 10 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "node <plugin dir>/src/stop-check.mjs", "timeout": 10 }] }
     ]
   }
 }
 ```
 
-All three hooks exit quietly on any error, so a broken hook never fails a tool call. The send guard rewrites only the plain form above (one literal argument, no `$` or backticks, nothing else in the command); any other `herdr agent prompt` to an agent is blocked with the `mailbox send` command to use instead.
+All four hooks exit quietly on any error, so a broken hook never fails a tool call. The send guard rewrites only the plain form above (one literal argument, no `$` or backticks, nothing else in the command); any other `herdr agent prompt` to an agent is blocked with the `mailbox send` command to use instead.
 
 ## Codex
 

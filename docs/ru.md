@@ -155,7 +155,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Пакетная доставка, проверка поля ввода, подтверждение, текст пачки. |
 | `src/screen/` | Экран почтового ящика, настройки показываются прямо в нём; вложения и ссылки передаются программам системы по умолчанию. |
 | `src/open.mjs`, `src/on-focus.mjs` | Действие `prefix+shift+m` и повторное открытие экрана после перезапуска Herdr. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Хуки Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Хуки Claude Code. |
 
 ### Тесты
 

@@ -155,7 +155,7 @@ Um pequeno daemon é dono do arquivo de estado e trata um pedido por vez. A CLI 
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Agrupamento em lotes, verificação do campo de texto, confirmação, texto do lote. |
 | `src/screen/` | A tela da caixa de correio, com as configurações exibidas dentro dela; anexos e links vão para os programas padrão do sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | A ação `prefix+shift+m` e a reabertura da tela depois de reiniciar o Herdr. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Os hooks do Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Os hooks do Claude Code. |
 
 ### Testes
 

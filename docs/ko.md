@@ -155,7 +155,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | 묶음 전달, 입력창 확인, 도착 확인, 묶음 본문. |
 | `src/screen/` | 우편함 화면. 설정은 화면 안에 표시하고, 첨부와 링크는 시스템 기본 프로그램으로 넘깁니다. |
 | `src/open.mjs`, `src/on-focus.mjs` | `prefix+shift+m` 동작, Herdr 재시작 후 화면 다시 열기. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Claude Code hooks. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Claude Code hooks. |
 
 ### 테스트
 

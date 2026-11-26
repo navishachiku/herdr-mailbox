@@ -155,7 +155,7 @@ Un petit démon possède le fichier d'état et traite une requête à la fois. L
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Regroupement en lots, vérification de la zone de saisie, confirmation, texte du lot. |
 | `src/screen/` | L'écran de la boîte, avec les réglages affichés à l'intérieur ; les pièces jointes et les liens vont aux programmes par défaut du système. |
 | `src/open.mjs`, `src/on-focus.mjs` | L'action `prefix+shift+m` et la réouverture de l'écran après un redémarrage de Herdr. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Les hooks de Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Les hooks de Claude Code. |
 
 ### Tests
 

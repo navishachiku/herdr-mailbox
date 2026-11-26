@@ -34,7 +34,7 @@ const snapshot = dir => {
   return out;
 };
 const commands = settings => Object.values(settings.hooks).flat().flatMap(g => g.hooks.map(h => h.command));
-const ours = c => /(session-start|prompt-submit|send-guard)\.mjs/.test(c);
+const ours = c => /(session-start|prompt-submit|send-guard|stop-check)\.mjs/.test(c);
 
 test('228/AC-1 install puts mailbox on the PATH of a new shell', { skip: !posix }, () => {
   const home = newHome();
@@ -60,9 +60,9 @@ test('228/AC-2 AC-4 install keeps existing hooks, adds ours once, and rerunning 
   const once = snapshot(home);
   const settings = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(settings.model, 'x');
-  assert.deepEqual(settings.hooks.Stop, mine.hooks.Stop);
+  assert.deepEqual(settings.hooks.Stop[0], mine.hooks.Stop[0]);
   assert.equal(settings.hooks.SessionStart[0].hooks[0].command, 'echo mine');
-  assert.equal(commands(settings).filter(ours).length, 3);
+  assert.equal(commands(settings).filter(ours).length, 4);
   assert.ok(fs.readdirSync(path.dirname(file)).some(f => f.startsWith('settings.json.bak-')));
   assert.equal(run(home, 'install').status, 0);
   assert.deepEqual(snapshot(home), once);
@@ -197,7 +197,7 @@ test('249/AC-3 regression: a home set up by the old install is switched to the s
   const after = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.equal(after.hooks.SessionStart[0].matcher, 'startup|resume|clear|compact|fork', 'the opening-event matcher gains the fork source');
   const cmds = commands(after);
-  assert.equal(cmds.length, 3);
+  assert.equal(cmds.length, 4);
   assert.ok(cmds.every(c => c.includes('.herdr-mailbox') && c.includes('--hook')));
 });
 
