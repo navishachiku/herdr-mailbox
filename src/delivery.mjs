@@ -9,7 +9,8 @@ import * as herdr from './herdr.mjs';
 import { signatureFor, withSignature } from './signature.mjs';
 import { classify, pastedLines, typedText } from './input-box.mjs';
 import { canDeliver } from './identity.mjs';
-import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, mailboxReminder, voidedContext, notesBatch, repliesBatch } from './format.mjs';
+import { conciseNotes, conciseReplies, fileNotice, forwardQuestion, directNote, hookContext, mailboxReminder, replyCheckReason, voidedContext, notesBatch, repliesBatch } from './format.mjs';
+import { offendingLine } from './reply-check.mjs';
 import { findByConversation, landed, sizeOf } from './transcript.mjs';
 import { ATTACH_DIR, STATE_DIR } from './paths.mjs';
 import { timings, mergeMs } from './timings.mjs';
@@ -385,13 +386,24 @@ async function batchByMarker(req, ctx) {
   return { ok: true, context: hookContext({ batch, items, voided }) };
 }
 
+const openMailboxOf = pane => pane && Object.values(api.state.mailboxes).find(b => b.state === 'connected' && b.owner?.pane === pane);
+
+// The Stop hook asks whether a final reply may stand: only a pane that owns a connected mailbox is held to it.
+function replyCheck(req, ctx) {
+  const mine = openMailboxOf(ctx.caller?.pane);
+  if (!mine) return { ok: true };
+  const waiting = Object.values(api.state.letters).filter(l => l.mailbox === mine.id && l.status === 'pending' && !api.answered(l)).map(l => l.serial);
+  const line = offendingLine(req.reply ?? '', waiting);
+  return line === null ? { ok: true } : { ok: true, reason: replyCheckReason(mine.id, line.trim()) };
+}
+
 // Every prompt typed into a pane goes through the hook: add the reminder when the pane owns a connected mailbox,
 // after the batch background when the prompt is a batch. A pane without a mailbox gets nothing.
 async function promptContext(req, ctx) {
   const parts = [];
   if (req.marker) { const batch = await batchByMarker(req, ctx); if (batch.ok) parts.push(batch.context); }
   const pane = ctx.caller?.pane;
-  const mine = pane && Object.values(api.state.mailboxes).find(b => b.state === 'connected' && b.owner?.pane === pane);
+  const mine = openMailboxOf(pane);
   if (mine) {
     // Voids no batch has carried yet ride on this prompt; marked at once so no other channel repeats them.
     const voids = unannouncedVoids(mine.id);
@@ -422,6 +434,7 @@ export default function registerDelivery(a) {
   api.op('delivery-state', deliveryState);
   api.op('batch-by-marker', batchByMarker);
   api.op('prompt-context', promptContext);
+  api.op('reply-check', replyCheck);
   // A restart in the middle of a send leaves the outcome unknown; it is never sent again by itself.
   api.on('start', () => {
     let changed = false;

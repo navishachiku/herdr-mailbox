@@ -155,7 +155,7 @@ daemon ตัวเล็กหนึ่งตัวดูแลไฟล์ส�
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | การส่งมอบเป็นชุด การตรวจช่องพิมพ์ การยืนยันว่าส่งถึง ข้อความของแต่ละชุด |
 | `src/screen/` | หน้าจอกล่องจดหมาย การตั้งค่าแสดงอยู่ในหน้าจอนี้ ส่วนไฟล์แนบและลิงก์จะส่งให้โปรแกรมเริ่มต้นของระบบ |
 | `src/open.mjs`, `src/on-focus.mjs` | การกระทำของ `prefix+shift+m` และการเปิดหน้าจอกล่องจดหมายใหม่หลัง Herdr รีสตาร์ท |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | hooks ของ Claude Code |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | hooks ของ Claude Code |
 
 ### การทดสอบ
 

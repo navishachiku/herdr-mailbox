@@ -155,7 +155,7 @@ Un piccolo daemon possiede il file di stato e gestisce una richiesta alla volta.
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Raggruppamento in lotti, controllo della casella di input, conferma, testo del lotto. |
 | `src/screen/` | La schermata della mailbox, con le impostazioni mostrate al suo interno; allegati e link vanno ai programmi predefiniti del sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | L'azione `prefix+shift+m` e la riapertura della schermata dopo un riavvio di Herdr. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Gli hook di Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Gli hook di Claude Code. |
 
 ### Test
 

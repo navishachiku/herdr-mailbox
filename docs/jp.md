@@ -155,7 +155,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | バッチ配信、入力欄のチェック、到着確認、バッチの本文。 |
 | `src/screen/` | メールボックス画面。設定は画面内に表示し、添付とリンクはシステム既定のプログラムに渡します。 |
 | `src/open.mjs`, `src/on-focus.mjs` | `prefix+shift+m` の動作と、Herdr 再起動後の画面の再表示。 |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Claude Code の hooks。 |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Claude Code の hooks。 |
 
 ### テスト
 

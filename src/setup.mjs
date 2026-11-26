@@ -28,6 +28,7 @@ const HOOKS = [
   ['SessionStart', 'session-start.mjs', 'startup|resume|clear|compact|fork'],
   ['UserPromptSubmit', 'prompt-submit.mjs'],
   ['PreToolUse', 'send-guard.mjs', 'Bash'],
+  ['Stop', 'stop-check.mjs'],
 ];
 const RUN = path.join(STABLE_DIR, 'run.mjs');
 const hookCommand = file => `node "${posix(RUN)}" --hook ${file}`;

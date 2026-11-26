@@ -33,6 +33,7 @@ const t = table({
     voided: 'X (Voided: no answer needed)',
     voidHead: 'The user voided these questions; no answer is needed, so drop whatever was waiting on them:',
     voidItem: (serial, uid, question) => `- ${serial} · uid ${uid}: ${question}`,
+    replyCheck: (id, line) => `herdr-mailbox: this pane has mailbox ${id} open, and this line of your reply asks with options or mentions a card in the mailbox:\n${line}\nSend the questions as cards; do not mention the cards in the mailbox when you report; rewrite this reply.`,
     noChoice: '(no option chosen)',
     forward: "Needs the user's decision; forward it to the user, do not answer it yourself",
     sentBy: (who, pane) => `From ${who} (${pane})`,
@@ -68,6 +69,7 @@ const t = table({
     voided: 'X（作廢：不需要回答）',
     voidHead: '使用者已作廢以下問題，不需要回答，原本等著它們的事可以放下：',
     voidItem: (serial, uid, question) => `- ${serial} · uid ${uid}：${question}`,
+    replyCheck: (id, line) => `herdr-mailbox：這個視窗的信箱 ${id} 開著，你回覆裡的這一行帶選項問題，或提到信箱裡的卡：\n${line}\n信箱開著：題目寄成卡；回報不提信箱裡的卡；改寫這則。`,
     noChoice: '（未選選項）',
     forward: '需由使用者裁決，請轉交使用者，勿自行代答',
     sentBy: (who, pane) => `來自 ${who}（${pane}）`,
@@ -220,3 +222,6 @@ export const mailboxReminder = id => t.reminder(id);
 
 // Voided questions the hook adds to a prompt that is not a batch (or after a batch's own background).
 export const voidedContext = letters => voidLines(letters).join('\n');
+
+// Why the Stop hook sends a reply back: the line that broke the rule, and what to do instead.
+export const replyCheckReason = (id, line) => t.replyCheck(id, line);

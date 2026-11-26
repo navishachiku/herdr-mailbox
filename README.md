@@ -155,7 +155,7 @@ A small daemon owns the state file and handles one request at a time. The CLI ta
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Batching, the input-box check, confirmation, batch text. |
 | `src/screen/` | The mailbox screen, with settings shown inside it; attachments and links go to the system's default programs. |
 | `src/open.mjs`, `src/on-focus.mjs` | The `prefix+shift+m` action and reopening the screen after a Herdr restart. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | The Claude Code hooks. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | The Claude Code hooks. |
 
 ### Tests
 

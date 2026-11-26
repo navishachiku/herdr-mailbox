@@ -93,6 +93,7 @@ export class Mailboxes {
       get state() { return core.state; },
       save: () => core.save(),
       now: () => core.now(),
+      answered: l => core.answered(l),
     });
   }
 

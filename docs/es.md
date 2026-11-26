@@ -155,7 +155,7 @@ Un pequeño daemon es dueño del archivo de estado y atiende una petición a la 
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Agrupación en lotes, comprobación del cuadro de entrada, confirmación, texto del lote. |
 | `src/screen/` | La pantalla del buzón, con los ajustes mostrados dentro de ella; los adjuntos y los enlaces van a los programas predeterminados del sistema. |
 | `src/open.mjs`, `src/on-focus.mjs` | La acción `prefix+shift+m` y la reapertura de la pantalla tras reiniciar Herdr. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Los hooks de Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Los hooks de Claude Code. |
 
 ### Pruebas
 

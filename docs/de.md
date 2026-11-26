@@ -155,7 +155,7 @@ Ein kleiner Daemon besitzt die Zustandsdatei und bearbeitet jeweils eine Anfrage
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Bündelung, Prüfung des Eingabefelds, Bestätigung, Text des Pakets. |
 | `src/screen/` | Der Briefkasten-Bildschirm, mit darin angezeigten Einstellungen; Anhänge und Links gehen an die Standardprogramme des Systems. |
 | `src/open.mjs`, `src/on-focus.mjs` | Die Aktion `prefix+shift+m` und das erneute Öffnen des Bildschirms nach einem Herdr-Neustart. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Die Claude-Code-Hooks. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Die Claude-Code-Hooks. |
 
 ### Tests
 

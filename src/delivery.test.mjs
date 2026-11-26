@@ -885,6 +885,47 @@ test('547/AC-1 the send skill tells agents the same tiers: 1 to 7 questions one 
   assert.ok(!skill.includes('one question per letter.'), 'the unconditional one-per-letter wording is gone');
 });
 
+test('673/AC-1 the Stop hook sends back a reply that asks with options or mentions mailbox cards, only in a pane with an open mailbox', async t => {
+  const r = rig(t);
+  const mb = await r.bind();
+  const card = r.decision(mb);
+  const hook = (reply, { pane = 'w1:p1', active = false } = {}) => {
+    const run = spawnSync(process.execPath, [path.join(here, 'stop-check.mjs')], {
+      env: { ...r.env, HERDR_PANE_ID: pane, HERDR_MAILBOX_SID: `sid-${pane}` },
+      input: JSON.stringify({ hook_event_name: 'Stop', stop_hook_active: active, last_assistant_message: reply }), encoding: 'utf8', timeout: 15000,
+    });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout ? JSON.parse(run.stdout) : null;
+  };
+  // [reply, the line the reason must quote]
+  const blocked = [
+    ['Done.\n1. Install it? (A) yes (B) no\n2. Ship today? (A) yes (B) no', '1. Install it? (A) yes (B) no'],
+    ['Which one?\n- (A) install now\n- （B） wait', '- (A) install now'],
+    ['All set.\n`(AP) take every recommendation`', '`(AP) take every recommendation`'],
+    [`Waiting on ${card.serial} before the next step.`, `Waiting on ${card.serial} before the next step.`],
+    ['報告完成。\n> 💡 補充：那張卡在信箱，卡住的事等你回。', '> 💡 補充：那張卡在信箱，卡住的事等你回。'],
+    ['報告完成。\n信箱裡有一張\n卡待回覆。', '信箱裡有一張'],
+    ['1. 決定？（B）等 （C）走\n2. 出嗎？（B）等 （C）走', '1. 決定？（B）等 （C）走'],
+    ['信箱裡的卡住在這裡。', '信箱裡的卡住在這裡。'],
+  ];
+  for (const [reply, line] of blocked) {
+    const out = hook(reply);
+    assert.equal(out?.decision, 'block', reply);
+    assert.ok(out.reason.includes(line) && out.reason.includes(mb), out.reason);
+  }
+  const passed = [
+    'Where exactly are you stuck?',
+    '1. Read the log.\n2. Fixed the parser.',
+    '信箱投遞卡住了，關卡也沒過。我看過卡片格式。信箱正常。',
+    '- 修好信箱\n- 更新卡片樣式\n\n信箱正常\n\n卡片正常',
+    'Example:\n```\n(A) yes\n(B) no\n(AP) all\n信箱的卡\n```\ndone',
+    'Q999 is not a card here.',
+  ];
+  for (const reply of passed) assert.equal(hook(reply), null, reply);
+  assert.equal(hook(blocked[0][0], { active: true }), null, 'a turn already continued by a Stop hook ends');
+  assert.equal(hook(blocked[0][0], { pane: 'w1:p3' }), null, 'a pane without a mailbox is not checked');
+});
+
 test('278.1/AC-1 a prompt typed into a pane without a mailbox gets no reminder', async t => {
   const r = rig(t);
   await r.bind();

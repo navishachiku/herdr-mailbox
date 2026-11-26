@@ -155,7 +155,7 @@ Một daemon nhỏ giữ tệp trạng thái và xử lý lần lượt từng y
 | `src/delivery.mjs`, `src/format.mjs`, `src/input-box.mjs` | Chuyển thư theo lô, kiểm tra ô nhập liệu, xác nhận đã đến, nội dung của lô. |
 | `src/screen/` | Màn hình hộp thư, cài đặt hiển thị ngay trong đó; tệp đính kèm và liên kết được chuyển cho các chương trình mặc định của hệ thống. |
 | `src/open.mjs`, `src/on-focus.mjs` | Thao tác `prefix+shift+m` và mở lại màn hình hộp thư sau khi Herdr khởi động lại. |
-| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs` | Các hook của Claude Code. |
+| `src/session-start.mjs`, `src/prompt-submit.mjs`, `src/send-guard.mjs`, `src/stop-check.mjs`, `src/reply-check.mjs` | Các hook của Claude Code. |
 
 ### Kiểm thử
 

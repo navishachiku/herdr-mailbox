@@ -155,7 +155,7 @@ mailbox send --to <address|MB-id> --type decision \
 | `src/delivery.mjs`、`src/format.mjs`、`src/input-box.mjs` | 成批投遞、輸入框檢查、送達確認、批次內文。 |
 | `src/screen/` | 信箱畫面，設定在畫面內顯示；附件與連結交給系統預設的程式。 |
 | `src/open.mjs`、`src/on-focus.mjs` | `prefix+shift+m` 的動作，以及 Herdr 重啟後重新開啟信箱畫面。 |
-| `src/session-start.mjs`、`src/prompt-submit.mjs`、`src/send-guard.mjs` | Claude Code 的 hooks。 |
+| `src/session-start.mjs`、`src/prompt-submit.mjs`、`src/send-guard.mjs`、`src/stop-check.mjs`、`src/reply-check.mjs` | Claude Code 的 hooks。 |
 
 ### 測試
 
