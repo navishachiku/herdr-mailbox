@@ -595,10 +595,10 @@ test('672.3/AC-1 the most recently released mailbox wins when two name the same 
     assert.equal(note.status, 'queued');
     assert.equal(R.state().letters[note.uid].mailbox, newer);
 
-    // Binding takes over the newer handover; the older one still names w4:p4, but a connected mailbox comes first.
+    // Binding takes over the newer handover and ends the older one that names the same pane.
     const successor = await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } });
     assert.equal(successor.mailbox, newer);
-    assert.equal(R.mb(older).handover.pane, 'w4:p4');
+    assert.equal(R.mb(older).handover, undefined);
     const toOwnMailbox = sendNote(R, 'w4:p4', 'the receiver has its own mailbox').out;
     assert.equal(toOwnMailbox.status, 'queued');
     assert.equal(R.state().letters[toOwnMailbox.uid].mailbox, newer);
@@ -611,11 +611,31 @@ test('672.3/AC-1 a handover to a pane comes before that pane\'s own disconnected
     const id = await R.bindReceiver();
     const own = { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' };
     const stale = (await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } })).mailbox;
-    assert.equal(R.cli(['release', stale], own).code, 0);
     assert.equal(R.cli(['release', id, '--next', 'w4:p4'], RECEIVER).code, 0);
+    const toConnected = sendNote(R, 'w4:p4', 'a connected mailbox comes first').out;
+    assert.equal(R.state().letters[toConnected.uid].mailbox, stale);
+    assert.equal(R.cli(['release', stale], own).code, 0);
     const note = sendNote(R, 'w4:p4', 'to the handover, not the stale mailbox').out;
     assert.equal(note.status, 'queued');
     assert.equal(R.state().letters[note.uid].mailbox, id);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 claiming one handover ends the others that name the same pane', async () => {
+  const R = rig();
+  try {
+    const older = await R.bindReceiver();
+    const other = { HERDR_PANE_ID: 'w5:p5', HERDR_MAILBOX_SID: 'sid-5' };
+    const newer = (await R.raw({ op: 'bind', pane: 'w5:p5', caller: { pane: 'w5:p5', sid: 'sid-5' } })).mailbox;
+    assert.equal(R.cli(['release', older, '--next', 'w4:p4'], RECEIVER).code, 0);
+    assert.equal(R.cli(['release', newer, '--next', 'w4:p4'], other).code, 0);
+    const successor = { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' };
+    assert.equal(R.cli(['claim', newer], successor).out.ok, true);
+    assert.equal(R.mb(older).handover, undefined);
+    // Once the successor's own mailbox disconnects, its notes go there, not to the older handover.
+    assert.equal(R.cli(['release', newer], successor).code, 0);
+    const note = sendNote(R, 'w4:p4', 'after the successor released its mailbox').out;
+    assert.equal(R.state().letters[note.uid].mailbox, newer);
   } finally { R.cleanup(); }
 });
 

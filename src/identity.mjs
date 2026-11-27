@@ -72,8 +72,10 @@ function takeOver(box, owner) {
   box.owner = { ...owner, generation: (from?.generation ?? 0) + 1 };
   box.state = 'connected';
   box.disconnect = null;
-  delete box.handover;
-  successorMissing.delete(box.id);
+  // The new receiver's pane is no longer waiting for a mailbox: every handover naming it, this one or an older one, ends.
+  for (const other of Object.values(api.state.mailboxes)) {
+    if (other === box || other.handover?.pane === owner.pane) { delete other.handover; successorMissing.delete(other.id); }
+  }
   box.paused = null;
   unverified.delete(box.id);
   for (const l of Object.values(api.state.letters)) {
