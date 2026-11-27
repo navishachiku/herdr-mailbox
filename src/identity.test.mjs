@@ -488,10 +488,11 @@ test('672.3/AC-1 release --next queues notes addressed to the successor before i
     Object.assign(R.fake.panes[2], { label: 'successor', agent_session: null, agent_status: 'unknown' });
     R.fake.screens['w4:p4'] = EMPTY_BOX;
     R.write();
-    const released = R.cli(['release', '--next', 'w4:p4'], RECEIVER);
+    const released = R.cli(['release', '--next', 'successor'], RECEIVER);
     const note = sendNote(R, 'successor', 'wait for the successor');
     assert.equal(note.out.status, 'queued', JSON.stringify({ released, note }));
     assert.equal(released.out.ok, true);
+    assert.equal(R.mb(id).handover.pane, 'w4:p4', 'an agent name resolves to its pane');
     assert.equal(R.mb(id).state, 'disconnected');
     assert.equal(R.state().letters[note.out.uid].mailbox, id);
     const log = fs.readFileSync(R.env.FAKE_HERDR_LOG, 'utf8').trim().split('\n').map(line => JSON.parse(line).argv);
@@ -594,11 +595,72 @@ test('672.3/AC-1 the most recently released mailbox wins when two name the same 
     assert.equal(note.status, 'queued');
     assert.equal(R.state().letters[note.uid].mailbox, newer);
 
+    // Binding takes over the newer handover; the older one still names w4:p4, but a connected mailbox comes first.
     const successor = await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } });
-    assert.equal(successor.ok, true);
+    assert.equal(successor.mailbox, newer);
+    assert.equal(R.mb(older).handover.pane, 'w4:p4');
     const toOwnMailbox = sendNote(R, 'w4:p4', 'the receiver has its own mailbox').out;
     assert.equal(toOwnMailbox.status, 'queued');
-    assert.equal(R.state().letters[toOwnMailbox.uid].mailbox, successor.mailbox);
+    assert.equal(R.state().letters[toOwnMailbox.uid].mailbox, newer);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 a handover to a pane comes before that pane\'s own disconnected mailbox', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    const own = { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' };
+    const stale = (await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } })).mailbox;
+    assert.equal(R.cli(['release', stale], own).code, 0);
+    assert.equal(R.cli(['release', id, '--next', 'w4:p4'], RECEIVER).code, 0);
+    const note = sendNote(R, 'w4:p4', 'to the handover, not the stale mailbox').out;
+    assert.equal(note.status, 'queued');
+    assert.equal(R.state().letters[note.uid].mailbox, id);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 mailbox open in the successor takes over the handed-over mailbox with its queued notes', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    assert.equal(R.cli(['release', id, '--next', 'w4:p4'], RECEIVER).code, 0);
+    const note = sendNote(R, 'w4:p4', 'queued before open').out;
+    const opened = await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } });
+    assert.deepEqual([opened.ok, opened.mailbox, opened.created], [true, id, false]);
+    assert.equal(Object.keys(R.state().mailboxes).length, 1, 'no second mailbox');
+    assert.deepEqual([R.mb(id).state, R.mb(id).owner.pane, R.mb(id).handover], ['connected', 'w4:p4', undefined]);
+    assert.equal(R.state().letters[note.uid].mailbox, id);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 the successor follows its terminal, and is dropped when the pane id changes terminal or closes', async () => {
+  const R = rig({ registerGraceMs: 1500 });
+  try {
+    const id = await R.bindReceiver();
+    assert.equal(R.cli(['release', id, '--next', 'w4:p4'], RECEIVER).code, 0);
+    assert.equal(R.mb(id).handover.terminalId, 't4');
+    // Moved to another space: same terminal, new pane id.
+    R.fake.panes[2] = pane('w6:p4', 't4', 'sid-4');
+    R.write();
+    await until(() => R.mb(id).handover?.pane === 'w6:p4', 'the successor to follow its terminal');
+    assert.equal(sendNote(R, 'w6:p4', 'after the move').out.status, 'queued');
+    // The pane id now belongs to another terminal: dropped at once.
+    R.fake.panes[2] = pane('w6:p4', 't9', 'sid-9');
+    R.write();
+    await until(() => R.mb(id).handover === undefined, 'a reused pane id to drop the successor', 1000);
+    R.fake.screens['w6:p4'] = EMPTY_BOX;
+    R.write();
+    assert.equal(sendNote(R, 'w6:p4', 'not for the mailbox').out.status, 'direct');
+
+    // Closed: kept through the grace period, then dropped; the queued note stays for whoever claims.
+    assert.equal(R.cli(['release', id, '--next', 'w5:p5'], RECEIVER).code, 0);
+    const queued = sendNote(R, 'w5:p5', 'queued before the close').out;
+    R.fake.panes = R.fake.panes.filter(p => p.pane_id !== 'w5:p5');
+    R.write();
+    await sleep(700);
+    assert.equal(R.mb(id).handover?.pane, 'w5:p5', 'still named within the grace period');
+    await until(() => R.mb(id).handover === undefined, 'a closed successor to be dropped', 4000);
+    assert.deepEqual([R.mb(id).state, R.state().letters[queued.uid].mailbox], ['disconnected', id]);
   } finally { R.cleanup(); }
 });
 

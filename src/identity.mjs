@@ -42,6 +42,8 @@ const missing = new Map();
 // Mailboxes whose pane reports no conversation (the agent has not resumed, or only a shell is left): they stay
 // connected, but nothing may be typed into the pane.
 const noConversation = new Set();
+// Since when the pane a released mailbox names as its successor has been missing from herdr's list.
+const successorMissing = new Map();
 
 const answered = l => Boolean(l.draft && (l.draft.choice || l.draft.text?.trim()));
 const registrationsOf = pane => api.state.registrations[pane] ?? [];
@@ -71,6 +73,7 @@ function takeOver(box, owner) {
   box.state = 'connected';
   box.disconnect = null;
   delete box.handover;
+  successorMissing.delete(box.id);
   box.paused = null;
   unverified.delete(box.id);
   for (const l of Object.values(api.state.letters)) {
@@ -90,6 +93,13 @@ function latestHandoverTo(pane) {
     if (!latest || box.handover.order > latest.handover.order) latest = box;
   }
   return latest;
+}
+
+// The mailbox a pane's letters go to and the pane binds to: its connected mailbox, then a mailbox released to it,
+// then its own disconnected one. One order for route and bind, so a handed-over mailbox keeps its MB id.
+function mailboxOfPane(pane) {
+  const boxes = boxesOf(pane);
+  return boxes.find(b => b.state === 'connected') ?? latestHandoverTo(pane) ?? boxes.at(-1);
 }
 
 // canDeliver(mbId): the pane and transcript a letter may go to right now, or why it may not.
@@ -160,8 +170,7 @@ function route(to) {
     // A renewed mailbox keeps forwarding for good: its letters go to the mailbox that replaced it, and the sender is told.
     return { kind: 'mailbox', id: box.id, ...(box.id !== to ? { renewed: { from: to, to: box.id, message: text.renewed(to, box.id) } } : {}) };
   }
-  const boxes = boxesOf(to);
-  const box = boxes.find(b => b.state === 'connected') ?? boxes.at(-1) ?? latestHandoverTo(to);
+  const box = mailboxOfPane(to);
   return box ? { kind: 'mailbox', id: box.id } : { kind: 'direct', pane: to };
 }
 
@@ -196,8 +205,7 @@ async function bind(req, ctx) {
     pane: req.pane, terminalId: pane.terminal_id, convo,
     transcript: latestRegistration(req.pane, r => r.sid === convo)?.transcript ?? null,
   };
-  const boxes = boxesOf(req.pane);
-  const box = boxes.find(b => b.state === 'connected') ?? boxes.at(-1);
+  const box = mailboxOfPane(req.pane);
   if (!box) {
     const id = newMailboxId(api.state.mailboxes);
     api.state.mailboxes[id] = { id, counter: 0, owner: { ...owner, generation: 1 }, state: 'connected', disconnect: null, paused: null, screen: { open: false } };
@@ -252,7 +260,8 @@ async function release(req) {
     try { if (req.nextPane) pane = await herdr.paneGet(req.nextPane); } catch { /* refuse an unresolvable pane */ }
     if (!pane?.pane_id) return fail('pane_not_found', `no pane ${req.nextPane}; pass an existing pane id to --next`);
     const previous = latestHandoverTo(pane.pane_id);
-    box.handover = { pane: pane.pane_id, order: (previous?.handover.order ?? 0) + 1 };
+    box.handover = { pane: pane.pane_id, terminalId: pane.terminal_id, order: (previous?.handover.order ?? 0) + 1 };
+    successorMissing.delete(box.id);
   }
   if (!alreadyReleased) disconnect(box, 'released');
   api.save();
@@ -352,12 +361,33 @@ function reconcileConversation(box, pane, changed) {
   return changed;
 }
 
+// Keeps a released mailbox's successor pointing at the pane that was named, judged as reconcileOne judges an owner:
+// a pane moved to another space is found by its terminal; a pane gone past the grace period, or a pane id now held
+// by another terminal, drops the successor. No time limit otherwise: a new agent may wait long at a start-up prompt.
+// Letters already queued stay in the mailbox for whoever claims it.
+function reconcileSuccessor(box, panes) {
+  const h = box.handover;
+  const drop = () => { delete box.handover; successorMissing.delete(box.id); return true; };
+  const pane = panes.find(p => p.pane_id === h.pane);
+  if (pane) {
+    successorMissing.delete(box.id);
+    if (h.terminalId === undefined) { h.terminalId = pane.terminal_id; return true; }
+    return pane.terminal_id === h.terminalId ? false : drop();
+  }
+  const moved = h.terminalId !== undefined && panes.find(p => p.terminal_id === h.terminalId);
+  if (moved) { successorMissing.delete(box.id); h.pane = moved.pane_id; return true; }
+  const since = successorMissing.get(box.id) ?? api.now();
+  successorMissing.set(box.id, since);
+  return api.now() - since >= timings.registerGraceMs ? drop() : false;
+}
+
 async function reconcile() {
   let panes;
   try { panes = await herdr.paneList(); } catch { return; } // herdr unreachable: judge nothing
   let changed = false;
   for (const box of Object.values(api.state.mailboxes)) {
     if (box.state === 'connected' && box.owner) changed = reconcileOne(box, panes) || changed;
+    else if (box.state === 'disconnected' && box.handover) changed = reconcileSuccessor(box, panes) || changed;
   }
   if (changed) api.save();
 }
