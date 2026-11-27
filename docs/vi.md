@@ -91,7 +91,7 @@ Mở hộp thư trong cửa sổ của leader: chọn pane của leader rồi b�
 
 Khi màn hình chưa mở, một câu hỏi quyết định hoặc câu hỏi thảo luận mới sẽ hiện thông báo của Herdr kèm câu hỏi; khi màn hình đang mở thì không có thông báo. Worker gửi thư cho leader bằng `mailbox send`, xem bên dưới.
 
-**Nhận lại hộp thư**: khi cuộc trò chuyện của leader bị thay thế, hộp thư mất kết nối nhưng thư vẫn còn. Chạy dòng `mailbox claim MB-xxxx` hiện trên màn hình trong pane của agent mới, hộp thư sẽ được kết nối lại.
+**Nhận lại hộp thư**: khi cuộc trò chuyện của leader bị thay thế, hộp thư mất kết nối nhưng thư vẫn còn. Chạy dòng `mailbox claim MB-xxxx` hiện trên màn hình trong pane của agent mới, hộp thư sẽ được kết nối lại. Khi cố ý giao hộp thư cho người kế nhiệm, hãy chạy `mailbox release` trong pane của người nhận hiện tại trước: hộp thư mất kết nối ngay, nên người kế nhiệm không phải chờ đến khi pane này bị coi là đã mất (khoảng 20 giây). Thêm `--next <pane hoặc tên agent>` để chỉ định pane của người kế nhiệm: ghi chú gửi đến pane đó sẽ chờ trong hộp thư này cho đến khi hộp thư được nhận lại, thay vì được gõ vào pane mà agent vẫn đang khởi động.
 
 **Làm mới hộp thư**: muốn bắt đầu lại với id mới thay vì mang theo lịch sử dài, hãy chạy `mailbox renew` trong pane của người nhận, hoặc bấm **Làm mới** ở đầu màn hình. Pane nhận một id hộp thư mới và màn hình chuyển sang hộp đó. Tin nhắn và câu hỏi chưa gửi, kể cả bản nháp, được chuyển sang; lịch sử các lô ở lại với id cũ. Thư gửi tới id cũ được chuyển tiếp vĩnh viễn tới hộp thư mới nhất, và biên nhận của người gửi cho biết id đã đổi.
 

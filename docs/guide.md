@@ -154,6 +154,8 @@ mailbox claim MB-xxxx
 
 Any other receiver can claim a disconnected mailbox. A mailbox that is still connected refuses with `already_claimed`. After a claim, the answers you had given on the screen ask for one more confirmation (**Confirm answer**) before they can be sent, and senders get a notice on their next receipt that the receiver changed.
 
+To hand the mailbox over on purpose, the receiver runs `mailbox release` in its pane: the mailbox disconnects at once. `mailbox release --next <pane or agent name>` also names the successor's pane; the same pane and conversation can run it again to change the successor. Until the mailbox is claimed, notes sent to that pane wait in this mailbox instead of being typed into a pane whose agent may still be starting; the successor gets them when it runs `mailbox claim` or `mailbox open`. A successor pane that moves to another space is followed by its terminal. One that closes, or whose pane id passes to another terminal, is dropped, and the queued notes stay for whoever claims the mailbox.
+
 ### While the user is away
 
 The receiver runs `mailbox away on` in its pane when the user steps away. Cards still come in and wait on the screen, but a new decision or discussion question raises no notification. `mailbox away off` raises one notification that counts the cards that came in meanwhile and are still waiting. The away mark stays on the mailbox, across a daemon restart and `mailbox renew`, until `away off` clears it.
