@@ -481,6 +481,127 @@ test('309/AC-2 only the current receiver can release; anyone else is refused and
 const RECEIVER = { HERDR_PANE_ID: 'w1:p1', HERDR_MAILBOX_SID: 'sid-1' };
 const EMPTY_BOX = '────────────\n❯ \n────────────';
 
+test('672.3/AC-1 release --next queues notes addressed to the successor before it claims', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    Object.assign(R.fake.panes[2], { label: 'successor', agent_session: null, agent_status: 'unknown' });
+    R.fake.screens['w4:p4'] = EMPTY_BOX;
+    R.write();
+    const released = R.cli(['release', '--next', 'w4:p4'], RECEIVER);
+    const note = sendNote(R, 'successor', 'wait for the successor');
+    assert.equal(note.out.status, 'queued', JSON.stringify({ released, note }));
+    assert.equal(released.out.ok, true);
+    assert.equal(R.mb(id).state, 'disconnected');
+    assert.equal(R.state().letters[note.out.uid].mailbox, id);
+    const log = fs.readFileSync(R.env.FAKE_HERDR_LOG, 'utf8').trim().split('\n').map(line => JSON.parse(line).argv);
+    assert.ok(!log.some(args => args.slice(0, 3).join(' ') === 'agent prompt w4:p4'));
+    const toPrevious = sendNote(R, 'w1:p1', 'a note for the previous receiver');
+    assert.equal(R.state().letters[toPrevious.out.uid].mailbox, id);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 claiming delivers the queued note and clears the successor', async () => {
+  const R = rig({ mergeMs: 0 });
+  try {
+    const id = await R.bindReceiver();
+    const transcript = path.join(R.root, 'sid-4.jsonl');
+    R.fake.screens['w4:p4'] = EMPTY_BOX;
+    R.fake.transcripts['w4:p4'] = transcript;
+    R.write();
+    assert.equal(R.sessionStart('w4:p4', 'sid-4', 'startup').status, 0);
+    assert.equal(R.cli(['release', id, '--next', 'w4:p4'], RECEIVER).code, 0);
+    const note = sendNote(R, 'w4:p4', 'queued before claim').out;
+    assert.equal(note.status, 'queued');
+    assert.equal(fs.existsSync(transcript), false);
+
+    const successor = { HERDR_PANE_ID: 'w4:p4', HERDR_MAILBOX_SID: 'sid-4' };
+    assert.equal(R.cli(['claim', id], successor).out.ok, true);
+    assert.equal(R.mb(id).owner.pane, 'w4:p4');
+    assert.equal(R.mb(id).handover, undefined);
+    const batch = await until(() => Object.values(R.state().batches)
+      .find(b => b.members.includes(note.uid) && b.status === 'confirmed'), 'the queued note to reach the successor transcript');
+    assert.equal(batch.pane, 'w4:p4');
+    assert.match(fs.readFileSync(transcript, 'utf8'), /queued before claim/);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 panes without a mailbox or a pending handover still receive direct notes', async () => {
+  const R = rig();
+  try {
+    await R.bindReceiver();
+    R.fake.screens['w5:p5'] = EMPTY_BOX;
+    R.write();
+    assert.equal(R.cli(['release', '--next', 'w4:p4'], RECEIVER).code, 0);
+    const note = sendNote(R, 'w5:p5', 'ordinary direct note');
+    assert.equal(note.out.status, 'direct', JSON.stringify(note));
+    assert.equal(note.out.to, 'w5:p5');
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 the previous receiver can add and replace the successor after release', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    assert.equal(R.cli(['release'], RECEIVER).out.ok, true);
+    assert.equal(R.cli(['release', id, '--next', 'w4:p4']).out?.error, 'not_owner');
+    assert.equal(R.sessionStart('w1:p1', 'sid-nested', 'startup').status, 0);
+    const nested = { ...RECEIVER, HERDR_MAILBOX_SID: 'sid-nested' };
+    const refused = R.cli(['release', id, '--next', 'w4:p4'], nested).out;
+    assert.equal(refused.error, 'not_owner');
+    assert.ok(refused.message.includes(`mailbox claim ${id}`));
+    assert.equal(R.mb(id).handover, undefined);
+    assert.equal(R.cli(['release', '--next', 'w4:p4'], RECEIVER).out.ok, true);
+    const first = sendNote(R, 'w4:p4', 'after adding a successor').out;
+    assert.equal(first.status, 'queued');
+    assert.equal(R.state().letters[first.uid].mailbox, id);
+
+    assert.equal(R.sessionStart('w1:p1', 'sid-fork', 'fork').status, 0);
+    const fork = { ...RECEIVER, HERDR_MAILBOX_SID: 'sid-fork' };
+    assert.equal(R.cli(['release', id, '--next', 'w5:p5'], fork).out.ok, true);
+    assert.equal(R.cli(['status', '--to', 'w4:p4']).out.mailbox, undefined);
+    const second = sendNote(R, 'w5:p5', 'after changing the successor').out;
+    assert.equal(second.status, 'queued');
+    assert.equal(R.state().letters[second.uid].mailbox, id);
+    assert.equal(R.cli(['claim', id], RECEIVER).out.ok, true);
+    assert.equal(R.cli(['status', '--to', 'w5:p5']).out.mailbox, undefined);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 release --next refuses a missing pane and leaves the mailbox connected', async () => {
+  const R = rig();
+  try {
+    const id = await R.bindReceiver();
+    const before = R.mb(id);
+    const refused = R.cli(['release', id, '--next', 'w9:p9'], RECEIVER);
+    assert.equal(refused.code, 1);
+    assert.equal(refused.out.error, 'pane_not_found');
+    assert.deepEqual(R.mb(id), before);
+  } finally { R.cleanup(); }
+});
+
+test('672.3/AC-1 the most recently released mailbox wins when two name the same successor', async () => {
+  const R = rig();
+  try {
+    const newer = await R.bindReceiver();
+    const other = { HERDR_PANE_ID: 'w5:p5', HERDR_MAILBOX_SID: 'sid-5' };
+    const bound = await R.raw({ op: 'bind', pane: other.HERDR_PANE_ID, caller: { pane: other.HERDR_PANE_ID, sid: other.HERDR_MAILBOX_SID } });
+    assert.equal(bound.ok, true);
+    const older = bound.mailbox;
+    assert.equal(R.cli(['release', older, '--next', 'w4:p4'], other).code, 0);
+    assert.equal(R.cli(['release', newer, '--next', 'w4:p4'], RECEIVER).code, 0);
+    const note = sendNote(R, 'w4:p4', 'route by release order').out;
+    assert.equal(note.status, 'queued');
+    assert.equal(R.state().letters[note.uid].mailbox, newer);
+
+    const successor = await R.raw({ op: 'bind', pane: 'w4:p4', caller: { pane: 'w4:p4', sid: 'sid-4' } });
+    assert.equal(successor.ok, true);
+    const toOwnMailbox = sendNote(R, 'w4:p4', 'the receiver has its own mailbox').out;
+    assert.equal(toOwnMailbox.status, 'queued');
+    assert.equal(R.state().letters[toOwnMailbox.uid].mailbox, successor.mailbox);
+  } finally { R.cleanup(); }
+});
+
 test('441/AC-1,2 renew gives the pane a new mailbox: unsent letters and drafts move, old batches stay behind, and letters to the old id arrive in the new one with a notice', async () => {
   const R = rig({ confirmMs: 300 });
   try {

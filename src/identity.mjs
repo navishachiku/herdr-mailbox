@@ -29,9 +29,9 @@ const text = table({
 
 const fail = (error, message, extra) => ({ ok: false, error, message, ...extra });
 // Writes that only the receiver (through the CLI) or the user (through the screen) may perform.
-const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release', 'renew', 'away']);
+const OWNER_OPS = new Set(['answer', 'submit', 'bulk', 'deliver-now', 'resolve-batch', 'close', 'deliver', 'release', 'release-next', 'renew', 'away']);
 // Of those, the receiver agent may run only these; answering and sending for the user is the screen's job.
-const AGENT_OPS = new Set(['close', 'deliver', 'release', 'renew', 'away']);
+const AGENT_OPS = new Set(['close', 'deliver', 'release', 'release-next', 'renew', 'away']);
 const KEEP_REGISTRATIONS = 5;
 
 let api;
@@ -70,6 +70,7 @@ function takeOver(box, owner) {
   box.owner = { ...owner, generation: (from?.generation ?? 0) + 1 };
   box.state = 'connected';
   box.disconnect = null;
+  delete box.handover;
   box.paused = null;
   unverified.delete(box.id);
   for (const l of Object.values(api.state.letters)) {
@@ -80,6 +81,15 @@ function takeOver(box, owner) {
 
 function boxesOf(pane) {
   return Object.values(api.state.mailboxes).filter(b => b.owner?.pane === pane);
+}
+
+function latestHandoverTo(pane) {
+  let latest;
+  for (const box of Object.values(api.state.mailboxes)) {
+    if (box.state !== 'disconnected' || box.handover?.pane !== pane) continue;
+    if (!latest || box.handover.order > latest.handover.order) latest = box;
+  }
+  return latest;
 }
 
 // canDeliver(mbId): the pane and transcript a letter may go to right now, or why it may not.
@@ -104,7 +114,11 @@ export function checkOwner(mbId, req, ctx) {
     if (req.generation !== (box.owner?.generation ?? 0)) return fail('stale_owner', 'the mailbox changed hands; reload it');
     return null;
   }
-  if (AGENT_OPS.has(req.op) && box.state === 'connected' && caller.pane === box.owner.pane && isReceiverSid(box, caller.pane, caller.sid)) return null;
+  const updatingHandover = req.op === 'release-next' && box.state === 'disconnected';
+  const canReleaseAgain = updatingHandover && box.disconnect?.reason === 'released';
+  if (AGENT_OPS.has(req.op) && (box.state === 'connected' || canReleaseAgain)
+    && caller.pane === box.owner?.pane && isReceiverSid(box, caller.pane, caller.sid)) return null;
+  if (updatingHandover) return fail('not_owner', `only the previous receiver can change the successor; to take over this mailbox, run mailbox claim ${mbId} in your pane, then mailbox release ${mbId} --next <pane>`);
   return fail('not_owner', 'only the current receiver of this mailbox can do that');
 }
 
@@ -147,7 +161,7 @@ function route(to) {
     return { kind: 'mailbox', id: box.id, ...(box.id !== to ? { renewed: { from: to, to: box.id, message: text.renewed(to, box.id) } } : {}) };
   }
   const boxes = boxesOf(to);
-  const box = boxes.find(b => b.state === 'connected') ?? boxes.at(-1);
+  const box = boxes.find(b => b.state === 'connected') ?? boxes.at(-1) ?? latestHandoverTo(to);
   return box ? { kind: 'mailbox', id: box.id } : { kind: 'direct', pane: to };
 }
 
@@ -227,11 +241,20 @@ async function claim(req, ctx) {
 
 // The receiver hands the mailbox over on purpose: it disconnects at once, so the next agent can claim it without
 // waiting for this pane to be judged gone. Letters and drafts stay, as with any disconnect.
-function release(req) {
+async function release(req) {
   const box = api.state.mailboxes[req.mailbox];
   if (!box) return fail('unknown_mailbox', `no mailbox ${req.mailbox}`);
-  if (box.state !== 'connected') return fail('not_connected', 'this mailbox is not connected, so there is nothing to release');
-  disconnect(box, 'released');
+  const withSuccessor = req.op === 'release-next';
+  const alreadyReleased = box.state === 'disconnected' && box.disconnect?.reason === 'released';
+  if (box.state !== 'connected' && !(withSuccessor && alreadyReleased)) return fail('not_connected', 'this mailbox is not connected, so there is nothing to release');
+  if (withSuccessor) {
+    let pane;
+    try { if (req.nextPane) pane = await herdr.paneGet(req.nextPane); } catch { /* refuse an unresolvable pane */ }
+    if (!pane?.pane_id) return fail('pane_not_found', `no pane ${req.nextPane}; pass an existing pane id to --next`);
+    const previous = latestHandoverTo(pane.pane_id);
+    box.handover = { pane: pane.pane_id, order: (previous?.handover.order ?? 0) + 1 };
+  }
+  if (!alreadyReleased) disconnect(box, 'released');
   api.save();
   return { ok: true, mailbox: box.id, claim: `mailbox claim ${box.id}` };
 }
@@ -348,6 +371,7 @@ export default function registerIdentity(a) {
   api.op('register', register, { mutates: true });
   api.op('claim', claim, { mutates: true });
   api.op('release', release, { mutates: true });
+  api.op('release-next', release, { mutates: true });
   api.op('renew', renew, { mutates: true });
   api.tick('reconcile', reconcile, timings.reconcileMs);
 }
