@@ -10,7 +10,7 @@ import { Mailboxes, DEDUP_MS, attachmentsOf } from './core.mjs';
 import { notesBatch } from './format.mjs';
 import { emptyState } from './store.mjs';
 import { sessionKey } from './paths.mjs';
-import { readCardRules } from './card-rules.mjs';
+import { readCardRules, checkStepText } from './card-rules.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mb-'));
@@ -652,7 +652,9 @@ test('550/AC-2 without a card-rules file, or with an unusable one, every card is
       assert.equal(s.cli('send', '--to', TO, '--type', 'note', `${text} ${bad.length}`).code, 0, bad);
     }
   } finally { s.cleanup(); }
-  assert.deepEqual(readCardRules(path.join(tmp(), 'missing.json')), {});
+  // No file still has no phrase or length rule; only the step check has a built-in default (see the 640 test).
+  const none = readCardRules(path.join(tmp(), 'missing.json'));
+  assert.deepEqual(Object.keys(none), ['stepPatterns']);
 });
 
 test('566/AC-2 a card without a source is refused and says how to give one; a written source is accepted, two sources are not', () => {
@@ -685,4 +687,35 @@ test('566/AC-2 a card citing a letter that does not exist, is in another mailbox
   const ok = core.handle(decision({ source: undefined, sourceUid: mine.uid }));
   assert.equal(ok.ok, true);
   assert.deepEqual(core.state.letters[ok.uid].origin, { uid: mine.uid, signed });
+});
+
+// Steps the owner must do by hand: each one carries the reason an agent cannot do it, and a step written into free text is refused.
+test('640/AC-1,2 a card step needs its reason; a step-like line in free text is refused and points to --step', () => {
+  const rules = { stepPatterns: ['^(open|press|log in)\\b'] };
+  const core = boundCore({ save: () => {}, attachDir: path.join(tmp(), 'att'), cardRules: () => rules });
+  const bare = core.handle(decision({ steps: ['Open the VM window', 'Type the Claude password'], whyNotAgent: ['the VM needs a window only you can see'] }));
+  assert.equal(bare.error, 'missing_why_not_agent');
+  assert.match(bare.message, /step 2/);
+  assert.equal(core.handle(decision({ steps: ['Open the VM window'], whyNotAgent: ['  '] })).error, 'missing_why_not_agent');
+  const ok = core.handle(decision({ steps: ['Type the Claude password'], whyNotAgent: ['only you know it'] }));
+  assert.equal(ok.ok, true);
+  assert.deepEqual(core.state.letters[ok.uid].content.steps, [{ do: 'Type the Claude password', why: 'only you know it' }]);
+  // The same words in the step field pass the pattern check, which reads only free text.
+  assert.equal(core.handle(decision({ question: 'Which VM?', steps: ['Open the VM window'], whyNotAgent: ['no display for an agent'] })).ok, true);
+  const listed = core.handle(decision({ whyOpen: '1. Open the VM window' }));
+  assert.equal(listed.error, 'step_in_text');
+  assert.match(listed.message, /--step/);
+  const bullet = core.handle({ op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'discussion', question: 'Which way?', idea: 'ok\n- Press Start' });
+  assert.equal(bullet.error, 'step_in_text');
+  // Prose that is not a list line passes, and a note between agents is not a card.
+  assert.equal(core.handle({ op: 'send', to: TO, from: 'w2:p2', source: 'test', type: 'discussion', question: 'Open questions remain?' }).ok, true);
+  assert.equal(core.handle(note('1. Open the VM window')).ok, true);
+  // A new install has no file and still catches a step written as a list line, in English and Chinese; an empty list turns it off.
+  const dir = tmp();
+  const fresh = readCardRules(path.join(dir, 'missing.json'));
+  assert.equal(checkStepText('1. Open the VM window', fresh, 'idea').error, 'step_in_text');
+  assert.equal(checkStepText('- 請登入測試機', fresh, 'idea').error, 'step_in_text');
+  assert.equal(checkStepText('- Opening hours are fixed', fresh, 'idea'), null);
+  fs.writeFileSync(path.join(dir, 'off.json'), '{"stepPatterns": []}');
+  assert.equal(checkStepText('1. Open the VM window', readCardRules(path.join(dir, 'off.json')), 'idea'), null);
 });

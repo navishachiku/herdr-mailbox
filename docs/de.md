@@ -128,13 +128,14 @@ Mit `--wait [--timeout <ms>]` kehrt der Versand erst zurück, wenn der leader de
 Um Briefe abzulehnen, die eine unerwünschte Wendung oder einen zu langen Satz enthalten, legen Sie `card-rules.json` im Plugin-Statusverzeichnis von Herdr neben `prefs.json` an (`mailbox --help` zeigt den genauen Pfad):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: Ein Brief, dessen Text eine dieser Wendungen enthält (ohne Beachtung der Groß-/Kleinschreibung), wird abgelehnt, und der Absender erfährt, welche.
 - `maxSentenceUnits`: Ein Brief mit einem längeren Satz wird abgelehnt. Ein chinesisches Zeichen zählt 1, ebenso jede zusammenhängende Folge von Buchstaben oder Ziffern; Sätze enden bei `。！？.!?` oder einem Zeilenumbruch.
+- `stepPatterns`: reguläre Ausdrücke (ohne Beachtung der Groß-/Kleinschreibung). Eine Entscheidungs- oder Diskussionskarte wird abgelehnt, wenn eine Aufzählungs- oder nummerierte Zeile in ihrem freien Text (ohne das Listenzeichen) auf einen davon passt; der Absender wird angewiesen, jeden Schritt, den Sie von Hand ausführen müssen, in `--step` zu setzen und mit `--why-not-agent` zu begründen, warum ein Agent ihn nicht ausführen kann. Ohne diesen Schlüssel gilt eine eingebaute Liste gängiger Handlungsverben (etwa open, press, click, run, type und ihre chinesischen Entsprechungen); `[]` schaltet die Prüfung aus.
 
-Beide Schlüssel sind optional, ein ungültiger Wert wird ignoriert. Ohne Datei werden alle Briefe angenommen. Geprüft wird der Text von Notiz, Frage, Optionen, Abwägungen, why-open und idea; Anhänge werden nicht gelesen.
+Alle Schlüssel sind optional, ein ungültiger Wert wird ignoriert. Ohne Datei gibt es keine Wendungs- oder Längenregel, und die Schrittprüfung nutzt die eingebaute Liste. Geprüft wird der Text von Notiz, Frage, Optionen, Abwägungen, why-open, idea, Schritten und Begründungen; Anhänge werden nicht gelesen.
 
 ## Bekannte Probleme
 

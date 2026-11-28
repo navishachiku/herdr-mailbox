@@ -128,13 +128,14 @@ mailbox send --to <address|MB-id> --type decision \
 想拒收含有不想看到的片语、或句子太长的信，在 Herdr 的插件状态目录里、`prefs.json` 旁创建 `card-rules.json`（确切路径用 `mailbox --help` 查）：
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`：信的文字含其中任一片语（不分大小写）就拒收，并告诉发件方是哪一个。
 - `maxSentenceUnits`：有句子超过这个数就拒收。一个汉字算 1，连续的英文字母或数字算 1；句子以 `。！？.!?` 或换行结束。
+- `stepPatterns`：正则表达式（不分大小写）。决策卡或讨论卡的自由文字中，只要有条列或编号的行（去掉项目符号后）匹配其中一个，就拒收，并告诉发件方：要你亲手做的步骤请放进 `--step`，每一步附上 `--why-not-agent` 说明 agent 为什么做不到。 没有这个字段时用内建的常见动作动词清单（如 open、press、click、run、type 与对应的中文动词）；设成 `[]` 就关掉这项检查。
 
-两个字段都可省略，值不合法时会被忽略。没有这个文件时，所有信都照收。检查的文字是普通消息、问题、选项、取舍、why-open 与 idea；附件不读。
+所有字段都可省略，值不合法时会被忽略。没有这个文件时，没有片语与长度规则，步骤检查用内建清单。检查的文字是普通消息、问题、选项、取舍、why-open、idea、步骤与各步的理由；附件不读。
 
 ## 已知问题
 

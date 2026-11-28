@@ -128,13 +128,14 @@ Il materiale più lungo viaggia con la lettera come file (`--attach <file>`, fin
 Per rifiutare le lettere che contengono una frase indesiderata o una frase troppo lunga, crea `card-rules.json` nella directory di stato dei plugin di Herdr, accanto a `prefs.json` (`mailbox --help` mostra il percorso esatto):
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases`: una lettera il cui testo contiene una di queste frasi (senza distinzione tra maiuscole e minuscole) viene rifiutata, e il mittente viene informato di quale.
 - `maxSentenceUnits`: una lettera con una frase più lunga viene rifiutata. Un carattere cinese conta 1, così come ogni sequenza continua di lettere o cifre; le frasi terminano con `。！？.!?` o con un a capo.
+- `stepPatterns`: espressioni regolari (senza distinzione tra maiuscole e minuscole). Una carta di decisione o di discussione viene rifiutata quando una riga con elenco puntato o numerato nel suo testo libero (senza il simbolo) ne corrisponde a una; al mittente viene detto di mettere ogni passaggio che devi fare a mano in `--step`, con un `--why-not-agent` che spieghi perché un agente non può farlo. Senza questa chiave si usa un elenco integrato di verbi d'azione comuni (come open, press, click, run, type e i loro equivalenti cinesi); `[]` disattiva il controllo.
 
-Entrambe le chiavi sono facoltative e un valore non valido viene ignorato. Senza file, tutte le lettere sono accettate. Il testo controllato è la nota, la domanda, le opzioni, i compromessi, why-open e idea; gli allegati non vengono letti.
+Tutte le chiavi sono facoltative e un valore non valido viene ignorato. Senza file non ci sono regole su frasi o lunghezza, e il controllo dei passaggi usa l'elenco integrato. Il testo controllato è la nota, la domanda, le opzioni, i compromessi, why-open, idea, i passaggi e le loro motivazioni; gli allegati non vengono letti.
 
 ## Problemi noti
 

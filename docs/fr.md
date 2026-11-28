@@ -128,13 +128,14 @@ Un contenu plus long se joint à la lettre sous forme de fichier (`--attach <fil
 Pour refuser les lettres qui contiennent une expression indésirable ou une phrase trop longue, créez `card-rules.json` dans le dossier d'état des plugins de Herdr, à côté de `prefs.json` (`mailbox --help` affiche le chemin exact) :
 
 ```json
-{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50}
+{"rejectPhrases": ["as you know", "basically"], "maxSentenceUnits": 50, "stepPatterns": ["^(open|press|log in) "]}
 ```
 
 - `rejectPhrases` : une lettre dont le texte contient l'une de ces expressions (sans distinction de casse) est refusée, et l'expéditeur est informé de laquelle.
 - `maxSentenceUnits` : une lettre contenant une phrase plus longue est refusée. Un caractère chinois compte 1, de même qu'une suite de lettres ou de chiffres ; les phrases se terminent par `。！？.!?` ou un saut de ligne.
+- `stepPatterns` : expressions régulières (sans distinction de casse). Une carte de décision ou de discussion est refusée quand une ligne à puce ou numérotée de son texte libre (sans le marqueur) en correspond à une ; l'expéditeur est invité à mettre chaque étape que vous devez faire à la main dans `--step`, avec un `--why-not-agent` disant pourquoi un agent ne peut pas la faire. Sans cette clé, une liste intégrée de verbes d'action courants (comme open, press, click, run, type et leurs équivalents chinois) est utilisée ; `[]` désactive la vérification.
 
-Les deux clés sont facultatives et une valeur invalide est ignorée. Sans fichier, toutes les lettres sont acceptées. Le texte vérifié est la note, la question, les options, les compromis, why-open et idea ; les pièces jointes ne sont pas lues.
+Toutes les clés sont facultatives et une valeur invalide est ignorée. Sans fichier, il n'y a ni règle d'expression ni règle de longueur, et la vérification des étapes utilise la liste intégrée. Le texte vérifié est la note, la question, les options, les compromis, why-open, idea, les étapes et leurs raisons ; les pièces jointes ne sont pas lues.
 
 ## Problèmes connus
 

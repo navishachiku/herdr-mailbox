@@ -266,6 +266,18 @@ function card(q, ctx) {
   } else if (q.content.idea) {
     for (const l of wrap(`${t.idea}: ${q.content.idea}`, w - 2)) add([textItem(` ${l}`, S.dim)]);
   }
+  // Steps the owner must do by hand, each followed by the reason an agent cannot do it, so the reader can judge it.
+  // Compact mode keeps each step to its own row, cut, with the reason on the next row.
+  if (q.content.steps?.length) {
+    blank();
+    add([textItem(` ${t.steps}`, S.bold)]);
+    q.content.steps.forEach((x, i) => {
+      const step = `${i + 1}. ${x.do}`;
+      const why = `   ${t.whyNot}: ${x.why}`;
+      for (const l of compact ? [cut(step, w - 2)] : wrap(step, w - 2)) add([{ ...textItem(` ${l}`, S.text), ...(compact && l !== step ? { tip: step } : {}) }]);
+      for (const l of compact ? [cut(why, w - 2)] : wrap(why, w - 2)) add([{ ...textItem(` ${l}`, S.dim), ...(compact && l !== why ? { tip: why } : {}) }]);
+    });
+  }
   (q.content.attachments ?? (q.content.attach ? [q.content.attach] : [])).forEach((a, index) => {
     const open = { type: 'attachment', mailbox: model.mailbox.id, uid: q.uid, ...(index ? { index } : {}) };
     const look = FB.look(open);
