@@ -698,12 +698,17 @@ test('226/AC-3 a person typing after the pasted batch is not sent with it', asyn
 });
 
 test('226/AC-1 a long batch folded into a "[Pasted text]" placeholder still gets one Enter', async t => {
-  const r = rig(t, { mergeMs: 4000, nudgeMs: 300, confirmMs: 4000 });
+  // Sending the letters takes longer than a short merge interval, so they are held until all are queued.
+  const r = rig(t, { mergeMs: 600000, nudgeMs: 300, confirmMs: 4000 });
   const mb = await r.bind();
   r.world.promptResult['w1:p1'] = 'stuck';
   r.write();
   const letters = Array.from({ length: 15 }, (_, i) => r.note(mb, `long report ${i}\nsecond line ${i}`));
-  await r.confirmed(letters[0].uid);
+  const released = await r.raw({ op: 'deliver-now', mailbox: mb, generation: r.state().mailboxes[mb].owner.generation });
+  assert.equal(released.ok, true, JSON.stringify(released));
+  const batch = await r.confirmed(letters[0].uid);
+  assert.equal(batch.members.length, letters.length);
+  assert.ok(batch.lines >= 30, 'the batch must be long enough to be folded');
   assert.equal(r.calls().filter(c => c.argv[0] === 'pane' && c.argv[1] === 'send-keys').length, 1);
   assert.equal(r.prompts().length, 1);
   assert.match(r.calls().find(c => c.argv[1] === 'send-keys').argv[2], /w1:p1/);
