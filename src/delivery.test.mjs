@@ -784,6 +784,35 @@ test('256/AC-1 a note to a Claude pane without a mailbox is typed once and leave
   assert.equal(r.batches().filter(b => b.kind === 'direct').length, 0, 'no batch is kept to follow');
 });
 
+test('681/AC-1 direct notes fail during startup and can be resent once the agent is ready', t => {
+  const r = rig(t);
+  const receiver = r.world.panes[2];
+  Object.assign(receiver, { agent: 'codex', agent_status: 'unknown', launch_pending: true });
+  r.world.promptResult[receiver.pane_id] = 'lost';
+  r.write();
+
+  const message = 'report for the starting agent';
+  const result = spawnSync(process.execPath, [
+    path.join(here, 'mailbox.mjs'), 'send', '--to', receiver.pane_id, '--type', 'note', '--text', message,
+  ], { env: r.env, encoding: 'utf8', timeout: 15000 });
+  assert.equal(result.status, 1, result.stdout || result.stderr);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.ok, false);
+  assert.equal(receipt.error, 'receiver_not_ready');
+  assert.match(receipt.message, /send again once the agent is ready/);
+  assert.equal(r.prompts(receiver.pane_id).length, 0);
+  if (fs.existsSync(path.join(r.dir, 'state.json'))) assert.deepEqual(r.batches(), []);
+
+  Object.assign(receiver, { agent_status: 'idle', interactive_ready: true });
+  delete receiver.launch_pending;
+  delete r.world.promptResult[receiver.pane_id];
+  r.world.transcripts[receiver.pane_id] = r.transcript;
+  r.write();
+  assert.equal(r.note(receiver.pane_id, message).status, 'direct');
+  assert.equal(r.prompts(receiver.pane_id).length, 1);
+  assert.ok(fs.readFileSync(r.transcript, 'utf8').includes(message));
+});
+
 test('256/AC-2 a note to a pane whose input box holds text is refused, not queued or retried', async t => {
   const r = rig(t, { mergeMs: 60000, retryMs: 100 });
   r.world.screens['w1:p3'] = '────────────\n❯ half a sentence\n────────────';

@@ -277,7 +277,12 @@ async function direct(req, content) {
   const to = req.to;
   let pane;
   try { pane = await herdr.paneGet(to); } catch { return fail('pane_not_found', `no pane ${to}`); }
-  if (!pane.agent) return fail('no_agent', `pane ${to} runs no agent, so a letter cannot be typed into it`);
+  // Read readiness from agent get; pane get does not expose the pending launch.
+  const agent = await herdr.agentGet(pane.pane_id).catch(() => null);
+  if (!pane.agent && !agent?.launch_pending) return fail('no_agent', `pane ${to} runs no agent, so a letter cannot be typed into it`);
+  if (!agent || agent.launch_pending || agent.interactive_ready === false) {
+    return fail('receiver_not_ready', `agent in ${to} is not ready for input, so nothing was sent and nothing is queued; send again once the agent is ready`);
+  }
   let state = 'unknown';
   let screen = '';
   try { screen = await herdr.readScreen(pane.pane_id); state = classify(screen, pane.agent); } catch { /* unknown */ }
