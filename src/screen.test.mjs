@@ -7,6 +7,7 @@ import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { guardDaemon } from './test-support/daemon-sandbox.cjs';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
 import { render } from './screen/render.mjs';
@@ -49,6 +50,7 @@ function world({ timings = {} } = {}) {
     HERDR_MAILBOX_TIMINGS: JSON.stringify({ tickMs: 50, reconcileMs: 50, mergeMs: 600_000, retryMs: 100, confirmMs: 400, promptPollMs: 10, promptWaitMs: 2000, registerGraceMs: 300, ...timings }),
   };
   delete env.HERDR_PLUGIN_STATE_DIR;
+  guardDaemon(env, root);
   const cliAs = (caller, ...args) => {
     const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], { env: { ...env, HERDR_PANE_ID: caller, HERDR_MAILBOX_SID: caller === RECV ? 'sid-1' : 'sid-2' }, encoding: 'utf8', timeout: 10000 });
     return { code: r.status, out: r.stdout.trim() ? JSON.parse(r.stdout) : null, err: r.stderr };

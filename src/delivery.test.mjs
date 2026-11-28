@@ -7,6 +7,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
 import { classify } from './input-box.mjs';
+import { guardDaemon } from './test-support/daemon-sandbox.cjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -49,6 +50,7 @@ function rig(t, timings = {}) {
     FAKE_HERDR_LOG: log, HERDR_PANE_ID: 'w1:p2', HERDR_MAILBOX_SID: 'sid-w1:p2',
     LC_ALL: 'en_US.UTF-8', LC_MESSAGES: 'en_US.UTF-8', LANG: 'en_US.UTF-8', HERDR_MAILBOX_TIMINGS: JSON.stringify(clock) };
   for (const key of ['HERDR_PLUGIN_STATE_DIR', 'HERDR_PLUGIN_ID', 'HERDR_MAILBOX_DAEMON_ENTRY', 'HERDR_MAILBOX_DAEMON_PROTO']) delete env[key];
+  guardDaemon(env, root);
   const cli = (args, extraEnv = {}) => {
     const r = spawnSync(process.execPath, [path.join(here, 'mailbox.mjs'), ...args], { env: { ...env, ...extraEnv }, encoding: 'utf8', timeout: 15000 });
     assert.equal(r.status, 0, `CLI failed: ${r.stdout} ${r.stderr}`);

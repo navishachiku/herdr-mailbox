@@ -5,15 +5,17 @@ import os from 'node:os';
 import net from 'node:net';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Mailboxes, DEDUP_MS, attachmentsOf } from './core.mjs';
 import { notesBatch } from './format.mjs';
 import { emptyState } from './store.mjs';
 import { sessionKey } from './paths.mjs';
 import { readCardRules, checkStepText } from './card-rules.mjs';
+import { guardDaemon } from './test-support/daemon-sandbox.cjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mb-'));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Core-only tests start with bound mailboxes; identity and its herdr lookup are covered separately.
 function boundCore(options) {
@@ -314,6 +316,7 @@ function sandbox({ root = fs.mkdtempSync(path.join('/tmp', 'mbe-')), session = '
   delete env.HERDR_MAILBOX_SID;
   delete env.HERDR_MAILBOX_DAEMON_ENTRY;
   delete env.HERDR_MAILBOX_DAEMON_PROTO;
+  guardDaemon(env, root);
   fs.writeFileSync(env.FAKE_HERDR_STATE, JSON.stringify({
     panes: [TO, 'w1:p2', 'w2:p2'].map((id, i) => ({
       pane_id: id, terminal_id: `terminal-${i}`, workspace_id: 'w1', tab_id: 'w1:t1',
@@ -388,6 +391,40 @@ test('when the daemon cannot start the CLI reports failure and sends nothing', (
     assert.equal(r.out.error, 'daemon_unavailable');
     assert.equal(fs.existsSync(path.join(s.dir, 'state.json')), false);
   } finally { s.cleanup(); }
+});
+
+test('a daemon starting after its test sandbox was cleaned up exits', () => {
+  const s = sandbox();
+  s.cleanup();
+  try {
+    const result = spawnSync(process.execPath, [path.join(here, 'daemon.mjs')], {
+      env: s.env, encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL',
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(s.root), false);
+  } finally { s.cleanup(); }
+});
+
+test('a daemon whose test sandbox is cleaned up while it is still loading exits', async () => {
+  const s = sandbox();
+  // Hold the daemon after the sandbox guard has run and before daemon.mjs loads, then clean up during that pause.
+  const hold = path.join(tmp(), 'hold.mjs');
+  fs.writeFileSync(hold, 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);\n');
+  const child = spawn(process.execPath, [path.join(here, 'daemon.mjs')], {
+    env: { ...s.env, NODE_OPTIONS: `${s.env.NODE_OPTIONS} --import ${JSON.stringify(pathToFileURL(hold).href)}` }, stdio: 'ignore',
+  });
+  const exited = new Promise(resolve => child.once('exit', code => resolve(code)));
+  try {
+    await sleep(400);
+    s.cleanup();
+    const code = await Promise.race([exited, sleep(5000).then(() => 'still running')]);
+    assert.equal(code, 0);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    s.cleanup();
+    fs.rmSync(path.dirname(hold), { recursive: true, force: true });
+  }
 });
 
 test('a killed daemon comes back with the letter and the answer draft', async () => {

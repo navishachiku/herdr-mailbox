@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
+import { guardDaemon } from './test-support/daemon-sandbox.cjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FAKE = path.join(here, 'test-support', 'fake-herdr.mjs');
@@ -41,6 +42,7 @@ function rig(timings = {}) {
   delete env.HERDR_PLUGIN_STATE_DIR;
   delete env.HERDR_PLUGIN_ID;
   delete env.HERDR_MAILBOX_SID;
+  guardDaemon(env, root);
   const fake = {
     panes: [pane('w1:p1', 't1', 'sid-1'), pane('w2:p2', 't2', 'sid-2'), pane('w4:p4', 't4', 'sid-4'), pane('w5:p5', 't5', 'sid-5')],
     screens: {}, promptResult: {}, transcripts: {},

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { guardDaemon } from './test-support/daemon-sandbox.cjs';
 import { fileURLToPath } from 'node:url';
 import { sessionKey } from './paths.mjs';
 
@@ -33,6 +34,7 @@ async function guardWorld(t) {
     LC_ALL: 'en_US.UTF-8', LC_MESSAGES: 'en_US.UTF-8', LANG: 'en_US.UTF-8',
     HERDR_MAILBOX_TIMINGS: JSON.stringify({ tickMs: 80, mergeMs: 60000, reconcileMs: 250 }) };
   for (const key of ['HERDR_PLUGIN_STATE_DIR', 'HERDR_PLUGIN_ID', 'HERDR_MAILBOX_DAEMON_ENTRY', 'HERDR_MAILBOX_DAEMON_PROTO']) delete env[key];
+  guardDaemon(env, root);
   t.after(() => {
     try { process.kill(Number(fs.readFileSync(path.join(dir, 'daemon.pid'), 'utf8')), 'SIGKILL'); } catch { /* not running */ }
     fs.rmSync(root, { recursive: true, force: true });
