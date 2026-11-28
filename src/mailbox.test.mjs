@@ -427,6 +427,34 @@ test('a daemon whose test sandbox is cleaned up while it is still loading exits'
   }
 });
 
+test('a daemon whose test process is killed before cleanup exits', async () => {
+  const s = sandbox();
+  // Stands in for a test file that is interrupted: it guards the sandbox, starts the daemon and never cleans up.
+  const script = `
+    import { spawn } from 'node:child_process';
+    import { guardDaemon } from ${JSON.stringify(new URL('./test-support/daemon-sandbox.cjs', import.meta.url).href)};
+    const env = { ...process.env };
+    guardDaemon(env, ${JSON.stringify(s.root)});
+    console.log(spawn(process.execPath, [${JSON.stringify(path.join(here, 'daemon.mjs'))}], { env, detached: true, stdio: 'ignore' }).pid);
+    setInterval(() => {}, 1000);
+  `;
+  const owner = spawn(process.execPath, ['--input-type=module', '-e', script], { env: s.env, stdio: ['ignore', 'pipe', 'inherit'] });
+  let daemon;
+  const running = () => { try { process.kill(daemon, 0); return true; } catch { return false; } };
+  try {
+    daemon = await new Promise(resolve => owner.stdout.once('data', data => resolve(Number(data))));
+    for (let i = 0; i < 100 && !fs.existsSync(path.join(s.dir, 'd.sock')); i++) await sleep(50);
+    assert.deepEqual([fs.existsSync(path.join(s.dir, 'd.sock')), running()], [true, true]);
+    owner.kill('SIGKILL');
+    for (let i = 0; i < 100 && running(); i++) await sleep(50);
+    assert.equal(running(), false);
+  } finally {
+    owner.kill('SIGKILL');
+    if (daemon && running()) process.kill(daemon, 'SIGKILL');
+    s.cleanup();
+  }
+});
+
 test('a killed daemon comes back with the letter and the answer draft', async () => {
   const s = sandbox();
   try {
